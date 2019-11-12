@@ -1,0 +1,40 @@
+language: scala
+
+sudo: false
+
+scala:
+  - "2.12.8"
+
+jdk:
+  - openjdk8
+  - openjdk11
+#  - oraclejdk8
+
+# build all PRs and only master branch and branches starting with either
+# 'deploy-*', 'deploy/*', 'ci-*' or 'ci/*'
+branches:
+  only:
+    - master
+    - /^(?i:deploy)(-|\/).*$/
+    - /^(?i:ci)(-|\/).*$/
+
+# cache local ivy cache, but delete properties and lock files beforehand
+before_cache:
+  - find $HOME/.ivy2 -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt  -name "*.lock"               -print -delete
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt/boot
+
+# if build is a pull request and origin branch starts with doc/ skip the build (successfully)
+before_install:
+  - if [[ "$TRAVIS_PULL_REQUEST" != "false" && "$TRAVIS_PULL_REQUEST_BRANCH" == doc/* ]]; then exit 0; fi
+
+# build script (sbt test)
+script:
+  - sbt ++$TRAVIS_SCALA_VERSION \
+      coverage \
+      coverageAggregate \
+      codacyCoverage

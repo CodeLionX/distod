@@ -4,11 +4,11 @@ sudo: false
 
 scala:
   - "2.13.1"
-  - "2.12.10"
+#  - "2.12.10"
 
 jdk:
   - openjdk8
-  - openjdk11
+#  - openjdk11
 #  - oraclejdk8
 
 # build all PRs and only master branch and branches starting with either
@@ -35,7 +35,7 @@ before_install:
 
 # build script (sbt test)
 script:
-  - sbt ++ $TRAVIS_SCALA_VERSION \
+  - sbt ++$TRAVIS_SCALA_VERSION! \
       coverage \
       coverageAggregate \
       codacyCoverage

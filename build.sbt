@@ -1,8 +1,12 @@
-scalaVersion := "2.13.1"
-
 lazy val akkaVersion = "2.6.0"
 lazy val univocityVersion = "2.8.3"
 lazy val clistVersion = "3.5.1"
+
+lazy val scala212 = "2.12.10"
+lazy val scala213 = "2.13.1"
+
+scalaVersion := scala213
+//crossScalaVersions := scala212 :: scala213 :: Nil
 
 organization := "com.github.codelionx"
 name := "distod"

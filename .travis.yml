@@ -37,5 +37,6 @@ before_install:
 script:
   - sbt ++$TRAVIS_SCALA_VERSION! \
       coverage \
+      coverageReport \
       coverageAggregate \
       codacyCoverage

@@ -15,7 +15,9 @@ version := "0.0.1"
 libraryDependencies ++= Seq(
   // akka
   "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+  "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
   "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
 //  "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
 //  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
 
@@ -32,14 +34,13 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.8" % "test",
 
   // serialization
+  "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
 //  "com.twitter" %% "chill-akka" % "0.9.3", // just for scala 2.12?
 //  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2",
 // I may need to switch to Jackson serialization (using the binary format)
-
-  // cli
-  "org.backuity.clist" %% "clist-core" % clistVersion,
-  "org.backuity.clist" %% "clist-macros" % clistVersion % "provided",
 )
+
+fork in run := true
 
 // set main class for assembly
 mainClass in assembly := Some("com.github.codelionx.distod.Main")

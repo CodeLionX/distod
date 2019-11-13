@@ -2,3 +2,17 @@
 
 DISTOD algorithm: Distributed discovery of bidirectional order dependencies
 
+## Usage
+
+Running DISTOD with a custom configuration:
+
+```bash
+java -Dconfig.file=path/to/config.conf -jar distod.jar
+```
+
+Or inside the SBT shell (`sbt`-command):
+
+```sbtshell
+; set javaOptions += "-Dconfig.file=path/to/config.conf"; run
+```
+

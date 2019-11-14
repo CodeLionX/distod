@@ -2,6 +2,7 @@ package com.github.codelionx.distod
 
 import akka.actor.typed.{ActorSystem, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
+import com.github.codelionx.distod.Settings.InputParsingSettings
 import com.typesafe.config.{Config, ConfigException}
 
 
@@ -11,6 +12,25 @@ import com.typesafe.config.{Config, ConfigException}
 object Settings extends ExtensionId[Settings] {
 
   override def createExtension(system: ActorSystem[_]): Settings = new Settings(system.settings.config)
+
+  class InputParsingSettings private[Settings](config: Config, namespace: String) {
+
+    private val subnamespace = s"$namespace.input"
+
+    val filePath: String = config.getString(s"$subnamespace.path")
+
+    val hasHeader: Boolean = config.getBoolean(s"$subnamespace.has-header")
+
+    val maxColumns: Option[Int] = if (config.hasPath(s"$subnamespace.max-columns"))
+      Some(config.getInt(s"$subnamespace.max-columns"))
+    else
+      None
+
+    val maxRows: Option[Int] = if (config.hasPath(s"$subnamespace.max-rows"))
+      Some(config.getInt(s"$subnamespace.max-rows"))
+    else
+      None
+  }
 
 }
 
@@ -27,6 +47,8 @@ class Settings private(config: Config) extends Extension {
 
   private val namespace = "distod"
 
+  def rawConfig: Config = config
+
   val actorSystemName: String = config.getString(s"$namespace.system-name")
 
   val actorSystemRole: Role = config.getString(s"$namespace.system-role") match {
@@ -37,10 +59,6 @@ class Settings private(config: Config) extends Extension {
       s"$s is not allowed, use either 'leader' or 'follower'"
     )
   }
-
-  val inputFilePath: String = config.getString(s"$namespace.input-file")
-
-  val inputFileHasHeader: Boolean = config.getBoolean(s"$namespace.input-has-header")
 
   val outputFilePath: String = config.getString(s"$namespace.output-file")
 
@@ -56,4 +74,5 @@ class Settings private(config: Config) extends Extension {
 
   //  val maxBatchSize: Int = config.getInt(s"$namespace.max-batch-size")
 
+  val inputParsingSettings: InputParsingSettings = new InputParsingSettings(config, namespace)
 }

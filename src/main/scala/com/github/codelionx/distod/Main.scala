@@ -1,9 +1,9 @@
 package com.github.codelionx.distod
 
 import akka.NotUsed
-import akka.actor.typed.Behavior
+import akka.actor.typed.{Behavior, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
-import com.github.codelionx.distod.actors.ClusterTester
+import com.github.codelionx.distod.actors.{ClusterTester, DataReader}
 
 
 object Main {
@@ -23,12 +23,20 @@ object Main {
          | hostname: ${settings.host}
          | port: ${settings.port}
          | Leader is at: ${settings.leaderHost}:${settings.leaderPort}
-         | ${if (settings.actorSystemRole == ActorSystem.LEADER) s"Reading data from ${settings.inputFilePath}" else ""}
+         | ${if (settings.actorSystemRole == ActorSystem.LEADER) s"Reading data from ${settings.inputParsingSettings.filePath}" else ""}
          |""".stripMargin
     )
 
-    context.spawn[Nothing](ClusterTester(), ClusterTester.name)
+    val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
+    context.watch(clusterTester)
 
-    Behaviors.empty
+    val dataReader = context.spawn(DataReader(), DataReader.name)
+    context.watch(dataReader)
+
+    Behaviors.receiveSignal{
+      case (context, Terminated(ref)) =>
+        context.log.info(s"$ref has stopped working!")
+        Behaviors.stopped
+    }
   }
 }

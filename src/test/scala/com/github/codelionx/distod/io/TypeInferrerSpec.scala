@@ -59,7 +59,11 @@ class TypeInferrerSpec extends WordSpec with Matchers {
       TypeInferrer.inferTypeForColumn(column) shouldEqual DoubleType
     }
 
-    "infer datetimes in a column"
+    "infer dates in a column" in {
+      val column = Array("2011-12-06+01:00", "2011-12-03+00:00", "2011-12-07+01:00", "2012-01-03+06:00", "2011-11-28+03:00")
+
+      TypeInferrer.inferTypeForColumn(column) shouldEqual LocalDateType(ISO_DATE)
+    }
 
     // bugfix guides
     "not infer 0-padded number with 6 digits as date" in {

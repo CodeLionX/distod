@@ -13,23 +13,15 @@ object Settings extends ExtensionId[Settings] {
 
   override def createExtension(system: ActorSystem[_]): Settings = new Settings(system.settings.config)
 
-  class InputParsingSettings private[Settings](config: Config, namespace: String) {
+  trait InputParsingSettings {
 
-    private val subnamespace = s"$namespace.input"
+    def filePath: String
 
-    val filePath: String = config.getString(s"$subnamespace.path")
+    def hasHeader: Boolean
 
-    val hasHeader: Boolean = config.getBoolean(s"$subnamespace.has-header")
+    def maxColumns: Option[Int]
 
-    val maxColumns: Option[Int] = if (config.hasPath(s"$subnamespace.max-columns"))
-      Some(config.getInt(s"$subnamespace.max-columns"))
-    else
-      None
-
-    val maxRows: Option[Int] = if (config.hasPath(s"$subnamespace.max-rows"))
-      Some(config.getInt(s"$subnamespace.max-rows"))
-    else
-      None
+    def maxRows: Option[Int]
   }
 
 }
@@ -74,5 +66,22 @@ class Settings private(config: Config) extends Extension {
 
   //  val maxBatchSize: Int = config.getInt(s"$namespace.max-batch-size")
 
-  val inputParsingSettings: InputParsingSettings = new InputParsingSettings(config, namespace)
+  val inputParsingSettings: InputParsingSettings = new InputParsingSettings {
+
+    private val subnamespace = s"$namespace.input"
+
+    val filePath: String = config.getString(s"$subnamespace.path")
+
+    val hasHeader: Boolean = config.getBoolean(s"$subnamespace.has-header")
+
+    val maxColumns: Option[Int] = if (config.hasPath(s"$subnamespace.max-columns"))
+      Some(config.getInt(s"$subnamespace.max-columns"))
+    else
+      None
+
+    val maxRows: Option[Int] = if (config.hasPath(s"$subnamespace.max-rows"))
+      Some(config.getInt(s"$subnamespace.max-rows"))
+    else
+      None
+  }
 }

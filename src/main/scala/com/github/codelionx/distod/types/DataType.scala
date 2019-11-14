@@ -11,7 +11,7 @@ object DataType {
 
   private def orderMapping(in: DataType[_]): Int = in match {
     case null | NullType => 0
-    case StringType => 1
+    case StringType | _: StringType => 1
     case DoubleType => 2
     case LocalDateType(_) => 3
     case LocalDateTimeType(_) => 4

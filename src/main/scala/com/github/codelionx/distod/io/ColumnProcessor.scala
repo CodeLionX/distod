@@ -9,6 +9,9 @@ import scala.collection.mutable
 
 object ColumnProcessor {
 
+  /**
+   * Creates a new ColumnProcessor
+   */
   def apply(settings: InputParsingSettings): ColumnProcessor = new ColumnProcessor(settings)
 }
 

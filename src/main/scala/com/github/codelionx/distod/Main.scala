@@ -30,8 +30,10 @@ object Main {
     val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
     context.watch(clusterTester)
 
-    val dataReader = context.spawn(DataReader(), DataReader.name)
-    context.watch(dataReader)
+    if(settings.actorSystemRole == ActorSystem.LEADER) {
+      val dataReader = context.spawn(DataReader(), DataReader.name)
+      context.watch(dataReader)
+    }
 
     Behaviors.receiveSignal{
       case (context, Terminated(ref)) =>

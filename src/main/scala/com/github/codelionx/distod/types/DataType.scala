@@ -37,12 +37,20 @@ sealed trait DataType[T <: Any] extends Ordered[DataType[_]] {
    */
   def valueOrdering: Ordering[T]
 
-  override def compare(that: DataType[_]): Int = DataType.orderMapping(this).compare(DataType.orderMapping(that))
+  /**
+   * Compares two values by parsing them first to the data type. This uses the `valueOrdering` defined for the type.
+   * It can be used in the `col.sortWith()` call.
+   *
+   * @return `true` if `v1` is less then `v2`
+   */
+  def valueLt(v1: String, v2: String): Boolean
 
   /**
    * Broaden type of this datatype.
    */
   def broaden: DataType[Any] = this.asInstanceOf[DataType[Any]]
+
+  override def compare(that: DataType[_]): Int = DataType.orderMapping(this).compare(DataType.orderMapping(that))
 }
 
 object DateTimeType {
@@ -73,9 +81,11 @@ final case class ZonedDateTimeType private[types](formatter: DateTimeFormatter) 
 
   override val valueOrdering: Ordering[ZonedDateTime] = Ordering.by(_.toEpochSecond)
 
-  def parse(value: String): ZonedDateTime = Try {
+  override def parse(value: String): ZonedDateTime = Try {
     formatter.parse[ZonedDateTime](value, (temp: TemporalAccessor) => ZonedDateTime.from(temp))
   }.getOrElse(null)
+
+  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 
 }
 
@@ -90,6 +100,7 @@ final case class LocalDateTimeType private[types](formatter: DateTimeFormatter) 
     formatter.parse[LocalDateTime](value, (temp: TemporalAccessor) => LocalDateTime.from(temp))
   }.getOrElse(null)
 
+  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 /**
@@ -104,6 +115,8 @@ final case class LocalDateType private[types](formatter: DateTimeFormatter) exte
   override def parse(value: String): LocalDate = Try {
     formatter.parse[LocalDate](value, (temp: TemporalAccessor) => LocalDate.from(temp))
   }.getOrElse(null)
+
+  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 /**
@@ -123,10 +136,11 @@ case object DoubleType extends DataType[Double] {
     case Failure(_) => false
   }
 
-  def parse(value: String): Double = Try {
+  override def parse(value: String): Double = Try {
     value.toDouble
   }.getOrElse(.0)
 
+  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 /**
@@ -141,8 +155,10 @@ trait StringType extends DataType[String] {
   override val valueOrdering: Ordering[String] = Ordering[String]
 
   override def parse(value: String): String =
-    if(NullType.isNull(value)) NullType.parse(value)
+    if (NullType.isNull(value)) NullType.parse(value)
     else value
+
+  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 case object StringType extends StringType
@@ -152,8 +168,6 @@ case object StringType extends StringType
  * [[com.github.codelionx.distod.types.StringType]].
  */
 case object NullType extends StringType {
-
-  override val valueOrdering: Ordering[String] = Ordering[String]
 
   /**
    * Checks if the value is a `null` value.

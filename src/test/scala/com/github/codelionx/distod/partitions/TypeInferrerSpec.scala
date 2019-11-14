@@ -1,9 +1,8 @@
-package com.github.codelionx.distod.io
+package com.github.codelionx.distod.partitions
 
-import com.github.codelionx.distod.types._
 import java.time.format.DateTimeFormatter._
 
-import com.github.codelionx.distod.partitions.TypeInferrer
+import com.github.codelionx.distod.types._
 import org.scalatest.{Matchers, WordSpec}
 
 

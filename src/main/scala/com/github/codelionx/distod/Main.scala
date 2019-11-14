@@ -1,8 +1,8 @@
 package com.github.codelionx.distod
 
 import akka.NotUsed
-import akka.actor.typed.{Behavior, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{Behavior, Terminated}
 import com.github.codelionx.distod.actors.{ClusterTester, DataReader}
 
 

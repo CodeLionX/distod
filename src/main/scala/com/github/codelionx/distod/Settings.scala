@@ -13,6 +13,8 @@ object Settings extends ExtensionId[Settings] {
 
   override def createExtension(system: ActorSystem[_]): Settings = new Settings(system.settings.config)
 
+  def fromConfig(config: Config): Settings = new Settings(config)
+
   trait InputParsingSettings {
 
     def filePath: String

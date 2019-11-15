@@ -49,7 +49,7 @@ class DataReader(
   private def start(): Behavior[Command] = {
     // send columns out to temp actors
     table.columns.zipWithIndex.foreach { case (column, id) =>
-      context.spawnAnonymous(partitioner(id, column, context.self))
+      context.spawnAnonymous(partitioner(id, column, context.self), settings.cpuBoundTaskDispatcher)
     }
 
     // collect results

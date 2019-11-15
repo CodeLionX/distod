@@ -1,7 +1,8 @@
 package com.github.codelionx.distod.actors
 
-import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{Behavior, Terminated}
+import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.partitions.FullPartition
 
 
@@ -14,6 +15,7 @@ object LeaderGuardian {
   def apply(): Behavior[Command] = Behaviors.setup { context =>
 
     context.log.info("LeaderGuardian started, spawning actors ...")
+
     val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
     context.watch(clusterTester)
 
@@ -21,6 +23,8 @@ object LeaderGuardian {
     context.watch(dataReader)
 
     context.log.info("actors started, waiting for data")
+
+    //    testCPUhogging(context)
 
     Behaviors
       .receiveMessage[Command] {
@@ -37,5 +41,15 @@ object LeaderGuardian {
           context.log.info(s"$ref has stopped working!")
           Behaviors.stopped
       }
+  }
+
+  def testCPUhogging(context: ActorContext[Command]): Unit = {
+    val settings = Settings(context.system)
+    val n = 16
+    context.log.info("Starting {} hoggers", n)
+    (0 until n).foreach { i =>
+      val ref = context.spawnAnonymous(CPUHogger(i), settings.cpuBoundTaskDispatcher)
+      context.watch(ref)
+    }
   }
 }

@@ -1,6 +1,6 @@
 package com.github.codelionx.distod
 
-import akka.actor.typed.{ActorSystem, Extension, ExtensionId}
+import akka.actor.typed.{ActorSystem, DispatcherSelector, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
 import com.github.codelionx.distod.Settings.InputParsingSettings
 import com.typesafe.config.{Config, ConfigException}
@@ -67,6 +67,9 @@ class Settings private(config: Config) extends Extension {
   //  val workers: Int = config.getInt(s"$namespace.workers")
 
   //  val maxBatchSize: Int = config.getInt(s"$namespace.max-batch-size")
+
+  val cpuBoundTaskDispatcher: DispatcherSelector =
+    DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 
   val inputParsingSettings: InputParsingSettings = new InputParsingSettings {
 

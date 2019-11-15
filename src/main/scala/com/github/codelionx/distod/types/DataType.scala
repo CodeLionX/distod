@@ -2,7 +2,7 @@ package com.github.codelionx.distod.types
 
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAccessor
-import java.time.{LocalDate, LocalDateTime, ZoneOffset, ZonedDateTime}
+import java.time.{LocalDate, LocalDateTime, ZoneId, ZoneOffset, ZonedDateTime}
 
 import scala.util.{Failure, Success, Try}
 
@@ -83,7 +83,7 @@ final case class ZonedDateTimeType private[types](formatter: DateTimeFormatter) 
 
   override def parse(value: String): ZonedDateTime = Try {
     formatter.parse[ZonedDateTime](value, (temp: TemporalAccessor) => ZonedDateTime.from(temp))
-  }.getOrElse(null)
+  }.getOrElse(ZonedDateTime.of(LocalDateTime.MIN, ZoneOffset.UTC))
 
   override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 
@@ -98,7 +98,7 @@ final case class LocalDateTimeType private[types](formatter: DateTimeFormatter) 
 
   override def parse(value: String): LocalDateTime = Try {
     formatter.parse[LocalDateTime](value, (temp: TemporalAccessor) => LocalDateTime.from(temp))
-  }.getOrElse(null)
+  }.getOrElse(LocalDateTime.MIN)
 
   override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
@@ -114,7 +114,7 @@ final case class LocalDateType private[types](formatter: DateTimeFormatter) exte
 
   override def parse(value: String): LocalDate = Try {
     formatter.parse[LocalDate](value, (temp: TemporalAccessor) => LocalDate.from(temp))
-  }.getOrElse(null)
+  }.getOrElse(LocalDate.MIN)
 
   override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
@@ -138,7 +138,7 @@ case object DoubleType extends DataType[Double] {
 
   override def parse(value: String): Double = Try {
     value.toDouble
-  }.getOrElse(.0)
+  }.getOrElse(Double.MinValue)
 
   override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }

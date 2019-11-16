@@ -5,9 +5,9 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.LeaderGuardian.DataLoaded
 import com.github.codelionx.distod.io.CSVParser
 import com.github.codelionx.distod.partitions.{FullPartition, Partition}
+import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoaded, DataLoadingEvent}
 
 
 object DataReader {
@@ -15,10 +15,9 @@ object DataReader {
   val name = "data-reader"
 
   sealed trait Command extends CborSerializable
-
   private final case class PartitioningFinished(columnId: Int, partition: FullPartition) extends Command
 
-  def apply(replyTo: ActorRef[DataLoaded]): Behavior[Command] = Behaviors.setup { context =>
+  def apply(replyTo: ActorRef[DataLoadingEvent]): Behavior[Command] = Behaviors.setup { context =>
     new DataReader(context, replyTo).start()
   }
 
@@ -34,7 +33,7 @@ object DataReader {
 
 class DataReader(
                   context: ActorContext[DataReader.Command],
-                  replyTo: ActorRef[DataLoaded]
+                  replyTo: ActorRef[DataLoadingEvent]
                 ) {
 
   import DataReader._

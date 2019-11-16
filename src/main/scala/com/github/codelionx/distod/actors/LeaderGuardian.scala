@@ -3,38 +3,42 @@ package com.github.codelionx.distod.actors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{Behavior, Terminated}
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.partitions.FullPartition
+import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoaded, DataLoadingEvent}
 
 
 object LeaderGuardian {
 
   sealed trait Command
-
-  final case class DataLoaded(name: String, headers: Array[String], partitions: Array[FullPartition]) extends Command
+  private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
+    val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
 
     context.log.info("LeaderGuardian started, spawning actors ...")
 
     val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
     context.watch(clusterTester)
 
-    val dataReader = context.spawn(DataReader(context.self), DataReader.name)
+    val dataReader = context.spawn(DataReader(loadingEventMapper), DataReader.name)
     context.watch(dataReader)
 
     context.log.info("actors started, waiting for data")
 
     //    testCPUhogging(context)
 
+    def onLoadingEvent(loadingEvent: DataLoadingEvent): Behavior[Command] = loadingEvent match {
+      case DataLoaded(name, headers, partitions) =>
+        context.log.info("Finished loading dataset {}", name)
+        println(s"Table headers: ${headers.mkString(",")}")
+        println(partitions.map(p =>
+          s"Partition(numberClasses=${p.numberClasses},numberElements=${p.numberElements})"
+        ).mkString("\n"))
+        Behaviors.stopped
+    }
+
     Behaviors
       .receiveMessage[Command] {
-        case DataLoaded(name, headers, partitions) =>
-          context.log.info("Finished loading dataset {}", name)
-          println(s"Table headers: ${headers.mkString(",")}")
-          println(partitions.map(p =>
-            s"Partition(numberClasses=${p.numberClasses},numberElements=${p.numberElements})"
-          ).mkString("\n"))
-          Behaviors.stopped
+        case WrappedLoadingEvent(event) => onLoadingEvent(event)
       }
       .receiveSignal {
         case (context, Terminated(ref)) =>

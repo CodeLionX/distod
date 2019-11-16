@@ -124,7 +124,7 @@ final case class LocalDateType private[types](formatter: DateTimeFormatter) exte
  */
 case object DoubleType extends DataType[Double] {
 
-  override val valueOrdering: Ordering[Double] = Ordering[Double]
+  override val valueOrdering: Ordering[Double] = Ordering.Double.TotalOrdering
 
   /**
    * Checks if the value is a [[scala.Double]] value.

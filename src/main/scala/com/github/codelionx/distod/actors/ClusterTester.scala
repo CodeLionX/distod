@@ -45,9 +45,7 @@ object ClusterTester {
   object Pinger {
 
     sealed trait Command extends CborSerializable
-
     final case class Pong(from: ActorRef[PingService.Ping]) extends Command
-
     private final case object Tick extends Command
 
     def apply(service: ActorRef[PingService.Ping]): Behavior[Command] = Behaviors.withTimers { timers =>

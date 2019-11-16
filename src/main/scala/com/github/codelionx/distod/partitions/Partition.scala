@@ -1,5 +1,8 @@
 package com.github.codelionx.distod.partitions
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import com.github.codelionx.distod.Serialization.CborSerializable
+
 import scala.collection.{SortedMap, mutable}
 
 
@@ -9,12 +12,16 @@ import scala.collection.{SortedMap, mutable}
  * @see [[com.github.codelionx.distod.partitions.FullPartition]]
  * @see [[com.github.codelionx.distod.partitions.StrippedPartition]]
  */
-trait Partition {
+trait Partition extends CborSerializable {
 
   def numberElements: Int
 
   def numberClasses: Int
 
+  @JsonDeserialize(
+    keyAs = classOf[Value],
+    contentAs = classOf[Set[Index]]
+  )
   def equivClasses: SortedMap[Value, Set[Index]]
 
   /**

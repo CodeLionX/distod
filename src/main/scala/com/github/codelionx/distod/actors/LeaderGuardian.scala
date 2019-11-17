@@ -33,6 +33,11 @@ object LeaderGuardian {
         println(partitions.map(p =>
           s"Partition(numberClasses=${p.numberClasses},numberElements=${p.numberElements})"
         ).mkString("\n"))
+        val combined = partitions(2) * partitions(3)
+        println(combined.equivClasses.size)
+
+        val combinedStripped = partitions(2).stripped * partitions(3).stripped
+        println(combinedStripped.equivClasses.size)
         Behaviors.stopped
     }
 

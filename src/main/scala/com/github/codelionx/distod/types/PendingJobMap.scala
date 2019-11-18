@@ -1,7 +1,5 @@
 package com.github.codelionx.distod.types
 
-import akka.util.TypedMultiMap
-
 import scala.collection.IterableOnce
 
 
@@ -15,9 +13,6 @@ object PendingJobMap {
 }
 
 class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
-
-  TypedMultiMap
-  Map(1 -> 2) + (1 -> 2)
 
   def apply(key: K): Seq[V] = jobMap(key)
 

@@ -18,7 +18,11 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
 
   def get(key: K): Option[Seq[V]] = jobMap.get(key)
 
-  def keyRemoved(key: K): PendingJobMap[K, V] = new PendingJobMap(jobMap - key)
+  def keyRemoved(key: K): PendingJobMap[K, V] =
+    if (jobMap.isEmpty)
+      this
+    else
+      new PendingJobMap(jobMap - key)
 
   def -[V1 >: V](kv: (K, V1)): PendingJobMap[K, V1] = removed(kv._1, kv._2)
 
@@ -61,7 +65,7 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
           case (None, None) => key -> Seq.empty[V1]
           case (Some(items), None) => key -> items
           case (None, Some(items)) => key -> items
-          case (Some(ourItems), Some(theirItems)) => key -> ourItems.prependedAll(theirItems)
+          case (Some(ourItems), Some(theirItems)) => key -> ourItems.appendedAll(theirItems)
         }
       }
       new PendingJobMap(updatedMap.toMap)
@@ -73,4 +77,18 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
   def mkString(sep: String): String = jobMap.mkString(sep)
 
   override def toString: String = s"PendingJobMap(${jobMap.mkString(", ")})"
+
+  def canEqual(other: Any): Boolean = other.isInstanceOf[PendingJobMap[_, _]]
+
+  override def equals(other: Any): Boolean = other match {
+    case that: PendingJobMap[_, _] =>
+      (that canEqual this) &&
+        jobMap.equals(that.jobMap)
+    case _ => false
+  }
+
+  override def hashCode(): Int = {
+    val state = Seq(jobMap)
+    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+  }
 }

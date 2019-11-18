@@ -62,9 +62,14 @@ class CSVParser private(settings: InputParsingSettings) {
     // parse and return result
     parser.parse(file)
     Table(
-      name = settings.filePath.substring(0, settings.filePath.lastIndexOf(".")),
+      name = extractFileName(settings.filePath),
       headers = p.headers,
       columns = p.columns
     )
+  }
+
+  private def extractFileName(path: String): String = {
+    val filename = new File(path).getName
+    filename.substring(0, filename.lastIndexOf("."))
   }
 }

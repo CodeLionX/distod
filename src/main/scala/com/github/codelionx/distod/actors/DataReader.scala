@@ -8,6 +8,7 @@ import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.io.CSVParser
 import com.github.codelionx.distod.partitions.{FullPartition, Partition}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoaded, DataLoadingEvent}
+import com.github.codelionx.distod.types.PartitionedTable
 
 
 object DataReader {
@@ -61,7 +62,11 @@ class DataReader(
         val newPartitions = partitions.updated(columnId, partition)
         context.log.info("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
         if (newPartitions.size == expected) {
-          replyTo ! DataLoaded(table.name, table.headers, newPartitions.toSeq.sortBy(_._1).map(_._2).toArray)
+          replyTo ! DataLoaded(PartitionedTable(
+            name = table.name,
+            headers = table.headers,
+            partitions = newPartitions.toSeq.sortBy(_._1).map(_._2).toArray)
+          )
           Behaviors.stopped
         } else {
           collectPartitions(newPartitions, expected)

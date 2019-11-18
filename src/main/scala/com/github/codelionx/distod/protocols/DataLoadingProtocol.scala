@@ -1,17 +1,13 @@
 package com.github.codelionx.distod.protocols
 
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.partitions.FullPartition
+import com.github.codelionx.distod.types.PartitionedTable
 
 
 object DataLoadingProtocol {
 
   sealed trait DataLoadingEvent extends CborSerializable
 
-  final case class DataLoaded(
-                               name: String,
-                               headers: Array[String],
-                               partitions: Array[FullPartition]
-                             ) extends DataLoadingEvent
+  final case class DataLoaded(table: PartitionedTable) extends DataLoadingEvent
 
 }

@@ -27,7 +27,6 @@ trait PartitionOps {
    */
   def product(other: Partition): Partition = product(this, other)
 
-
   private def toStripped: StrippedPartition = this match {
     case p: FullPartition =>
       val strippedClasses = stripClasses(p.equivClasses)

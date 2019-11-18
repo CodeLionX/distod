@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.types
 
+
 case class Table(name: String, headers: Array[String], columns: Array[Array[String]]) {
 
   override def toString: String = toStringCapped()

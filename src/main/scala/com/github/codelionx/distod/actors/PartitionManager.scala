@@ -111,7 +111,6 @@ class PartitionManager(context: ActorContext[PartitionCommand]) {
           context.log.info("Partition not found. Starting background job to compute {}", key)
           val allPartitions = partitions ++ singletonPartitions.map(t => t._1 -> t._2.stripped)
           val jobs = pendingJobs ++ generateStrippedPartitions(key, allPartitions, replyTo)
-          context.log.info("New pending jobs: {}", jobs)
           behavior(singletonPartitions, partitions, jobs)
       }
 

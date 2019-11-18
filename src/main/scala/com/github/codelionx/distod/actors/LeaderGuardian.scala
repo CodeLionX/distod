@@ -32,7 +32,7 @@ object LeaderGuardian {
 
     context.log.info("actors started, waiting for data")
 
-    //    testCPUhogging(context)
+    // testCPUhogging(context)
 
     def onLoadingEvent(loadingEvent: DataLoadingEvent): Behavior[Command] = loadingEvent match {
       case DataLoaded(t@PartitionedTable(name, headers, partitions)) =>

@@ -16,7 +16,7 @@ object PartitionManager {
   private case class ProductComputed(key: CandidateSet, partition: StrippedPartition) extends PartitionCommand
 
 
-  def name = "partition-manager"
+  val name = "partition-manager"
 
   def apply(): Behavior[PartitionCommand] = Behaviors.setup(new PartitionManager(_).start())
 

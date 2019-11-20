@@ -1,13 +1,12 @@
 package com.github.codelionx.distod.actors
 
 import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import akka.actor.typed.{ActorRef, Behavior}
-import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.io.CSVParser
 import com.github.codelionx.distod.partitions.{FullPartition, Partition}
-import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoaded, DataLoadingEvent}
+import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoadingCommand, LoadPartitions, PartitionsLoaded, Stop}
 import com.github.codelionx.distod.types.PartitionedTable
 
 
@@ -15,16 +14,18 @@ object DataReader {
 
   val name = "data-reader"
 
-  sealed trait Command extends CborSerializable
-  private final case class PartitioningFinished(columnId: Int, partition: FullPartition) extends Command
+  private final case class PartitioningFinished(columnId: Int, partition: FullPartition) extends DataLoadingCommand
 
-  def apply(replyTo: ActorRef[DataLoadingEvent]): Behavior[Command] = Behaviors.setup { context =>
-    new DataReader(context, replyTo).start()
-  }
+  def apply(): Behavior[DataLoadingCommand] =
+    Behaviors.setup(context =>
+      Behaviors.withStash(10) { messageBuffer =>
+        new DataReader(context, messageBuffer).start()
+      }
+    )
 
   def partitioner(columnId: Int, column: Array[String], replyTo: ActorRef[PartitioningFinished]): Behavior[NotUsed] =
     Behaviors.setup { context =>
-      context.log.info("Partitioning column {}", columnId)
+      context.log.debug("Partitioning column {}", columnId)
       val partition = Partition.fullFrom(column)
       replyTo ! PartitioningFinished(columnId, partition)
       Behaviors.stopped
@@ -33,8 +34,8 @@ object DataReader {
 
 
 class DataReader(
-                  context: ActorContext[DataReader.Command],
-                  replyTo: ActorRef[DataLoadingEvent]
+                  context: ActorContext[DataLoadingCommand],
+                  buffer: StashBuffer[DataLoadingCommand]
                 ) {
 
   import DataReader._
@@ -46,7 +47,9 @@ class DataReader(
   context.log.info("DataReader started, parsing data from {}", settings.inputParsingSettings.filePath)
   private val table = parser.parse()
 
-  private def start(): Behavior[Command] = {
+  private def start(): Behavior[DataLoadingCommand] = {
+    // Load data early:
+
     // send columns out to temp actors
     table.columns.zipWithIndex.foreach { case (column, id) =>
       context.spawnAnonymous(partitioner(id, column, context.self), settings.cpuBoundTaskDispatcher)
@@ -56,20 +59,42 @@ class DataReader(
     collectPartitions(Map.empty, table.columns.length)
   }
 
-  private def collectPartitions(partitions: Map[Int, FullPartition], expected: Int): Behavior[Command] =
-    Behaviors.receiveMessagePartial {
+  private def collectPartitions(partitions: Map[Int, FullPartition], expected: Int): Behavior[DataLoadingCommand] =
+    Behaviors.receiveMessage {
+      case m: LoadPartitions =>
+        context.log.debug("Stashing request to load partitions from {}", m.replyTo)
+        buffer.stash(m)
+        Behaviors.same
+
+      case Stop =>
+        context.log.warn("Data reading and partitioning not finished, but actor was stopped by external request!")
+        Behaviors.stopped
+
       case PartitioningFinished(columnId, partition) =>
         val newPartitions = partitions.updated(columnId, partition)
-        context.log.info("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
+        context.log.debug("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
         if (newPartitions.size == expected) {
-          replyTo ! DataLoaded(PartitionedTable(
-            name = table.name,
-            headers = table.headers,
-            partitions = newPartitions.toSeq.sortBy(_._1).map(_._2).toArray)
+          context.log.info("Data ready")
+          buffer.unstashAll(
+            dataReady(newPartitions.toSeq.sortBy(_._1).map(_._2).toArray)
           )
-          Behaviors.stopped
         } else {
           collectPartitions(newPartitions, expected)
         }
+    }
+
+  private def dataReady(partitions: Array[FullPartition]): Behavior[DataLoadingCommand] =
+    Behaviors.receiveMessagePartial {
+      case LoadPartitions(replyTo) =>
+        replyTo ! PartitionsLoaded(PartitionedTable(
+          name = table.name,
+          headers = table.headers,
+          partitions = partitions
+        ))
+        Behaviors.same
+
+      case Stop =>
+        context.log.info("Data reader was stopped by request.")
+        Behaviors.stopped
     }
 }

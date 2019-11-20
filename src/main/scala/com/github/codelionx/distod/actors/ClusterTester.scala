@@ -18,7 +18,7 @@ object ClusterTester {
 
   val PingServiceKey: ServiceKey[PingService.Ping] = ServiceKey("ping")
 
-  def name: String = "cluster-tester"
+  val name: String = "cluster-tester"
 
   def apply(): Behavior[Nothing] = {
     Behaviors.setup[Receptionist.Listing] { context =>

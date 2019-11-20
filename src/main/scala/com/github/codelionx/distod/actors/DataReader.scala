@@ -33,10 +33,7 @@ object DataReader {
 }
 
 
-class DataReader(
-                  context: ActorContext[DataLoadingCommand],
-                  buffer: StashBuffer[DataLoadingCommand]
-                ) {
+class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[DataLoadingCommand]) {
 
   import DataReader._
 

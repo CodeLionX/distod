@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{Behavior, Terminated}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
 
 

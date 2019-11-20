@@ -1,8 +1,8 @@
 package com.github.codelionx.distod.types
 
+import java.time.{LocalDate, LocalDateTime, ZonedDateTime, ZoneOffset}
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAccessor
-import java.time.{LocalDate, LocalDateTime, ZoneId, ZoneOffset, ZonedDateTime}
 
 import scala.util.{Failure, Success, Try}
 

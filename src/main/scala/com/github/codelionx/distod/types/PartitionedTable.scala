@@ -8,7 +8,7 @@ case class PartitionedTable(name: String, headers: Array[String], partitions: Ar
   /**
    * Number of rows / tuples.
    */
-  lazy val n: Int = partitions.headOption match {
+  lazy val nTuples: Int = partitions.headOption match {
     case Some(c) => c.numberElements
     case None => 0
   }
@@ -16,5 +16,5 @@ case class PartitionedTable(name: String, headers: Array[String], partitions: Ar
   /**
    * Number of columns / attributes
    */
-  lazy val m: Int = headers.length
+  lazy val nAttributes: Int = headers.length
 }

@@ -10,7 +10,8 @@ object PartitionManagementProtocol {
 
   trait PartitionCommand extends CborSerializable
   final case class LookupPartition(key: CandidateSet, replyTo: ActorRef[PartitionFound]) extends PartitionCommand
-  final case class LookupStrippedPartition(key: CandidateSet, replyTo: ActorRef[StrippedPartitionFound]) extends PartitionCommand
+  final case class LookupStrippedPartition(key: CandidateSet, replyTo: ActorRef[StrippedPartitionFound])
+    extends PartitionCommand
   final case class InsertPartition(key: CandidateSet, value: Partition) extends PartitionCommand
 
   trait PartitionEvent extends CborSerializable

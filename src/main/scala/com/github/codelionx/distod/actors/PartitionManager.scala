@@ -1,8 +1,8 @@
 package com.github.codelionx.distod.actors
 
 import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
@@ -21,16 +21,18 @@ object PartitionManager {
   def apply(): Behavior[PartitionCommand] = Behaviors.setup(new PartitionManager(_).start())
 
   private case class ComputeProductJob(
-                                        key: CandidateSet,
-                                        partitionA: Either[CandidateSet, StrippedPartition],
-                                        partitionB: Either[CandidateSet, StrippedPartition]
-                                      )
+      key: CandidateSet,
+      partitionA: Either[CandidateSet, StrippedPartition],
+      partitionB: Either[CandidateSet, StrippedPartition]
+  )
 
   private def partitionGenerator(jobs: Seq[ComputeProductJob], replyTo: ActorRef[ProductComputed]): Behavior[NotUsed] =
     Behaviors.setup { _ =>
       // actually just a stateful loop (but with immutable collections ;) )
       @tailrec
-      def computePartition(partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputeProductJob]): Unit = {
+      def computePartition(
+          partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputeProductJob]
+      ): Unit = {
         val job :: newRemainingJobs = remainingJobs
         val pA = job.partitionA match {
           case Right(p) => p
@@ -63,10 +65,10 @@ class PartitionManager(context: ActorContext[PartitionCommand]) {
   private val settings = Settings(context.system)
 
   private def behavior(
-                        singletonPartitions: Map[CandidateSet, FullPartition], // keys of size == 1
-                        partitions: Map[CandidateSet, StrippedPartition], // keys of size != 1
-                        pendingJobs: PendingJobMap[CandidateSet, ActorRef[StrippedPartitionFound]]
-                      ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
+      singletonPartitions: Map[CandidateSet, FullPartition], // keys of size == 1
+      partitions: Map[CandidateSet, StrippedPartition], // keys of size != 1
+      pendingJobs: PendingJobMap[CandidateSet, ActorRef[StrippedPartitionFound]]
+  ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
 
     case InsertPartition(key, value: FullPartition) if key.size == 1 =>
       context.log.info("Inserting full partition for key {}", key)
@@ -127,10 +129,10 @@ class PartitionManager(context: ActorContext[PartitionCommand]) {
   }
 
   private def generateStrippedPartitions(
-                                          key: CandidateSet,
-                                          partitions: Map[CandidateSet, StrippedPartition],
-                                          receiver: ActorRef[StrippedPartitionFound]
-                                        ): PendingJobMap[CandidateSet, ActorRef[StrippedPartitionFound]] = {
+      key: CandidateSet,
+      partitions: Map[CandidateSet, StrippedPartition],
+      receiver: ActorRef[StrippedPartitionFound]
+  ): PendingJobMap[CandidateSet, ActorRef[StrippedPartitionFound]] = {
     val jobs = calcJobChain(key, partitions)
     context.spawnAnonymous(partitionGenerator(jobs, context.self), settings.cpuBoundTaskDispatcher)
     val x = jobs.map { job =>
@@ -143,9 +145,9 @@ class PartitionManager(context: ActorContext[PartitionCommand]) {
   }
 
   private def calcJobChain(
-                            key: CandidateSet,
-                            partitions: Map[CandidateSet, StrippedPartition]
-                          ): Seq[ComputeProductJob] = {
+      key: CandidateSet,
+      partitions: Map[CandidateSet, StrippedPartition]
+  ): Seq[ComputeProductJob] = {
 
     def loop(subkey: CandidateSet): Seq[ComputeProductJob] = {
       val predecessorKeys = subkey.predecessors

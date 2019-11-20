@@ -77,7 +77,7 @@ class ColumnProcessor private(settings: InputParsingSettings) extends AbstractRo
 //  override def processStarted(context: ParsingContext): Unit = {}
 
   override def rowProcessed(row: Array[String], context: ParsingContext): Unit = {
-    if(_headers == null || _columns == null) {
+    if (_headers == null || _columns == null) {
       lazyInit(row, context)
     }
     if (settings.maxRows.fold(ifEmpty = false)(parsedLines >= _)) {

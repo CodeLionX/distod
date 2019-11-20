@@ -42,7 +42,6 @@ object LeaderGuardian {
           s"Partition(numberClasses=${p.numberClasses},numberElements=${p.numberElements})"
         ).mkString("\n"))
 
-
         // insert empty partition
         partitionManager ! PartitionManagementProtocol.InsertPartition(CandidateSet.empty, StrippedPartition(
           numberElements = t.n,
@@ -54,7 +53,7 @@ object LeaderGuardian {
           partitionManager ! PartitionManagementProtocol.InsertPartition(CandidateSet(BitSet(columnId)), partitions(columnId))
         )
 
-        // ask for advanced partition
+        // ask for advanced partitions
         partitionManager ! LookupStrippedPartition(CandidateSet(1, 2), partitionEventMapper)
         partitionManager ! LookupStrippedPartition(CandidateSet(0, 1, 2), partitionEventMapper)
         partitionManager ! LookupStrippedPartition(CandidateSet(1, 2), partitionEventMapper)

@@ -1,8 +1,8 @@
 package com.github.codelionx.distod.actors
 
 import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.io.CSVParser
 import com.github.codelionx.distod.partitions.{FullPartition, Partition}
@@ -75,9 +75,9 @@ class DataReader(
         context.log.debug("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
         if (newPartitions.size == expected) {
           context.log.info("Data ready")
-          buffer.unstashAll(
-            dataReady(newPartitions.toSeq.sortBy(_._1).map(_._2).toArray)
-          )
+          val orderedPartitions = newPartitions.toSeq.sortBy(_._1)
+          val partitionsArray = orderedPartitions.map(_._2).toArray
+          buffer.unstashAll(dataReady(partitionsArray))
         } else {
           collectPartitions(newPartitions, expected)
         }

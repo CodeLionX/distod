@@ -15,7 +15,9 @@ object Master {
 
 class Master(context: ActorContext[Command]) {
 
-  def start(): Behavior[Command] = Behaviors.receiveMessage{
+  def start(): Behavior[Command] = behavior()
+
+  def behavior(): Behavior[Command] = Behaviors.receiveMessage{
     case _ => ???
   }
 }

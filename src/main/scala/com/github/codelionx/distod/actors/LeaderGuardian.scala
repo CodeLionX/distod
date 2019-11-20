@@ -9,8 +9,6 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.LookupStrippedPartition
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 
-import scala.collection.immutable.BitSet
-
 
 object LeaderGuardian {
 
@@ -42,6 +40,8 @@ object LeaderGuardian {
           s"Partition(numberClasses=${p.numberClasses},numberElements=${p.numberElements})"
         ).mkString("\n"))
 
+        val L1candidates = generateFirstLevelCandidates(t.m)
+
         // insert empty partition
         partitionManager ! PartitionManagementProtocol.InsertPartition(CandidateSet.empty, StrippedPartition(
           numberElements = t.n,
@@ -49,9 +49,10 @@ object LeaderGuardian {
           equivClasses = IndexedSeq((0 until t.n).toSet)
         ))
         // insert level1 partitions
-        (0 until t.m).foreach(columnId =>
-          partitionManager ! PartitionManagementProtocol.InsertPartition(CandidateSet(BitSet(columnId)), partitions(columnId))
-        )
+        L1candidates.zipWithIndex.foreach { case (candidate, index) =>
+          partitionManager ! PartitionManagementProtocol.InsertPartition(candidate, partitions(index))
+
+        }
 
         // ask for advanced partitions
         partitionManager ! LookupStrippedPartition(CandidateSet(1, 2), partitionEventMapper)
@@ -82,7 +83,10 @@ object LeaderGuardian {
       }
   }
 
-  def testCPUhogging(context: ActorContext[Command]): Unit = {
+  private def generateFirstLevelCandidates(nAttributes: Int): IndexedSeq[CandidateSet] =
+    (0 until nAttributes).map(columnId => CandidateSet(columnId))
+
+  private def testCPUhogging(context: ActorContext[Command]): Unit = {
     val settings = Settings(context.system)
     val n = 16
     context.log.info("Starting {} hoggers", n)

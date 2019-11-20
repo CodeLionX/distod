@@ -1,6 +1,7 @@
 package com.github.codelionx.distod.actors
 
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.actors.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
@@ -15,6 +16,8 @@ object Master {
   sealed trait Command
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
+
+  val MasterServiceKey: ServiceKey[Command] = ServiceKey("master")
 
   val name = "master"
 
@@ -38,6 +41,7 @@ object Master {
   )
 }
 
+
 class Master(context: ActorContext[Command], localPeers: LocalPeers) {
 
   import Master._
@@ -47,7 +51,11 @@ class Master(context: ActorContext[Command], localPeers: LocalPeers) {
   def start(): Behavior[Command] = initialize()
 
   private def initialize(): Behavior[Command] = Behaviors.setup { context =>
+    // register message adapters
     val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
+
+    // make master available to the whole cluster using the registry
+    context.system.receptionist ! Receptionist.Register(MasterServiceKey, context.self)
 
     dataReader ! LoadPartitions(loadingEventMapper)
 

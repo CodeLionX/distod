@@ -81,11 +81,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // L1: single attribute candidate nodes
         val L1candidateState = generateLevel1(attributes, partitions)
 
-        testPartitionMgmt()
-//        val state = rootCandidateState ++ L1candidateState
-//        stash.unstashAll(
-//          behavior(state, state.keys.to(Queue), Queue.empty)
-//        )
+        //        testPartitionMgmt()
+        val state = rootCandidateState ++ L1candidateState
+        val initialQueue = L1candidateState.keys.to(Queue)
+        context.log.info("Master ready, initial work queue: {}", initialQueue)
+        stash.unstashAll(
+          behavior(state, initialQueue, Queue.empty)
+        )
     }
 
     Behaviors.receiveMessagePartial[Command] {
@@ -117,7 +119,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         println("Received stripped partition", key, value)
         Behaviors.same
 
-        // FINISHED for now
+      // FINISHED for now
 //        finished()
     }
 

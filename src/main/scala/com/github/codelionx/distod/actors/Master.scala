@@ -2,18 +2,23 @@ package com.github.codelionx.distod.actors
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.actors.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
+import com.github.codelionx.distod.Serialization.CborSerializable
+import com.github.codelionx.distod.actors.Worker.CheckCandidateNode
+
+import scala.collection.immutable.{BitSet, Queue}
 
 
 object Master {
 
   sealed trait Command
+  final case class DispatchWork(replyTo: ActorRef[Worker.Command]) extends Command with CborSerializable
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
 
@@ -26,8 +31,9 @@ object Master {
       dataReader: ActorRef[DataLoadingCommand],
       partitionManager: ActorRef[PartitionCommand]
   ): Behavior[Command] = Behaviors.setup(context =>
-    new Master(context, LocalPeers(guardian, dataReader, partitionManager)).start()
-  )
+    Behaviors.withStash(100) { stash =>
+      new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager)).start()
+    })
 
   case class LocalPeers(
       guardian: ActorRef[LeaderGuardian.Command],
@@ -42,7 +48,7 @@ object Master {
 }
 
 
-class Master(context: ActorContext[Command], localPeers: LocalPeers) {
+class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers) {
 
   import Master._
   import localPeers._
@@ -74,12 +80,21 @@ class Master(context: ActorContext[Command], localPeers: LocalPeers) {
         // L1: single attribute candidate nodes
         val L1candidateState = generateLevel1(attributes, partitions)
 
-        testPartitionMgmt()
-//        behavior(rootCandidateState ++ L1candidateState)
+        //        testPartitionMgmt()
+        val state = rootCandidateState ++ L1candidateState
+        stash.unstashAll(
+          behavior(state, state.keys.to(Queue), Queue.empty)
+        )
     }
 
     Behaviors.receiveMessagePartial[Command] {
-      case WrappedLoadingEvent(event) => onLoadingEvent(event)
+      case m: DispatchWork =>
+        context.log.debug("Woker {} is ready for work, stashing request", m.replyTo)
+        stash.stash(m)
+        Behaviors.same
+
+      case WrappedLoadingEvent(event) =>
+        onLoadingEvent(event)
     }
   }
 
@@ -102,12 +117,30 @@ class Master(context: ActorContext[Command], localPeers: LocalPeers) {
     }
 
     Behaviors.receiveMessagePartial {
-      case WrappedPartitionEvent(event) => onPartitionEvent(event)
+      case m: DispatchWork =>
+        stash.stash(m)
+        Behaviors.same
+
+      case WrappedPartitionEvent(event) =>
+        onPartitionEvent(event)
     }
   }
 
-  private def behavior(state: Map[CandidateSet, CandidateState]): Behavior[Command] = Behaviors.receiveMessage {
-    case _ => ???
+  private def behavior(
+      state: Map[CandidateSet, CandidateState],
+      workQueue: Queue[CandidateSet],
+      pendingQueue: Queue[CandidateSet]
+  ): Behavior[Command] = Behaviors.receiveMessage {
+    case DispatchWork(replyTo) =>
+      val (taskId, newWorkQueue) = workQueue.dequeue
+      val taskState = state(taskId)
+      val splitCandidates = taskId.x & BitSet.fromSpecific(taskState.splitCandidates)
+      replyTo ! CheckCandidateNode(taskId, splitCandidates, taskState.swapCandidates)
+      behavior(state, newWorkQueue, pendingQueue.enqueue(taskId))
+
+    case m =>
+      context.log.info("Received message: {}", m)
+      Behaviors.same
   }
 
   private def finished(): Behavior[Command] = {

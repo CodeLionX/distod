@@ -12,7 +12,7 @@ object CandidateSet {
 
 case class CandidateSet(x: BitSet) {
 
-  def predecessors: Seq[CandidateSet] = x.iterator.map(elem =>
+  def predecessors: Seq[CandidateSet] = x.unsorted.map(elem =>
     CandidateSet(x - elem)
   ).toSeq
 

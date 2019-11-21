@@ -33,12 +33,18 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
 }
 
 
+/**
+ * Represents a set of candidates (column Ids). It uses a [[scala.collection.immutable.BitSet]] as underlying data
+ * structure that allows space-efficient storage and efficient set-inclusion testing and set-combination operations.
+ *
+ * @see [[scala.collection.immutable.BitSet]]
+ */
 class CandidateSet(_underlying: BitSet)
   extends SortedSet[Int]
     with SortedSetOps[Int, SortedSet, CandidateSet]
     with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet] {
 
-  def factory: SpecificIterableFactory[Int, CandidateSet] = CandidateSet
+  private def factory: SpecificIterableFactory[Int, CandidateSet] = CandidateSet
 
   protected override def fromSpecific(coll: IterableOnce[Int]): CandidateSet = factory.fromSpecific(coll)
 
@@ -65,7 +71,17 @@ class CandidateSet(_underlying: BitSet)
   override def rangeImpl(from: Option[Int], until: Option[Int]): CandidateSet =
     new CandidateSet(_underlying.rangeImpl(from, until))
 
+  /**
+   * Computes the predecessors of this CandidateSet. E.g. for CandidateSet(0, 1, 2), the predecessors are:
+   * - CandidateSet(0, 1)
+   * - CandidateSet(1, 2)
+   * - CandidateSet(0, 2)
+   *
+   * @return A new sequence of the preceding candidate sets.
+   */
   def predecessors: Seq[CandidateSet] = _underlying.unsorted.map(elem =>
     new CandidateSet(_underlying - elem)
   ).toSeq
+
+  override def toString(): String = s"CandidateSet(${_underlying.mkString(", ")})"
 }

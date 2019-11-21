@@ -59,7 +59,7 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
   private def collectPartitions(partitions: Map[Int, FullPartition], expected: Int): Behavior[DataLoadingCommand] =
     Behaviors.receiveMessage {
       case m: LoadPartitions =>
-        context.log.debug("Stashing request to load partitions from {}", m.replyTo)
+        context.log.debug("Stashing request to load data from {}", m.replyTo)
         buffer.stash(m)
         Behaviors.same
 

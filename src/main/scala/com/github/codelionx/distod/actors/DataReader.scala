@@ -72,8 +72,8 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
         context.log.debug("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
         if (newPartitions.size == expected) {
           context.log.info("Data ready")
-          val orderedPartitions = newPartitions.toSeq.sortBy(_._1)
-          val partitionsArray = orderedPartitions.map(_._2).toArray
+          val orderedPartitions = newPartitions.toSeq.sortBy { case (id, _) => id }
+          val partitionsArray = orderedPartitions.map { case (_, partition) => partition }.toArray
           buffer.unstashAll(dataReady(partitionsArray))
         } else {
           collectPartitions(newPartitions, expected)

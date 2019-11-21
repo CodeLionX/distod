@@ -102,7 +102,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
 
     // ask for advanced partitions as a test
-    partitionManager ! LookupStrippedPartition(CandidateSet(0, 1, 2), partitionEventMapper)
+    partitionManager ! LookupStrippedPartition(CandidateSet.from(0, 1, 2), partitionEventMapper)
 
     def onPartitionEvent(event: PartitionEvent): Behavior[Command] = event match {
       case PartitionFound(key, value) =>
@@ -134,7 +134,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     case DispatchWork(replyTo) =>
       val (taskId, newWorkQueue) = workQueue.dequeue
       val taskState = state(taskId)
-      val splitCandidates = taskId.x & BitSet.fromSpecific(taskState.splitCandidates)
+      val splitCandidates = taskId & BitSet.fromSpecific(taskState.splitCandidates)
       replyTo ! CheckCandidateNode(taskId, splitCandidates, taskState.swapCandidates)
       behavior(state, newWorkQueue, pendingQueue.enqueue(taskId))
 
@@ -168,7 +168,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   private def generateLevel1(
       attributes: Seq[Int], partitions: Array[FullPartition]
   ): Map[CandidateSet, CandidateState] = {
-    val L1candidates = attributes.map(columnId => CandidateSet(columnId))
+    val L1candidates = attributes.map(columnId => CandidateSet.from(columnId))
     val L1candidateState = L1candidates.map { candidate =>
       candidate -> CandidateState(
         splitCandidates = attributes,

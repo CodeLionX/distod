@@ -9,15 +9,13 @@ import com.github.codelionx.distod.actors.Worker.{CheckCandidateNode, Command}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.types.CandidateSet
 
-import scala.collection.BitSet
-
 
 object Worker {
 
   sealed trait Command extends CborSerializable
   final case class CheckCandidateNode(
       candidateId: CandidateSet,
-      spiltCandidates: BitSet,
+      spiltCandidates: CandidateSet,
       swapCandidates: Seq[(Int, Int)]
   ) extends Command
 
@@ -54,8 +52,8 @@ class Worker(
     case CheckCandidateNode(candidateId, spiltCandidates, swapCandidates) =>
       context.log.info("Checking candidate node {}", candidateId)
 
-      for(c <- spiltCandidates) {
-        val context = candidateId.x - c
+      for (c <- spiltCandidates) {
+        val context = candidateId - c
       }
       Behaviors.same
   }

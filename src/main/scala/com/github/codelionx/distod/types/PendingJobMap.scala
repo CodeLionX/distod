@@ -46,6 +46,13 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
   @inline def get(key: K): Option[Seq[V]] = jobMap.get(key)
 
   /**
+   * The size of this pending job map.
+   *
+   * @return the number of key
+   */
+  def size: Int = jobMap.size
+
+  /**
    * Removes a key and all its values from this map, returning a new map.
    *
    * @param key the key to be removed

@@ -66,25 +66,26 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     dataReader ! LoadPartitions(loadingEventMapper)
 
     def onLoadingEvent(loadingEvent: DataLoadingEvent): Behavior[Command] = loadingEvent match {
-      case PartitionsLoaded(t @ PartitionedTable(name, headers, partitions)) =>
+      case PartitionsLoaded(table @ PartitionedTable(name, headers, partitions)) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
 
         // stop data reader to free up resources
         dataReader ! Stop
 
-        val attributes = 0 until t.nAttributes
+        val attributes = 0 until table.nAttributes
+        partitionManager ! SetAttributes(attributes)
 
         // L0: root candidate node
-        val rootCandidateState = generateLevel0(attributes, t.nTuples)
+        val rootCandidateState = generateLevel0(attributes, table.nTuples)
 
         // L1: single attribute candidate nodes
         val L1candidateState = generateLevel1(attributes, partitions)
 
-        //        testPartitionMgmt()
-        val state = rootCandidateState ++ L1candidateState
-        stash.unstashAll(
-          behavior(state, state.keys.to(Queue), Queue.empty)
-        )
+        testPartitionMgmt()
+//        val state = rootCandidateState ++ L1candidateState
+//        stash.unstashAll(
+//          behavior(state, state.keys.to(Queue), Queue.empty)
+//        )
     }
 
     Behaviors.receiveMessagePartial[Command] {
@@ -102,18 +103,22 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
 
     // ask for advanced partitions as a test
+    partitionManager ! LookupError(CandidateSet.from(0, 1), partitionEventMapper)
     partitionManager ! LookupStrippedPartition(CandidateSet.from(0, 1, 2), partitionEventMapper)
 
     def onPartitionEvent(event: PartitionEvent): Behavior[Command] = event match {
+      case ErrorFound(key, error) =>
+        println("Partition error", key, error)
+        Behaviors.same
       case PartitionFound(key, value) =>
         println("Received partition", key, value)
         Behaviors.same
       case StrippedPartitionFound(key, value) =>
         println("Received stripped partition", key, value)
-        // Behaviors.same
+        Behaviors.same
 
         // FINISHED for now
-        finished()
+//        finished()
     }
 
     Behaviors.receiveMessagePartial {

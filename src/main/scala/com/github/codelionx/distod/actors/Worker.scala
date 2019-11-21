@@ -1,13 +1,12 @@
 package com.github.codelionx.distod.actors
 
 import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.Master.DispatchWork
-import com.github.codelionx.distod.actors.Worker.{CheckCandidateNode, Command}
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
-import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.actors.Worker.{CheckCandidateNode, Command, WrappedPartitionEvent}
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
+import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
 
 
 object Worker {
@@ -18,43 +17,99 @@ object Worker {
       spiltCandidates: CandidateSet,
       swapCandidates: Seq[(Int, Int)]
   ) extends Command
+  private case class WrappedPartitionEvent(event: PartitionEvent) extends Command
 
   def name(n: Int): String = s"worker-$n"
 
-  def apply(partitionManager: ActorRef[PartitionCommand]): Behavior[Nothing] =
-    Behaviors.setup[Receptionist.Listing] { context =>
-      context.system.receptionist ! Receptionist.Subscribe(Master.MasterServiceKey, context.self)
+  def apply(partitionManager: ActorRef[PartitionCommand], master: ActorRef[Master.Command]): Behavior[Command] =
+    Behaviors.setup[Command] { context =>
+      new Worker(context, master, partitionManager).start()
+    }
 
-      Behaviors.receiveMessage { case Master.MasterServiceKey.Listing(listings) =>
-        listings.headOption match {
-          case None =>
-            Behaviors.same
-          case Some(masterRef) =>
-            Behaviors.setup[Command] { workerContext =>
-              new Worker(workerContext, masterRef, partitionManager).start()
-            }
-        }
-        Behaviors.same
-      }
-    }.narrow
 }
 
 class Worker(
     context: ActorContext[Command], master: ActorRef[Master.Command], partitionManager: ActorRef[PartitionCommand]
 ) {
 
-  def start(): Behavior[Command] = {
-    master ! DispatchWork(context.self)
-    behavior()
+  private val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
+
+  def start(): Behavior[Command] = initialize()
+
+  def initialize(): Behavior[Command] = {
+    partitionManager ! LookupAttributes(partitionEventMapper)
+
+    Behaviors.receiveMessagePartial {
+      case WrappedPartitionEvent(AttributesFound(attributes)) =>
+        context.log.debug("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
+        master ! DispatchWork(context.self)
+        behavior(attributes)
+    }
   }
 
-  def behavior(): Behavior[Command] = Behaviors.receiveMessage {
-    case CheckCandidateNode(candidateId, spiltCandidates, swapCandidates) =>
+  def behavior(attributes: Seq[Int]): Behavior[Command] = Behaviors.receiveMessage {
+    case task @ CheckCandidateNode(candidateId, spiltCandidates, swapCandidates) =>
       context.log.info("Checking candidate node {}", candidateId)
 
-      for (c <- spiltCandidates) {
-        val context = candidateId - c
-      }
+      checkSplitCandidates(attributes, task)
+
+    case WrappedPartitionEvent(event) =>
+      context.log.info("Ignored {}", event)
       Behaviors.same
+  }
+
+  def checkSplitCandidates(attributes: Seq[Int], task: CheckCandidateNode): Behavior[Command] = {
+    partitionManager ! LookupError(task.candidateId, partitionEventMapper)
+
+    for (c <- task.spiltCandidates) {
+      val fdContext = task.candidateId - c
+      partitionManager ! LookupError(fdContext, partitionEventMapper)
+    }
+
+    context.log.debug("Loading partition errors for all split checks")
+
+    def collectErrors(errors: PendingJobMap[CandidateSet, Double], expected: Int): Behavior[Command] =
+      Behaviors.receiveMessage {
+        case WrappedPartitionEvent(ErrorFound(key, value)) =>
+          context.log.debug("Received partition error value", key, value)
+          val newErrorMap = errors + (key -> value)
+          if (newErrorMap.size == expected) {
+            performCheck(newErrorMap)
+          } else {
+            collectErrors(errors + (key -> value), expected)
+          }
+      }
+
+    def performCheck(errors: PendingJobMap[CandidateSet, Double]): Behavior[Command] = {
+      val errorCompare = errors(task.candidateId)
+      val validConstantODs = for {
+        a <- task.spiltCandidates.unsorted
+        fdContext = task.candidateId - a
+        if errors(fdContext) == errorCompare // candidate fdContext: [] -> a holds
+      } yield a
+
+      // TODO: emit OD
+      if(validConstantODs.nonEmpty) {
+        context.log.debug("Found valid candidates: {}",
+          validConstantODs.map(a => s"${task.candidateId}: [] -> $a").mkString(", ")
+        )
+      } else {
+        context.log.debug("No valid constant candidates found")
+      }
+
+      val toBeRemovedCandidates = {
+        val validCandidateSet = CandidateSet.fromSpecific(validConstantODs)
+        if (validCandidateSet.nonEmpty)
+          validCandidateSet union (CandidateSet.fromSpecific(attributes) diff task.candidateId)
+        else
+          CandidateSet.empty
+      }
+
+      // TODO: save removed candidates and progress further with swap candidates
+      Behaviors.unhandled
+    }
+
+    collectErrors(PendingJobMap.empty, task.spiltCandidates.size + 1)
+//    Behaviors.empty
   }
 }

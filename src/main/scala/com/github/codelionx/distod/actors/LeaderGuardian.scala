@@ -28,6 +28,10 @@ object LeaderGuardian {
     val master = context.spawn(Master(context.self, dataReader, partitionManager), Master.name)
     context.watch(master)
 
+    // worker manager spawns the workers
+    val workerManager = context.spawn(WorkerManager(partitionManager), WorkerManager.name)
+    context.watch(workerManager)
+
     context.log.info("Actors started, waiting for data")
 
 

@@ -70,7 +70,7 @@ class Worker(
     context.log.debug("Loading partition errors for all split checks")
 
     def collectErrors(errors: PendingJobMap[CandidateSet, Double], expected: Int): Behavior[Command] =
-      Behaviors.receiveMessage {
+      Behaviors.receiveMessagePartial {
         case WrappedPartitionEvent(ErrorFound(key, value)) =>
           context.log.debug("Received partition error value", key, value)
           val newErrorMap = errors + (key -> value)
@@ -90,7 +90,7 @@ class Worker(
       } yield a
 
       // TODO: emit OD
-      if(validConstantODs.nonEmpty) {
+      if (validConstantODs.nonEmpty) {
         context.log.debug("Found valid candidates: {}",
           validConstantODs.map(a => s"${task.candidateId}: [] -> $a").mkString(", ")
         )

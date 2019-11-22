@@ -25,11 +25,14 @@ object ResultCollector {
 
 class ResultCollector(context: ActorContext[ResultCommand]) {
 
+  protected def createWriter(append: Boolean): BufferedWriter =
+    new BufferedWriter(new FileWriter(settings.outputFilePath, append))
+
   private val settings = Settings(context.system)
 
   private def recreateWriter(currentWriter: Option[BufferedWriter], append: Boolean): BufferedWriter = {
     cleanup(currentWriter)
-    new BufferedWriter(new FileWriter(settings.outputFilePath, append))
+    createWriter(append)
   }
 
   private def cleanup(writer: Option[BufferedWriter]): Unit = writer match {
@@ -65,11 +68,12 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
   private def behavior(
       writer: BufferedWriter, seenBatches: PendingJobMap[ActorPath, Int]
   ): Behavior[ResultCommand] = Behaviors
-    .receiveMessage { case DependencyBatch(id, deps, ackTo) =>
+    .receiveMessage[ResultCommand] { case DependencyBatch(id, deps, ackTo) =>
       val wasSeen = seenBatches.get(ackTo.path).fold(false)(_.contains(id))
       if (wasSeen) {
         context.log.warn("Ignoring duplicated batch {} from {}", id, ackTo)
-        Behaviors.same
+        ackTo ! AckBatch(id)
+        Behaviors.same[ResultCommand]
       } else {
         try {
           writeBatch(deps, writer)
@@ -81,6 +85,7 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
             // do not wrap in try to let a potential second exception stop the actor
             val newWriter = recreateWriter(Some(writer), append = true)
             writeBatch(deps, newWriter)
+            ackTo ! AckBatch(id)
             behavior(newWriter, seenBatches + (ackTo.path -> id))
         }
       }

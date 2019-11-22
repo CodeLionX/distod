@@ -29,15 +29,15 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3",
 
   // test
-  "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
+  "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
+  "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
   "org.scalactic" %% "scalactic" % "3.0.8",
-  "org.scalatest" %% "scalatest" % "3.0.8" % "test",
+  "org.scalatest" %% "scalatest" % "3.0.8" % Test,
 
   // serialization
   "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
 //  "com.twitter" %% "chill-akka" % "0.9.3", // just for scala 2.12?
-//  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2",
-// I may need to switch to Jackson serialization (using the binary format)
+//  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
 )
 
 fork in run := true

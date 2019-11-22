@@ -16,7 +16,7 @@ object WorkerManager {
 
     val settings = Settings(context.system)
     val cores = Runtime.getRuntime.availableProcessors()
-    val numberOfWorkers = Math.min(settings.maxWorkers, cores)
+    val numberOfWorkers = scala.math.min(settings.maxWorkers, cores)
 
     def spawnAndWatchWorker(master: ActorRef[Master.Command], id: Int): Unit = {
       val ref = context.spawn(Worker(partitionManager, master), Worker.name(id))

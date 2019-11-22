@@ -58,6 +58,8 @@ class Settings private(config: Config) extends Extension {
 
   val outputToConsole: Boolean = config.getBoolean(s"$namespace.output-to-console")
 
+  val resultBatchSize: Int = config.getInt(s"$namespace.result-batch-size")
+
   val host: String = config.getString(s"$namespace.host")
   val port: Int = config.getInt(s"$namespace.port")
 

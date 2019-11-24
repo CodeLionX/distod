@@ -9,28 +9,18 @@ import akka.actor.typed.Behavior
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{AckBatch, DependencyBatch, ResultCommand, ResultProxyCommand}
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.ConfigFactory
 import org.scalatest
-import org.scalatest.WordSpecLike
+import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
 
-object ResultCollectorSpec {
-
-  val config: Config = ConfigFactory
-    .parseString(
-      s"""""".stripMargin
-    )
-    .withFallback(ConfigFactory.load())
-
-}
-
 class ResultCollectorSpec
-  extends ScalaTestWithActorTestKit(ResultCollectorSpec.config) with WordSpecLike with LogCapturing {
+  extends ScalaTestWithActorTestKit(ConfigFactory.load()) with WordSpecLike with LogCapturing with Matchers {
 
-  var writeBuffer = new StringWriter()
+  val writeBuffer = new StringWriter()
 
   val patchedResultCollectorBehavior: Behavior[ResultCommand] = Behaviors.setup[ResultCommand] { context =>
     new ResultCollector(context) {
@@ -49,14 +39,9 @@ class ResultCollectorSpec
     )
     val expectedFileContent = deps.map(_.toString).mkString("", "\n", "\n")
 
-    def testFileContents(): scalatest.Assertion = {
+    def testFileContents(expected: String = expectedFileContent): scalatest.Assertion = {
       val fileContent = writeBuffer.toString
-
-//      println("expected")
-//      println(expectedFileContent)
-//      println("found")
-//      println(fileContent)
-      fileContent shouldEqual expectedFileContent
+      fileContent shouldEqual expected
     }
 
     "register at the receptionist" in {
@@ -80,11 +65,17 @@ class ResultCollectorSpec
       testFileContents()
     }
 
-    "ignore duplicate batches, but send an acknowledgement" in {
+    "ignore duplicate batches from the same sender, but send an acknowledgement" in {
+      val batch = Seq(ConstantOrderDependency(CandidateSet.from(6), 1))
       val probe = createTestProbe[ResultProxyCommand]()
-      collector ! DependencyBatch(0, Seq(ConstantOrderDependency(CandidateSet.from(4), 3)), probe.ref)
+      collector ! DependencyBatch(0, batch, probe.ref)
+      probe.expectMessageType[AckBatch]
+      collector ! DependencyBatch(0, batch, probe.ref)
+      probe.expectMessageType[AckBatch]
 
-      testFileContents()
+      testFileContents(
+        expectedFileContent + batch.map(_.toString).mkString("", "\n", "\n")
+      )
     }
   }
 }

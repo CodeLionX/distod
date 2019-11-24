@@ -25,10 +25,10 @@ object ResultCollector {
 
 class ResultCollector(context: ActorContext[ResultCommand]) {
 
+  private val settings: Settings = Settings(context.system)
+
   protected def createWriter(append: Boolean): BufferedWriter =
     new BufferedWriter(new FileWriter(settings.outputFilePath, append))
-
-  private val settings = Settings(context.system)
 
   private def recreateWriter(currentWriter: Option[BufferedWriter], append: Boolean): BufferedWriter = {
     cleanup(currentWriter)
@@ -75,18 +75,20 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
         ackTo ! AckBatch(id)
         Behaviors.same[ResultCommand]
       } else {
-        try {
-          writeBatch(deps, writer)
+        def handleBatchWith(w: BufferedWriter): Behavior[ResultCommand] = {
+          writeBatch(deps, w)
           ackTo ! AckBatch(id)
-          behavior(writer, seenBatches + (ackTo.path -> id))
+          behavior(w, seenBatches + (ackTo.path -> id))
+        }
+
+        try {
+          handleBatchWith(writer)
         } catch {
           case e: java.io.IOException =>
             context.log.debug("Writing results failed, because {}! Recreating file writer ...", e.getMessage)
             // do not wrap in try to let a potential second exception stop the actor
             val newWriter = recreateWriter(Some(writer), append = true)
-            writeBatch(deps, newWriter)
-            ackTo ! AckBatch(id)
-            behavior(newWriter, seenBatches + (ackTo.path -> id))
+            handleBatchWith(newWriter)
         }
       }
     }

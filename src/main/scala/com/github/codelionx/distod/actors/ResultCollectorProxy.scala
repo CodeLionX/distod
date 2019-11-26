@@ -109,16 +109,20 @@ class ResultCollectorProxy(
         behavior(newCollector, nextId, buffer, pendingAcks.empty)
       }
 
-    case FlushAndStop(replyTo) if buffer.isEmpty =>
-      context.log.info("Buffer is empty, flushing not required.")
+    case FlushAndStop(replyTo) if buffer.isEmpty && pendingAcks.isEmpty =>
+      context.log.info("Buffer and pending buffer are empty, finished.")
       replyTo ! FlushFinished
       Behaviors.stopped
+
+    case FlushAndStop(replyTo) if buffer.isEmpty && pendingAcks.nonEmpty =>
+      context.log.info("Nothing to flush, waiting for {} pending acks", pendingAcks.size)
+      flushing(pendingAcks, Seq(replyTo))
 
     case FlushAndStop(replyTo) if buffer.nonEmpty =>
       val cancellable = scheduleSendingBatch(collector, nextId, buffer)
       timers.startSingleTimer(timoutTimerKey, Timeout, 2 seconds)
       val newPendingAcks = pendingAcks + (nextId -> cancellable)
-      context.log.info("Request to flush and stop, pending acks: {}", newPendingAcks.size)
+      context.log.info("Flushed buffer, pending acks: {}", newPendingAcks.size)
       flushing(newPendingAcks, Seq(replyTo))
   }
 

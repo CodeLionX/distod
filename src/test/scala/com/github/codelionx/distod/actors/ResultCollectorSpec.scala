@@ -42,7 +42,7 @@ class ResultCollectorSpec
     val deps3 = Seq(
       ConstantOrderDependency(CandidateSet.from(6), 1)
     )
-    val columnNames = ColumnProcessor.generateSyntheticColumnNames(10)
+    val columnNames = ColumnProcessor.generateSyntheticColumnNames(10).toIndexedSeq
     val expectedFileContent = (deps1 ++ deps2).map(_.withAttributeNames(columnNames)).mkString("", "\n", "\n")
 
     def testFileContents(expected: String = expectedFileContent): scalatest.Assertion = {

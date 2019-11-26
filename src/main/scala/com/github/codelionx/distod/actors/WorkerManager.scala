@@ -5,13 +5,16 @@ import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.Settings
+import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 
 
 object WorkerManager {
 
   val name = "workerManager"
 
-  def apply(partitionManager: ActorRef[PartitionCommand]): Behavior[Receptionist.Listing] = Behaviors.setup { context =>
+  def apply(
+      partitionManager: ActorRef[PartitionCommand], rsProxy: ActorRef[ResultProxyCommand]
+  ): Behavior[Receptionist.Listing] = Behaviors.setup { context =>
     context.system.receptionist ! Receptionist.Subscribe(Master.MasterServiceKey, context.self)
 
     val settings = Settings(context.system)
@@ -19,7 +22,7 @@ object WorkerManager {
     val numberOfWorkers = scala.math.min(settings.maxWorkers, cores)
 
     def spawnAndWatchWorker(master: ActorRef[Master.Command], id: Int): Unit = {
-      val ref = context.spawn(Worker(partitionManager, master), Worker.name(id))
+      val ref = context.spawn(Worker(partitionManager, rsProxy, master), Worker.name(id))
       context.watch(ref)
     }
 

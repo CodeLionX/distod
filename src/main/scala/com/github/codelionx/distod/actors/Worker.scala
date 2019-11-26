@@ -6,7 +6,9 @@ import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.Master.DispatchWork
 import com.github.codelionx.distod.actors.Worker.{CheckCandidateNode, Command, WrappedPartitionEvent}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
+import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FoundDependencies, ResultProxyCommand}
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
+import com.github.codelionx.distod.types.OrderDependency.ConstantOrderDependency
 
 
 object Worker {
@@ -21,16 +23,22 @@ object Worker {
 
   def name(n: Int): String = s"worker-$n"
 
-  def apply(partitionManager: ActorRef[PartitionCommand], master: ActorRef[Master.Command]): Behavior[Command] =
+  def apply(
+      partitionManager: ActorRef[PartitionCommand], rsProxy: ActorRef[ResultProxyCommand],
+      master: ActorRef[Master.Command]
+  ): Behavior[Command] =
     Behaviors.setup[Command] { context =>
-      new Worker(context, master, partitionManager).start()
+      new Worker(context, master, partitionManager, rsProxy).start()
     }
 
 }
 
 
 class Worker(
-    context: ActorContext[Command], master: ActorRef[Master.Command], partitionManager: ActorRef[PartitionCommand]
+    context: ActorContext[Command],
+    master: ActorRef[Master.Command],
+    partitionManager: ActorRef[PartitionCommand],
+    rsProxy: ActorRef[ResultProxyCommand]
 ) {
 
   private val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
@@ -87,19 +95,20 @@ class Worker(
         a <- task.spiltCandidates.unsorted
         fdContext = task.candidateId - a
         if errors(fdContext) == errorCompare // candidate fdContext: [] -> a holds
-      } yield a
+      } yield fdContext -> a
 
-      // TODO: emit OD
       if (validConstantODs.nonEmpty) {
-        context.log.debug("Found valid candidates: {}",
-          validConstantODs.map(a => s"${task.candidateId}: [] -> $a").mkString(", ")
-        )
+        val constantOds = validConstantODs.map {
+          case (context, attribute) => ConstantOrderDependency(context, attribute)
+        }.toSeq
+        context.log.debug("Found valid candidates: {}", constantOds.mkString(", "))
+        rsProxy ! FoundDependencies(constantOds)
       } else {
         context.log.debug("No valid constant candidates found")
       }
 
       val toBeRemovedCandidates = {
-        val validCandidateSet = CandidateSet.fromSpecific(validConstantODs)
+        val validCandidateSet = CandidateSet.fromSpecific(validConstantODs.map(_._2))
         if (validCandidateSet.nonEmpty)
           validCandidateSet union (CandidateSet.fromSpecific(attributes) diff task.candidateId)
         else

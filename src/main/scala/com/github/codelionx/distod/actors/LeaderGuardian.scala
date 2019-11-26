@@ -3,42 +3,60 @@ package com.github.codelionx.distod.actors
 import akka.actor.typed.{Behavior, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
+import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 
 
 object LeaderGuardian {
 
   sealed trait Command
   case object AlgorithmFinished extends Command
+  case class WrappedRSProxyEvent(event: FlushFinished.type) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
+    val rsAdapter = context.messageAdapter(WrappedRSProxyEvent)
     context.log.info("LeaderGuardian started, spawning actors ...")
 
     context.spawn[Nothing](ClusterTester(), ClusterTester.name)
     // testCPUhogging(context)
 
-    // temp. data reader
-    val dataReader = context.spawn(DataReader(), DataReader.name)
-    // don't watch data reader, because it will be shut down after initialization
-
     // local partition manager
     val partitionManager = context.spawn(PartitionManager(), PartitionManager.name)
     context.watch(partitionManager)
 
-    // master is only spawned by leader
-    val master = context.spawn(Master(context.self, dataReader, partitionManager), Master.name)
-    context.watch(master)
+    // local result collector proxy
+    val rsProxy = context.spawn(ResultCollectorProxy(), ResultCollectorProxy.name)
+    context.watch(rsProxy)
 
-    // worker manager spawns the workers
-    val workerManager = context.spawn(WorkerManager(partitionManager), WorkerManager.name)
+    // local worker manager spawns the workers
+    val workerManager = context.spawn(WorkerManager(partitionManager, rsProxy), WorkerManager.name)
     context.watch(workerManager)
 
-    context.log.info("Actors started, waiting for data")
+    // only spawned by leader:
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    // temp. data reader
+    val dataReader = context.spawn(DataReader(), DataReader.name)
+    // don't watch data reader, because it will be shut down after initialization
+
+    // the single result collector
+    val rs = context.spawn(ResultCollector(), ResultCollector.name)
+    context.watch(rs)
+
+    // master
+    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name)
+    context.watch(master)
+
+    context.log.info("Actors started, algorithm is running")
 
     Behaviors
       .receiveMessage[Command] {
         case AlgorithmFinished =>
           context.log.info("Received message that algorithm has finished successfully. Shutting down system.")
+          rsProxy ! FlushAndStop(rsAdapter)
+          Behaviors.same
+
+        case WrappedRSProxyEvent(FlushFinished) =>
+          context.unwatch(rsProxy)
           Behaviors.stopped
       }
       .receiveSignal {

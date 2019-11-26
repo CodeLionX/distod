@@ -5,12 +5,13 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.actors.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
+import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.Worker.CheckCandidateNode
+import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
 import scala.collection.immutable.{BitSet, Queue}
 
@@ -29,16 +30,18 @@ object Master {
   def apply(
       guardian: ActorRef[LeaderGuardian.Command],
       dataReader: ActorRef[DataLoadingCommand],
-      partitionManager: ActorRef[PartitionCommand]
+      partitionManager: ActorRef[PartitionCommand],
+      resultCollector: ActorRef[ResultCommand]
   ): Behavior[Command] = Behaviors.setup(context =>
     Behaviors.withStash(100) { stash =>
-      new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager)).start()
+      new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
     })
 
   case class LocalPeers(
       guardian: ActorRef[LeaderGuardian.Command],
       dataReader: ActorRef[DataLoadingCommand],
-      partitionManager: ActorRef[PartitionCommand]
+      partitionManager: ActorRef[PartitionCommand],
+      resultCollector: ActorRef[ResultCommand]
   )
   case class CandidateState(
       splitCandidates: Seq[Int],
@@ -73,7 +76,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         dataReader ! Stop
 
         val attributes = 0 until table.nAttributes
-        partitionManager ! SetAttributes(attributes)
+        partitionManager ! PartitionManagementProtocol.SetAttributes(attributes)
+        resultCollector ! ResultCollectionProtocol.SetAttributeNames(headers)
 
         // L0: root candidate node
         val rootCandidateState = generateLevel0(attributes, table.nTuples)
@@ -81,7 +85,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // L1: single attribute candidate nodes
         val L1candidateState = generateLevel1(attributes, partitions)
 
-        //        testPartitionMgmt()
+        // testPartitionMgmt()
         val state = rootCandidateState ++ L1candidateState
         val initialQueue = L1candidateState.keys.to(Queue)
         context.log.info("Master ready, initial work queue: {}", initialQueue)

@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.types
 
-import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder}
 import java.time.{LocalDate, LocalDateTime, ZonedDateTime}
+import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder}
 import java.util.Locale
 
 import scala.util.{Failure, Success, Try}

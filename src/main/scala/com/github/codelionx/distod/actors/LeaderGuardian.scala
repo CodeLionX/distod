@@ -1,88 +1,77 @@
 package com.github.codelionx.distod.actors
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{Behavior, Terminated}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.partitions.StrippedPartition
-import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoaded, DataLoadingEvent}
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol.LookupStrippedPartition
-import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
-
-import scala.collection.immutable.BitSet
+import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 
 
 object LeaderGuardian {
 
   sealed trait Command
-  private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
-  private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
+  case object AlgorithmFinished extends Command
+  case class WrappedRSProxyEvent(event: FlushFinished.type) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
-    val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
-    val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
-
+    val rsAdapter = context.messageAdapter(WrappedRSProxyEvent)
     context.log.info("LeaderGuardian started, spawning actors ...")
 
-    val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
-    val dataReader = context.spawn(DataReader(loadingEventMapper), DataReader.name)
+    context.spawn[Nothing](ClusterTester(), ClusterTester.name)
+    // testCPUhogging(context)
 
+    // local partition manager
     val partitionManager = context.spawn(PartitionManager(), PartitionManager.name)
     context.watch(partitionManager)
 
-    context.log.info("actors started, waiting for data")
+    // local result collector proxy
+    val rsProxy = context.spawn(ResultCollectorProxy(), ResultCollectorProxy.name)
+    context.watch(rsProxy)
 
-    // testCPUhogging(context)
+    // local worker manager spawns the workers
+    val workerManager = context.spawn(WorkerManager(partitionManager, rsProxy), WorkerManager.name)
+    context.watch(workerManager)
 
-    def onLoadingEvent(loadingEvent: DataLoadingEvent): Behavior[Command] = loadingEvent match {
-      case DataLoaded(t@PartitionedTable(name, headers, partitions)) =>
-        context.log.info("Finished loading dataset {}", name)
-        println(s"Table headers: ${headers.mkString(",")}")
-        println(partitions.map(p =>
-          s"Partition(numberClasses=${p.numberClasses},numberElements=${p.numberElements})"
-        ).mkString("\n"))
+    // only spawned by leader:
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        // insert empty partition
-        partitionManager ! PartitionManagementProtocol.InsertPartition(CandidateSet.empty, StrippedPartition(
-          numberElements = t.n,
-          numberClasses = 1,
-          equivClasses = IndexedSeq((0 until t.n).toSet)
-        ))
-        // insert level1 partitions
-        (0 until t.m).foreach(columnId =>
-          partitionManager ! PartitionManagementProtocol.InsertPartition(CandidateSet(BitSet(columnId)), partitions(columnId))
-        )
+    // temp. data reader
+    val dataReader = context.spawn(DataReader(), DataReader.name)
+    // don't watch data reader, because it will be shut down after initialization
 
-        // ask for advanced partitions
-        partitionManager ! LookupStrippedPartition(CandidateSet(1, 2), partitionEventMapper)
-        partitionManager ! LookupStrippedPartition(CandidateSet(0, 1, 2), partitionEventMapper)
-        partitionManager ! LookupStrippedPartition(CandidateSet(1, 2), partitionEventMapper)
-        partitionManager ! LookupStrippedPartition(CandidateSet(1, 2, 3), partitionEventMapper)
-        Behaviors.same
-    }
+    // the single result collector
+    val rs = context.spawn(ResultCollector(), ResultCollector.name)
+    context.watch(rs)
 
-    def onPartitionEvent(event: PartitionManagementProtocol.PartitionEvent): Behavior[Command] = event match {
-      case PartitionManagementProtocol.PartitionFound(key, value) =>
-        println("Received partition", key, value)
-        Behaviors.same
-      case PartitionManagementProtocol.StrippedPartitionFound(key, value) =>
-        println("Received stripped partition", key, value)
-        Behaviors.same
-    }
+    // master
+    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name)
+    context.watch(master)
+
+    context.log.info("Actors started, algorithm is running")
 
     Behaviors
       .receiveMessage[Command] {
-        case WrappedLoadingEvent(event) => onLoadingEvent(event)
-        case WrappedPartitionEvent(event) => onPartitionEvent(event)
+        case AlgorithmFinished =>
+          context.log.info("Received message that algorithm has finished successfully. Shutting down system.")
+          rsProxy ! FlushAndStop(rsAdapter)
+          Behaviors.same
+
+        case WrappedRSProxyEvent(FlushFinished) =>
+          context.unwatch(rsProxy)
+          Behaviors.stopped
       }
       .receiveSignal {
         case (context, Terminated(ref)) =>
-          context.log.info(s"$ref has stopped working!")
-          Behaviors.stopped
+          context.log.info("{} has stopped working!", ref)
+          if (context.children.isEmpty) {
+            context.log.info("There are no child actors left. Shutting down system.")
+            Behaviors.stopped
+          } else {
+            Behaviors.same
+          }
       }
   }
 
-  def testCPUhogging(context: ActorContext[Command]): Unit = {
+  private def testCPUhogging(context: ActorContext[Command]): Unit = {
     val settings = Settings(context.system)
     val n = 16
     context.log.info("Starting {} hoggers", n)

@@ -58,18 +58,21 @@ class Settings private(config: Config) extends Extension {
 
   val outputToConsole: Boolean = config.getBoolean(s"$namespace.output-to-console")
 
+  val resultBatchSize: Int = config.getInt(s"$namespace.result-batch-size")
+
   val host: String = config.getString(s"$namespace.host")
   val port: Int = config.getInt(s"$namespace.port")
 
   val leaderHost: String = config.getString(s"$namespace.leader-host")
   val leaderPort: Int = config.getInt(s"$namespace.leader-port")
 
-  //  val workers: Int = config.getInt(s"$namespace.workers")
+  val maxWorkers: Int = config.getInt(s"$namespace.max-workers")
 
   //  val maxBatchSize: Int = config.getInt(s"$namespace.max-batch-size")
 
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
+
 
   val inputParsingSettings: InputParsingSettings = new InputParsingSettings {
 

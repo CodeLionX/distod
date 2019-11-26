@@ -13,19 +13,8 @@ object ColumnProcessor {
    * Creates a new ColumnProcessor
    */
   def apply(settings: InputParsingSettings): ColumnProcessor = new ColumnProcessor(settings)
-}
 
-
-class ColumnProcessor private(settings: InputParsingSettings) extends AbstractRowProcessor {
-
-  private var parsedLines: Long = 0
-  private var numberOfColumns: Int = _
-  private var parsingEnded: Boolean = false
-
-  private var _columns: Array[mutable.Buffer[String]] = _
-  private var _headers: Array[String] = _
-
-  private def generateSyntheticColumnNames(length: Int): Array[String] = {
+  def generateSyntheticColumnNames(length: Int): Array[String] = {
     // seems very fast, so no optimization necessary
     val columnIndexToName = (i: Int) => {
       var name = ""
@@ -44,6 +33,17 @@ class ColumnProcessor private(settings: InputParsingSettings) extends AbstractRo
     }
     (1 to length).map(columnIndexToName).toArray
   }
+}
+
+
+class ColumnProcessor private(settings: InputParsingSettings) extends AbstractRowProcessor {
+
+  private var parsedLines: Long = 0
+  private var numberOfColumns: Int = _
+  private var parsingEnded: Boolean = false
+
+  private var _columns: Array[mutable.Buffer[String]] = _
+  private var _headers: Array[String] = _
 
   private def lazyInit(row: Array[String], context: ParsingContext): Unit = {
     numberOfColumns = settings.maxColumns match {
@@ -54,7 +54,7 @@ class ColumnProcessor private(settings: InputParsingSettings) extends AbstractRo
       if (settings.hasHeader)
         context.headers().take(numberOfColumns)
       else
-        generateSyntheticColumnNames(numberOfColumns)
+        ColumnProcessor.generateSyntheticColumnNames(numberOfColumns)
 
     val bufferSizeHint = settings.maxRows match {
       case Some(limit) => limit
@@ -77,7 +77,7 @@ class ColumnProcessor private(settings: InputParsingSettings) extends AbstractRo
 //  override def processStarted(context: ParsingContext): Unit = {}
 
   override def rowProcessed(row: Array[String], context: ParsingContext): Unit = {
-    if(_headers == null || _columns == null) {
+    if (_headers == null || _columns == null) {
       lazyInit(row, context)
     }
     if (settings.maxRows.fold(ifEmpty = false)(parsedLines >= _)) {

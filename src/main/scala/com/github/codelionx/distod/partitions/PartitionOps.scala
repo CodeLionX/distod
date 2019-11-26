@@ -1,8 +1,7 @@
 package com.github.codelionx.distod.partitions
 
 
-trait PartitionOps {
-  this: Partition =>
+trait PartitionOps { this: Partition =>
 
   /**
    * Converts this partition to a stripped partition by removing equivalence classes with size 1.

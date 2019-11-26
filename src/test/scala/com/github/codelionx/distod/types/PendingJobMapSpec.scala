@@ -9,7 +9,7 @@ class PendingJobMapSpec extends WordSpec with Matchers {
 
   "An empty pending job map" should {
     val empty: SpecificPendingJobMap = PendingJobMap.empty
-    val key: CandidateSet = CandidateSet(0)
+    val key: CandidateSet = CandidateSet.from(0)
 
     "throw an exception when accessed with apply" in {
       an[Exception] should be thrownBy empty(key)
@@ -41,7 +41,7 @@ class PendingJobMapSpec extends WordSpec with Matchers {
     }
 
     "merge with other pending job map (of other value type)" in {
-      val otherMap: PendingJobMap[CandidateSet, Double] = PendingJobMap(CandidateSet(0, 1) -> Seq(12.34, 56.78))
+      val otherMap: PendingJobMap[CandidateSet, Double] = PendingJobMap(CandidateSet.from(0, 1) -> Seq(12.34, 56.78))
       val newMap = empty ++ otherMap
       newMap shouldEqual otherMap
     }
@@ -57,10 +57,10 @@ class PendingJobMapSpec extends WordSpec with Matchers {
   }
 
   "An filled pending job map" should {
-    val newKey: CandidateSet = CandidateSet(0)
-    val existingKey: CandidateSet = CandidateSet(5)
+    val newKey: CandidateSet = CandidateSet.from(0)
+    val existingKey: CandidateSet = CandidateSet.from(5)
     val existingKeyValues: Seq[Int] = Seq(9)
-    val existingMapping: (CandidateSet, Seq[Int]) = CandidateSet(7, 12, 5) -> Seq(5, 3, 9)
+    val existingMapping: (CandidateSet, Seq[Int]) = CandidateSet.from(7, 12, 5) -> Seq(5, 3, 9)
     val values: Seq[Double] = Seq(13, .4)
 
     val pendingJobMap: SpecificPendingJobMap = PendingJobMap(existingMapping, existingKey -> existingKeyValues)
@@ -110,7 +110,7 @@ class PendingJobMapSpec extends WordSpec with Matchers {
     "merge with other pending job map (of other value type)" in {
       val otherMappings: Seq[(CandidateSet, Seq[Double])] = Seq(
         existingKey -> values,
-        CandidateSet(0, 1) -> Seq(12.34, 56.78)
+        CandidateSet.from(0, 1) -> Seq(12.34, 56.78)
       )
       val otherMap: PendingJobMap[CandidateSet, Double] = PendingJobMap.from(otherMappings)
       val newMap = pendingJobMap ++ otherMap

@@ -16,7 +16,7 @@ object TypeInferrer {
       case Some(tpe) =>
         tpe
       case None =>
-        if(DoubleType.isDouble(value))
+        if (DoubleType.isDouble(value))
           DoubleType
         else
           StringType
@@ -29,13 +29,13 @@ object TypeInferrer {
    */
   def inferTypeForColumn(column: Array[String]): DataType[_] = {
     val start = column.take(2)
-    val mid = column.slice((column.length/2)-2, (column.length/2)+2)
+    val mid = column.slice((column.length / 2) - 2, (column.length / 2) + 2)
     val end = column.takeRight(2)
 
     var tpe: DataType[Any] = NullType.broaden
-    for(value <- (start ++ mid ++ end)) {
+    for (value <- start ++ mid ++ end) {
       val newTpe = inferType(value)
-      if(tpe != newTpe && tpe < newTpe) {
+      if (tpe != newTpe && tpe < newTpe) {
         tpe = newTpe.broaden
       }
     }

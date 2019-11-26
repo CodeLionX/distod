@@ -36,10 +36,10 @@ sealed trait Partition extends CborSerializable with PartitionOps {
  * @param equivClasses   sorted equivalence classes
  */
 case class FullPartition private[partitions](
-                                              numberElements: Int,
-                                              numberClasses: Int,
-                                              equivClasses: IndexedSeq[Set[Index]]
-                                            ) extends Partition {
+    numberElements: Int,
+    numberClasses: Int,
+    equivClasses: IndexedSeq[Set[Index]]
+) extends Partition {
 
   override def error: Double = 1 - numberClasses
 }
@@ -53,10 +53,10 @@ case class FullPartition private[partitions](
  * @param equivClasses   remaining sorted equivalence classes
  */
 case class StrippedPartition private[partitions](
-                                                  numberElements: Int,
-                                                  numberClasses: Int,
-                                                  equivClasses: IndexedSeq[Set[Index]]
-                                                ) extends Partition {
+    numberElements: Int,
+    numberClasses: Int,
+    equivClasses: IndexedSeq[Set[Index]]
+) extends Partition {
 
   override def error: Double = numberElements - numberClasses
 }

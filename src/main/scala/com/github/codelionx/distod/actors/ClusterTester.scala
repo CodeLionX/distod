@@ -1,11 +1,11 @@
 package com.github.codelionx.distod.actors
 
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.typed.Cluster
-import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.{ActorSystem, Settings}
+import com.github.codelionx.distod.Serialization.CborSerializable
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -18,7 +18,7 @@ object ClusterTester {
 
   val PingServiceKey: ServiceKey[PingService.Ping] = ServiceKey("ping")
 
-  def name: String = "cluster-tester"
+  val name: String = "cluster-tester"
 
   def apply(): Behavior[Nothing] = {
     Behaviors.setup[Receptionist.Listing] { context =>

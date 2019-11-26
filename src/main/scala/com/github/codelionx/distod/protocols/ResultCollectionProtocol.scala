@@ -7,12 +7,13 @@ import com.github.codelionx.distod.types.OrderDependency
 
 object ResultCollectionProtocol {
 
-  sealed trait ResultCommand extends CborSerializable
+  sealed trait ResultCommand
   final case class DependencyBatch(id: Int, deps: Seq[OrderDependency], ackTo: ActorRef[AckBatch])
-    extends ResultCommand
+    extends ResultCommand with CborSerializable
+  final case class SetAttributeNames(attributes: Seq[String]) extends ResultCommand
 
-  trait ResultProxyCommand extends CborSerializable
-  final case class AckBatch(id: Int) extends ResultProxyCommand
+  trait ResultProxyCommand
+  final case class AckBatch(id: Int) extends ResultProxyCommand with CborSerializable
   final case class FoundDependencies(deps: Seq[OrderDependency]) extends ResultProxyCommand
   final case class FlushAndStop(replyTo: ActorRef[FlushFinished.type]) extends ResultProxyCommand
 

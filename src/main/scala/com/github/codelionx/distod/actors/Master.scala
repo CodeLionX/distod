@@ -20,6 +20,9 @@ object Master {
 
   sealed trait Command
   final case class DispatchWork(replyTo: ActorRef[Worker.Command]) extends Command with CborSerializable
+  final case class CandidateNodeChecked(
+      id: CandidateSet, removedSplitCandidates: CandidateSet, removedSwapCandidates: Seq[(Int, Int)]
+  ) extends Command with CborSerializable
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
 
@@ -77,7 +80,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
         val attributes = 0 until table.nAttributes
         partitionManager ! PartitionManagementProtocol.SetAttributes(attributes)
-        resultCollector ! ResultCollectionProtocol.SetAttributeNames(headers)
+        resultCollector ! ResultCollectionProtocol.SetAttributeNames(headers.toIndexedSeq)
 
         // L0: root candidate node
         val rootCandidateState = generateLevel0(attributes, table.nTuples)
@@ -90,7 +93,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         val initialQueue = L1candidateState.keys.to(Queue)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         stash.unstashAll(
-          behavior(state, initialQueue, Queue.empty)
+          behavior(state, initialQueue, Set.empty)
         )
     }
 
@@ -140,14 +143,30 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   private def behavior(
       state: Map[CandidateSet, CandidateState],
       workQueue: Queue[CandidateSet],
-      pendingQueue: Queue[CandidateSet]
+      pending: Set[CandidateSet]
   ): Behavior[Command] = Behaviors.receiveMessage {
-    case DispatchWork(replyTo) =>
+    case DispatchWork(_) if workQueue.isEmpty && pending.isEmpty =>
+      finished()
+
+    case m: DispatchWork if workQueue.isEmpty && pending.nonEmpty =>
+      stash.stash(m)
+      Behaviors.same
+
+    case DispatchWork(replyTo) if workQueue.nonEmpty =>
       val (taskId, newWorkQueue) = workQueue.dequeue
       val taskState = state(taskId)
       val splitCandidates = taskId & BitSet.fromSpecific(taskState.splitCandidates)
       replyTo ! CheckCandidateNode(taskId, splitCandidates, taskState.swapCandidates)
-      behavior(state, newWorkQueue, pendingQueue.enqueue(taskId))
+      behavior(state, newWorkQueue, pending + taskId)
+
+    case CandidateNodeChecked(id, removedSplitCandidates, removedSwapCandidates) =>
+      val taskState = state(id)
+      println("Initial state", id, taskState)
+      println("Received updated candadidates:",
+        CandidateSet.fromSpecific(taskState.splitCandidates) -- removedSplitCandidates,
+        taskState.swapCandidates.filterNot(removedSwapCandidates.contains)
+      )
+      behavior(state, workQueue, pending - id)
 
     case m =>
       context.log.info("Received message: {}", m)
@@ -156,7 +175,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def finished(): Behavior[Command] = {
     guardian ! LeaderGuardian.AlgorithmFinished
-    Behaviors.stopped
+    Behaviors.same
   }
 
   private def generateLevel0(attributes: Seq[Int], nTuples: Int): Map[CandidateSet, CandidateState] = {

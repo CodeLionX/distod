@@ -3,7 +3,7 @@ package com.github.codelionx.distod.actors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.Master.DispatchWork
+import com.github.codelionx.distod.actors.Master.{CandidateNodeChecked, DispatchWork}
 import com.github.codelionx.distod.actors.Worker.{CheckCandidateNode, Command, WrappedPartitionEvent}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FoundDependencies, ResultProxyCommand}
@@ -107,7 +107,7 @@ class Worker(
         context.log.debug("No valid constant candidates found")
       }
 
-      val toBeRemovedCandidates = {
+      val removedCandidates = {
         val validCandidateSet = CandidateSet.fromSpecific(validConstantODs.map(_._2))
         if (validCandidateSet.nonEmpty)
           validCandidateSet union (CandidateSet.fromSpecific(attributes) diff task.candidateId)
@@ -115,11 +115,22 @@ class Worker(
           CandidateSet.empty
       }
 
-      // TODO: save removed candidates and progress further with swap candidates
-      Behaviors.unhandled
+      checkSwapCandidates(attributes, task, removedCandidates)
     }
 
     collectErrors(PendingJobMap.empty, task.spiltCandidates.size + 1)
-//    Behaviors.empty
+  }
+
+  def checkSwapCandidates(
+      attributes: Seq[Int], task: CheckCandidateNode, removedSplitCandidates: CandidateSet
+  ): Behavior[Command] = {
+    // TODO: check swap candidates
+
+    // notify master of result
+    master ! CandidateNodeChecked(task.candidateId, removedSplitCandidates, Seq.empty)
+
+    // ready to work on next node:
+    master ! DispatchWork(context.self)
+    behavior(attributes)
   }
 }

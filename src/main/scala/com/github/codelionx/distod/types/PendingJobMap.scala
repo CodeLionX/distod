@@ -183,6 +183,8 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
 
   @inline def mkString(sep: String): String = jobMap.mkString(sep)
 
+  @inline def toMap[K2, V2](implicit ev: (K, Seq[V]) <:< (K2, Seq[V2])): Map[K2, Seq[V2]] = jobMap.toMap[K2, Seq[V2]]
+
   // Object overwrites
   override def toString: String = s"PendingJobMap(${jobMap.mkString(", ")})"
 

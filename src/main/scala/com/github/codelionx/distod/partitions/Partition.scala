@@ -42,6 +42,19 @@ case class FullPartition private[partitions](
 ) extends Partition {
 
   override def error: Double = 1 - numberClasses
+
+  /**
+   * Converts this full partition to a tuple-value-map, mapping each tuple ID to its value equivalent (position of
+   * the corresponding equivalence class in the sorted partition).
+   *
+   * @return Map containing tuple ID to value mapping
+   */
+  def toTupleValueMap: Map[Index, Value] = {
+    val indexedClasses = equivClasses.zipWithIndex
+    indexedClasses.flatMap {
+      case (set, value) => set.map(_ -> value)
+    }.toMap
+  }
 }
 
 

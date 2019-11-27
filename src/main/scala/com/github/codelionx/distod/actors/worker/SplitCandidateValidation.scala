@@ -5,8 +5,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.actors.worker.Worker.{Command, WrappedPartitionEvent}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.{ErrorFound, LookupError}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDependencies
-import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
-import com.github.codelionx.distod.types.OrderDependency.ConstantOrderDependency
+import com.github.codelionx.distod.types.CandidateSet
 
 
 object SplitCandidateValidation {
@@ -29,7 +28,7 @@ class SplitCandidateValidation(
     attributes: Seq[Int],
     candidateId: CandidateSet,
     splitCandidates: CandidateSet
-) {
+) extends CandidateValidation {
 
   import workerContext._
 
@@ -43,10 +42,10 @@ class SplitCandidateValidation(
       partitionManager ! LookupError(fdContext, partitionEventMapper)
     }
 
-    collectErrors(PendingJobMap.empty, splitCandidates.size + 1)
+    collectErrors(Map.empty, splitCandidates.size + 1)
   }
 
-  def collectErrors(errors: PendingJobMap[CandidateSet, Double], expected: Int): Behavior[Command] =
+  def collectErrors(errors: Map[CandidateSet, Double], expected: Int): Behavior[Command] =
     Behaviors.receiveMessagePartial {
       case WrappedPartitionEvent(ErrorFound(key, value)) =>
         context.log.debug("Received partition error value: {}, {}", key, value)
@@ -58,32 +57,16 @@ class SplitCandidateValidation(
         }
     }
 
-  def performCheck(errors: PendingJobMap[CandidateSet, Double]): Behavior[Command] = {
-    val errorCompare = errors(candidateId)
-    val validConstantODs = for {
-      a <- splitCandidates.unsorted
-      fdContext = candidateId - a
-      if errors(fdContext) == errorCompare // candidate fdContext: [] -> a holds
-    } yield fdContext -> a
+  def performCheck(errors: Map[CandidateSet, Double]): Behavior[Command] = {
+    val result = checkSplitCandidates(candidateId, splitCandidates, attributes, errors)
 
-    if (validConstantODs.nonEmpty) {
-      val constantOds = validConstantODs.map {
-        case (context, attribute) => ConstantOrderDependency(context, attribute)
-      }.toSeq
-      context.log.debug("Found valid candidates: {}", constantOds.mkString(", "))
-      rsProxy ! FoundDependencies(constantOds)
+    if (result.validOds.nonEmpty) {
+      context.log.debug("Found valid candidates: {}", result.validOds.mkString(", "))
+      rsProxy ! FoundDependencies(result.validOds)
     } else {
       context.log.debug("No valid constant candidates found")
     }
 
-    val removedCandidates = {
-      val validCandidateSet = CandidateSet.fromSpecific(validConstantODs.map(_._2))
-      if (validCandidateSet.nonEmpty)
-        validCandidateSet union (CandidateSet.fromSpecific(attributes) diff candidateId)
-      else
-        CandidateSet.empty
-    }
-
-    next(removedCandidates)
+    next(result.removedCandidates)
   }
 }

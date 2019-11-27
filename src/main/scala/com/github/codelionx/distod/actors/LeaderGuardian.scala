@@ -3,6 +3,7 @@ package com.github.codelionx.distod.actors
 import akka.actor.typed.{Behavior, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
+import com.github.codelionx.distod.actors.worker.WorkerManager
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 
 

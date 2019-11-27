@@ -10,7 +10,8 @@ import com.github.codelionx.distod.protocols.DataLoadingProtocol._
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.Worker.CheckCandidateNode
+import com.github.codelionx.distod.actors.worker.Worker
+import com.github.codelionx.distod.actors.worker.Worker.CheckCandidateNode
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
 import scala.collection.immutable.{BitSet, Queue}

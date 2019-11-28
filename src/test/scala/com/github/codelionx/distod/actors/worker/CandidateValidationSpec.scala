@@ -13,10 +13,12 @@ class CandidateValidationSpec extends WordSpec with Matchers {
 
     val candidateId = CandidateSet.from(2, 3)
     val attributes = 0 until 4
+    val partitionCol0 = Partition.fullFrom(Array("a", "b", "a", "b"))
     val partitionCol2 = Partition.fullFrom(Array("a", "a", "a", "d"))
     val partitionCol3 = Partition.fullFrom(Array("a", "a", "c", "e"))
 
     "find constant order dependencies correctly" in {
+      // {D}: [] -> C
       val splitCandidates = candidateId
       val errors = Map(
         candidateId -> (partitionCol2.stripped * partitionCol3.stripped).error,
@@ -29,7 +31,8 @@ class CandidateValidationSpec extends WordSpec with Matchers {
       result.removedCandidates shouldEqual CandidateSet.from(0, 1, 2)
     }
 
-    "find equivalency order dependencies correctly" in {
+    "find regular equivalency order dependencies correctly" in {
+      // {}: C ~ D
       val swapCandidates = Seq((2, 3))
       val singletonPartitions = Map(
         CandidateSet.from(2) -> partitionCol2,
@@ -45,6 +48,25 @@ class CandidateValidationSpec extends WordSpec with Matchers {
       val result = tester.checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
 
       result.validOds shouldEqual Seq(EquivalencyOrderDependency(CandidateSet.empty, 2, 3))
+      result.removedCandidates shouldEqual swapCandidates
+    }
+
+    "find reverse equivalency order dependencies correctly" in {
+      // {C]: A ~ rev. D
+      val candidate = CandidateSet.from(0, 2, 3)
+      val swapCandidates = Seq((0, 3))
+      val singletonPartitions = Map(
+        CandidateSet.from(0) -> partitionCol0,
+        CandidateSet.from(3) -> partitionCol3
+      )
+      val candidatePartitions = Map(
+        CandidateSet.from(0) -> partitionCol0.stripped,
+        CandidateSet.from(2) -> partitionCol2.stripped,
+        CandidateSet.from(3) -> partitionCol3.stripped,
+      )
+      val result = tester.checkSwapCandidates(candidate, swapCandidates, singletonPartitions, candidatePartitions)
+
+      result.validOds shouldEqual Seq(EquivalencyOrderDependency(CandidateSet.from(2), 0, 3, reverse = true))
       result.removedCandidates shouldEqual swapCandidates
     }
   }

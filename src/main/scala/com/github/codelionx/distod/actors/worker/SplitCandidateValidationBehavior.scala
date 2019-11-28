@@ -8,7 +8,7 @@ import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDepen
 import com.github.codelionx.distod.types.CandidateSet
 
 
-object SplitCandidateValidation {
+object SplitCandidateValidationBehavior {
 
   def apply(
       workerContext: WorkerContext,
@@ -18,11 +18,11 @@ object SplitCandidateValidation {
   )(
       next: CandidateSet => Behavior[Command]
   ): Behavior[Command] =
-    new SplitCandidateValidation(workerContext, next, attributes, candidateId, splitCandidates).start()
+    new SplitCandidateValidationBehavior(workerContext, next, attributes, candidateId, splitCandidates).start()
 }
 
 
-class SplitCandidateValidation(
+class SplitCandidateValidationBehavior(
     workerContext: WorkerContext,
     next: CandidateSet => Behavior[Command],
     attributes: Seq[Int],

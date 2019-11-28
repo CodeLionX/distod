@@ -4,7 +4,8 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.Master
-import com.github.codelionx.distod.actors.Master.{CandidateNodeChecked, DispatchWork}
+import com.github.codelionx.distod.actors.Master.{CandidateNodeChecked, DispatchWork, JobType}
+import com.github.codelionx.distod.actors.Master.JobType.JobType
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.types.CandidateSet
@@ -13,9 +14,12 @@ import com.github.codelionx.distod.types.CandidateSet
 object Worker {
 
   sealed trait Command extends CborSerializable
-  final case class CheckCandidateNode(
+  final case class CheckSplitCandidates(
       candidateId: CandidateSet,
-      spiltCandidates: CandidateSet,
+      splitCandidates: CandidateSet
+  ) extends Command
+  final case class CheckSwapCandidates(
+      candidateId: CandidateSet,
       swapCandidates: Seq[(Int, Int)]
   ) extends Command
   private[worker] case class WrappedPartitionEvent(event: PartitionEvent) extends Command
@@ -55,11 +59,30 @@ class Worker(workerContext: WorkerContext) {
   }
 
   def behavior(attributes: Seq[Int]): Behavior[Command] = Behaviors.receiveMessage {
-    case task @ CheckCandidateNode(candidateId, _, _) =>
-      context.log.info("Checking candidate node {}", candidateId)
+    case CheckSplitCandidates(candidateId, splitCandidates) =>
+      context.log.info("Checking split candidates of node {}", candidateId)
 
-      SplitCandidateValidation(workerContext, attributes, task.candidateId, task.spiltCandidates) { removedCandidates =>
-        checkSwapCandidates(attributes, task, removedCandidates)
+      val splitValidation = SplitCandidateValidationBehavior(workerContext, attributes, candidateId, splitCandidates) _
+
+      if (splitCandidates.nonEmpty) {
+        splitValidation(removedSplitCandidates =>
+          handleResults(attributes, candidateId, JobType.Split, removedSplitCandidates = removedSplitCandidates)
+        )
+      } else {
+        handleResults(attributes, candidateId, JobType.Split)
+      }
+
+    case CheckSwapCandidates(candidateId, swapCandidates) =>
+      context.log.info("Checking swap candidates of node {}", candidateId)
+
+      val swapValidation = SwapCandidateValidationBehavior(workerContext, candidateId, swapCandidates) _
+
+      if (swapCandidates.nonEmpty) {
+        swapValidation(removedSwapCandidates =>
+          handleResults(attributes, candidateId, JobType.Swap, removedSwapCandidates = removedSwapCandidates)
+        )
+      } else {
+        handleResults(attributes, candidateId, JobType.Swap)
       }
 
     case WrappedPartitionEvent(event) =>
@@ -67,13 +90,16 @@ class Worker(workerContext: WorkerContext) {
       Behaviors.same
   }
 
-  def checkSwapCandidates(
-      attributes: Seq[Int], task: CheckCandidateNode, removedSplitCandidates: CandidateSet
+  def handleResults(
+      attributes: Seq[Int],
+      candidateId: CandidateSet,
+      jobType: JobType,
+      removedSplitCandidates: CandidateSet = CandidateSet.empty,
+      removedSwapCandidates: Seq[(Int, Int)] = Seq.empty
   ): Behavior[Command] = {
-    // TODO: check swap candidates
 
     // notify master of result
-    master ! CandidateNodeChecked(task.candidateId, removedSplitCandidates, Seq.empty)
+    master ! CandidateNodeChecked(candidateId, jobType, removedSplitCandidates, removedSwapCandidates)
 
     // ready to work on next node:
     master ! DispatchWork(context.self)

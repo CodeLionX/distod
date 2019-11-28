@@ -99,8 +99,15 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         val L1candidateState = generateLevel1(attributes, partitions)
 
         // testPartitionMgmt()
-        val state = rootCandidateState ++ L1candidateState
-        val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split).to(Queue)
+        val testSwapState = Map(CandidateSet.from(2, 3) -> CandidateState(
+          splitCandidates = Seq.empty,
+          swapCandidates = Seq(2 -> 3),
+          isValid = true
+        ))
+        val testSwapQueue = Queue(CandidateSet.from(2, 3) -> JobType.Swap)
+
+        val state = rootCandidateState ++ L1candidateState ++ testSwapState
+        val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split).to(Queue) ++ testSwapQueue
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         stash.unstashAll(
           behavior(state, initialQueue, Set.empty)

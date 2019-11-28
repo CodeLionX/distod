@@ -35,6 +35,12 @@ object CandidateValidation {
       }
     }
   }
+
+  private[CandidateValidation] object SwapTestResult {
+    sealed trait Type
+    case object NoSwap extends Type
+    case object NoReverseSwap extends Type
+  }
 }
 
 
@@ -87,36 +93,26 @@ trait CandidateValidation {
       val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
       val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val testResults = sortedContextClasses.foldLeft((false, false)) { case ((swap, reverseSwap), sortedClass) =>
-        if (!swap && !reverseSwap) {
-          sortedClass.sliding(2).foldLeft((false, false)) { case ((swap, reverseSwap), lists) =>
-            val list1 = lists(0)
-            val list2 = lists(1)
+      val testResults = sortedContextClasses.flatMap(sortedClass =>
+        sortedClass.sliding(2).flatMap { lists =>
+          val list1 = lists(0)
+          val list2 = lists(1)
 
-            val rightValues1 = list1.map(rightTupleValueMapping)
-            val rightValues2 = list2.map(rightTupleValueMapping)
-            Tuple2(
-              swap || (rightValues1.max > rightValues2.min),
-              reverseSwap || (rightValues2.max > rightValues1.min)
-            )
-          }
-        } else {
-          true -> true
+          val rightValues1 = list1.map(rightTupleValueMapping)
+          val rightValues2 = list2.map(rightTupleValueMapping)
+          val hasNoSwap = for {
+            x <- List(SwapTestResult.NoSwap) if !(rightValues1.max > rightValues2.min)
+          } yield x
+          val hasNoReverseSwap = for {
+            x <- List(SwapTestResult.NoReverseSwap) if !(rightValues2.max > rightValues1.min)
+          } yield x
+          hasNoSwap ++ hasNoReverseSwap
         }
-      }
+      )
 
-      testResults match {
-        case (false, false) =>
-          Seq(
-            EquivalencyOrderDependency(context, left, right),
-            EquivalencyOrderDependency(context, left, right, reverse = true)
-          )
-        case (false, true) =>
-          Seq(EquivalencyOrderDependency(context, left, right))
-        case (true, false) =>
-          Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
-        case _ =>
-          Seq.empty
+      testResults.flatMap {
+        case SwapTestResult.NoSwap => Seq(EquivalencyOrderDependency(context, left, right))
+        case SwapTestResult.NoReverseSwap => Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
       }
     }
 

@@ -50,7 +50,7 @@ object OrderDependency {
           val attribute1Name = names(attribute1)
           val attribute2Name = names(attribute2)
           val contextNames = context.map(names).mkString(", ")
-          s"{$contextNames}: $attribute1Name ~ $attribute2Name$orderOfSecondAttribute"
+          s"{$contextNames}: $attribute1Name↑ ~ $attribute2Name$orderOfSecondAttribute"
         }
       }
   }

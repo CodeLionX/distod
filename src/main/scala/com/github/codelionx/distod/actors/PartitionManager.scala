@@ -242,18 +242,17 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       val foundKeys = predecessorKeys.filter(partitions.contains)
       val missingKeys = predecessorKeys.diff(foundKeys)
 
-      if (foundKeys.size == 1) {
-        val nextPred = missingKeys.head
-        loop(nextPred) :+ ComputeProductJob(subkey, Right(partitions(foundKeys.head)), Left(nextPred))
+      foundKeys match {
+        case Nil =>
+          val nextPred1 :: nextPred2 :: _ = missingKeys
+          loop(nextPred1) ++ loop(nextPred2) :+ ComputeProductJob(subkey, Left(nextPred1), Left(nextPred2))
 
-      } else if (foundKeys.isEmpty) {
-        val nextPred1 = missingKeys(0)
-        val nextPred2 = missingKeys(1)
-        loop(nextPred1) ++ loop(nextPred2) :+ ComputeProductJob(subkey, Left(nextPred1), Left(nextPred2))
+        case nextPred :: Nil =>
+          loop(nextPred) :+ ComputeProductJob(subkey, Right(partitions(foundKeys.head)), Left(nextPred))
 
-      } else {
-        val prePartitions = foundKeys.map(partitions).take(2)
-        Seq(ComputeProductJob(subkey, Right(prePartitions(0)), Right(prePartitions(1))))
+        case _ =>
+          val p1 :: p2 :: _ = foundKeys.map(partitions).take(2)
+          Seq(ComputeProductJob(subkey, Right(p1), Right(p2)))
       }
     }
 

@@ -1,6 +1,5 @@
 package com.github.codelionx.distod.actors.worker
 
-import com.github.codelionx.distod.actors.worker.CandidateValidation.{SplitCandidateValidationResult, SwapCandidateValidationResult}
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
@@ -19,10 +18,30 @@ object CandidateValidation {
       validOds: Seq[OrderDependency],
       removedCandidates: Seq[(Int, Int)]
   )
+
+  implicit class SortableStrippedPartition(p: StrippedPartition) {
+
+    def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
+      val indexLUT = fullPartition.toTupleValueMap
+
+      p.equivClasses.map { clazz =>
+        val subClazzes = mutable.Map.empty[Int, mutable.Buffer[Int]]
+        for (tuple <- clazz) {
+          val index = indexLUT(tuple)
+          val subClazz = subClazzes.getOrElseUpdate(index, mutable.Buffer.empty)
+          subClazz += tuple
+        }
+        subClazzes.values.map(_.toSeq).toIndexedSeq
+      }
+    }
+  }
 }
 
 
 trait CandidateValidation {
+
+  import CandidateValidation._
+
 
   def checkSplitCandidates(
       candidateId: CandidateSet,
@@ -62,42 +81,31 @@ trait CandidateValidation {
   ): SwapCandidateValidationResult = {
     val validCandidates = swapCandidates.flatMap { case (left, right) =>
       val context = candidateId - left - right
-      val contextPartition = candidatePartitions(context)
       val leftPartition = singletonPartitions(CandidateSet.from(left))
       val rightPartition = singletonPartitions(CandidateSet.from(right))
 
-      val leftTupleValueMapping = leftPartition.toTupleValueMap
+      val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
       val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val sortedContextClasses = contextPartition.equivClasses.map { clazz =>
-        val subClazzes = mutable.Map.empty[Int, mutable.Buffer[Int]]
-        for (tuple <- clazz) {
-          val index = leftTupleValueMapping(tuple)
-          val subClazz = subClazzes.getOrElseUpdate(index, mutable.Buffer.empty)
-          subClazz += tuple
-        }
-        subClazzes.values.map(_.toSeq).toIndexedSeq
-      }
+      val testResults = sortedContextClasses.foldLeft((false, false)) { case ((swap, reverseSwap), sortedClass) =>
+        if (!swap && !reverseSwap) {
+          sortedClass.sliding(2).foldLeft((false, false)) { case ((swap, reverseSwap), lists) =>
+            val list1 = lists(0)
+            val list2 = lists(1)
 
-      var swap = false
-      var reverseSwap = false
-      for (sortedClass <- sortedContextClasses if !swap && !reverseSwap) {
-        for (i <- 0 until sortedClass.size - 1 if !swap && !reverseSwap) {
-          val list1 = sortedClass(i)
-          val list2 = sortedClass(i + 1)
-
-          val rightValues1 = list1.map(rightTupleValueMapping)
-          val rightValues2 = list2.map(rightTupleValueMapping)
-          if (rightValues1.max > rightValues2.min) {
-            swap = true
+            val rightValues1 = list1.map(rightTupleValueMapping)
+            val rightValues2 = list2.map(rightTupleValueMapping)
+            Tuple2(
+              swap || (rightValues1.max > rightValues2.min),
+              reverseSwap || (rightValues2.max > rightValues1.min)
+            )
           }
-          if (rightValues2.max > rightValues1.min) {
-            reverseSwap = true
-          }
+        } else {
+          true -> true
         }
       }
 
-      (swap, reverseSwap) match {
+      testResults match {
         case (false, false) =>
           Seq(
             EquivalencyOrderDependency(context, left, right),
@@ -112,11 +120,14 @@ trait CandidateValidation {
       }
     }
 
+    def isValid(candidate: (Int, Int)): Boolean = {
+      val (left, right) = candidate
+      validCandidates.exists(elem => elem.attribute1 == left && elem.attribute2 == right)
+    }
+
     SwapCandidateValidationResult(
       validOds = validCandidates,
-      removedCandidates = swapCandidates.filterNot { case (left, right) =>
-        !validCandidates.exists(elem => elem.attribute1 == left && elem.attribute2 == right)
-      }
+      removedCandidates = swapCandidates.filterNot(candidate => !isValid(candidate))
     )
   }
 }

@@ -1,11 +1,12 @@
-package com.github.codelionx.distod.actors
+package com.github.codelionx.distod.actors.worker
 
 import akka.actor.typed.{ActorRef, Behavior, Terminated}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.Behaviors
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
-import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
+import com.github.codelionx.distod.Settings
+import com.github.codelionx.distod.actors.Master
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 
 
 object WorkerManager {

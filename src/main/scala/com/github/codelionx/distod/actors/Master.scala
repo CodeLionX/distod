@@ -10,7 +10,8 @@ import com.github.codelionx.distod.protocols.DataLoadingProtocol._
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.Worker.CheckCandidateNode
+import com.github.codelionx.distod.actors.worker.Worker
+import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
 import scala.collection.immutable.{BitSet, Queue}
@@ -21,7 +22,10 @@ object Master {
   sealed trait Command
   final case class DispatchWork(replyTo: ActorRef[Worker.Command]) extends Command with CborSerializable
   final case class CandidateNodeChecked(
-      id: CandidateSet, removedSplitCandidates: CandidateSet, removedSwapCandidates: Seq[(Int, Int)]
+      id: CandidateSet,
+      jobType: JobType.JobType,
+      removedSplitCandidates: CandidateSet,
+      removedSwapCandidates: Seq[(Int, Int)]
   ) extends Command with CborSerializable
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
@@ -51,6 +55,12 @@ object Master {
       swapCandidates: Seq[(Int, Int)],
       isValid: Boolean
   )
+
+  object JobType {
+    sealed trait JobType
+    case object Split extends JobType
+    case object Swap extends JobType
+  }
 }
 
 
@@ -89,8 +99,15 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         val L1candidateState = generateLevel1(attributes, partitions)
 
         // testPartitionMgmt()
-        val state = rootCandidateState ++ L1candidateState
-        val initialQueue = L1candidateState.keys.to(Queue)
+        val testSwapState = Map(CandidateSet.from(2, 3) -> CandidateState(
+          splitCandidates = Seq.empty,
+          swapCandidates = Seq(2 -> 3),
+          isValid = true
+        ))
+        val testSwapQueue = Queue(CandidateSet.from(2, 3) -> JobType.Swap)
+
+        val state = rootCandidateState ++ L1candidateState ++ testSwapState
+        val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split).to(Queue) ++ testSwapQueue
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         stash.unstashAll(
           behavior(state, initialQueue, Set.empty)
@@ -142,8 +159,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def behavior(
       state: Map[CandidateSet, CandidateState],
-      workQueue: Queue[CandidateSet],
-      pending: Set[CandidateSet]
+      workQueue: Queue[(CandidateSet, JobType.JobType)],
+      pending: Set[(CandidateSet, JobType.JobType)]
   ): Behavior[Command] = Behaviors.receiveMessage {
     case DispatchWork(_) if workQueue.isEmpty && pending.isEmpty =>
       finished()
@@ -153,20 +170,26 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       Behaviors.same
 
     case DispatchWork(replyTo) if workQueue.nonEmpty =>
-      val (taskId, newWorkQueue) = workQueue.dequeue
+      val ((taskId, jobType), newWorkQueue) = workQueue.dequeue
       val taskState = state(taskId)
-      val splitCandidates = taskId & BitSet.fromSpecific(taskState.splitCandidates)
-      replyTo ! CheckCandidateNode(taskId, splitCandidates, taskState.swapCandidates)
-      behavior(state, newWorkQueue, pending + taskId)
+      jobType match {
+        case JobType.Split =>
+          val splitCandidates = taskId & BitSet.fromSpecific(taskState.splitCandidates)
+          replyTo ! CheckSplitCandidates(taskId, splitCandidates)
+        case JobType.Swap =>
+          val swapCandidates = taskState.swapCandidates
+          replyTo ! CheckSwapCandidates(taskId, swapCandidates)
+      }
+      behavior(state, newWorkQueue, pending + (taskId -> jobType))
 
-    case CandidateNodeChecked(id, removedSplitCandidates, removedSwapCandidates) =>
+    case CandidateNodeChecked(id, jobType, removedSplitCandidates, removedSwapCandidates) =>
       val taskState = state(id)
       println("Initial state", id, taskState)
-      println("Received updated candadidates:",
+      println("Received updated candidates:",
         CandidateSet.fromSpecific(taskState.splitCandidates) -- removedSplitCandidates,
         taskState.swapCandidates.filterNot(removedSwapCandidates.contains)
       )
-      behavior(state, workQueue, pending - id)
+      behavior(state, workQueue, pending - (id -> jobType))
 
     case m =>
       context.log.info("Received message: {}", m)

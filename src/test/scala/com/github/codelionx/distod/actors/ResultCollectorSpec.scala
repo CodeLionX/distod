@@ -48,8 +48,8 @@ class ResultCollectorSpec
     def testFileContents(expected: String = expectedFileContent): scalatest.Assertion = {
       val fileContent = writeBuffer.toString
 
-      println(fileContent)
-      println(expected)
+//      println(fileContent)
+//      println(expected)
       fileContent shouldEqual expected
     }
 

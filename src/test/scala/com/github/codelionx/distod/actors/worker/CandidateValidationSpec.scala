@@ -14,6 +14,7 @@ class CandidateValidationSpec extends WordSpec with Matchers {
     val candidateId = CandidateSet.from(2, 3)
     val attributes = 0 until 4
     val partitionCol0 = Partition.fullFrom(Array("a", "b", "a", "b"))
+    val partitionCol1 = Partition.fullFrom(Array("a", "b", "c", "c"))
     val partitionCol2 = Partition.fullFrom(Array("a", "a", "a", "d"))
     val partitionCol3 = Partition.fullFrom(Array("a", "a", "c", "e"))
 
@@ -52,7 +53,7 @@ class CandidateValidationSpec extends WordSpec with Matchers {
     }
 
     "find reverse equivalency order dependencies correctly" in {
-      // {C]: A ~ rev. D
+      // {C}: A ~ rev. D
       val candidate = CandidateSet.from(0, 2, 3)
       val swapCandidates = Seq((0, 3))
       val singletonPartitions = Map(
@@ -67,6 +68,28 @@ class CandidateValidationSpec extends WordSpec with Matchers {
       val result = tester.checkSwapCandidates(candidate, swapCandidates, singletonPartitions, candidatePartitions)
 
       result.validOds shouldEqual Seq(EquivalencyOrderDependency(CandidateSet.from(2), 0, 3, reverse = true))
+      result.removedCandidates shouldEqual swapCandidates
+    }
+
+    "pass the bug guard: duplicate result" in {
+      // {}: B ~ C
+      val candidate = CandidateSet.from(1, 2)
+      val swapCandidates = Seq((1, 2))
+      val singletonPartitions = Map(
+        CandidateSet.from(1) -> partitionCol1,
+        CandidateSet.from(2) -> partitionCol2
+      )
+      val candidatePartitions = Map(
+        CandidateSet.empty -> StrippedPartition(
+          numberElements = attributes.size,
+          numberClasses = 1,
+          equivClasses = IndexedSeq(attributes.toSet)
+        )
+      )
+      val result = tester.checkSwapCandidates(candidate, swapCandidates, singletonPartitions, candidatePartitions)
+      println(result)
+
+      result.validOds shouldEqual Seq(EquivalencyOrderDependency(CandidateSet.empty, 1, 2))
       result.removedCandidates shouldEqual swapCandidates
     }
   }

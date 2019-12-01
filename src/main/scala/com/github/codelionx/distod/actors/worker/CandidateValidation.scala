@@ -35,12 +35,6 @@ object CandidateValidation {
       }
     }
   }
-
-  private[CandidateValidation] object SwapTestResult {
-    sealed trait Type
-    case object NoSwap extends Type
-    case object NoReverseSwap extends Type
-  }
 }
 
 
@@ -93,27 +87,31 @@ trait CandidateValidation {
       val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
       val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val testResults = sortedContextClasses.flatMap(sortedClass =>
-        sortedClass.sliding(2).flatMap { lists =>
-          val list1 = lists(0)
-          val list2 = lists(1)
+      val results = sortedContextClasses
+        .map { sortedClass =>
+          val default = false -> false
+          sortedClass.sliding(2).foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
+            val list1 = lists(0)
+            val list2 = lists(1)
 
-          val rightValues1 = list1.map(rightTupleValueMapping)
-          val rightValues2 = list2.map(rightTupleValueMapping)
-          val hasNoSwap = for {
-            x <- List(SwapTestResult.NoSwap) if !(rightValues1.max > rightValues2.min)
-          } yield x
-          val hasNoReverseSwap = for {
-            x <- List(SwapTestResult.NoReverseSwap) if !(rightValues2.max > rightValues1.min)
-          } yield x
-          hasNoSwap ++ hasNoReverseSwap
+            val rightValues1 = list1.map(rightTupleValueMapping)
+            val rightValues2 = list2.map(rightTupleValueMapping)
+            val isSwap = rightValues1.max > rightValues2.min
+            val isReverseSwap = rightValues2.max > rightValues1.min
+            (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
+          }
         }
-      )
+      val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
 
-      testResults.flatMap {
-        case SwapTestResult.NoSwap => Seq(EquivalencyOrderDependency(context, left, right))
-        case SwapTestResult.NoReverseSwap => Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
-      }
+      val normal = if (!swap)
+        Seq(EquivalencyOrderDependency(context, left, right))
+      else
+        Seq.empty
+      val reverse = if (!reverseSwap)
+        Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
+      else
+        Seq.empty
+      normal ++ reverse
     }
 
     def isValid(candidate: (Int, Int)): Boolean = {

@@ -11,7 +11,7 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol.Partiti
 
 object WorkerManager {
 
-  val name = "workerManager"
+  val name = "worker-manager"
 
   def apply(
       partitionManager: ActorRef[PartitionCommand], rsProxy: ActorRef[ResultProxyCommand]

@@ -177,6 +177,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
       }
+      context.log.warn("Work queue size = {}", newWorkQueue.size)
       behavior(attributes, state, newWorkQueue, pending + (taskId -> jobType))
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>

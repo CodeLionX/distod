@@ -3,9 +3,8 @@ package com.github.codelionx.distod.actors.worker
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.Master
-import com.github.codelionx.distod.actors.Master.{CandidateNodeChecked, DispatchWork, JobType}
-import com.github.codelionx.distod.actors.Master.JobType.JobType
+import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
+import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.types.CandidateSet
@@ -62,47 +61,45 @@ class Worker(workerContext: WorkerContext) {
     case CheckSplitCandidates(candidateId, splitCandidates) =>
       context.log.info("Checking split candidates of node {}", candidateId)
 
-      val splitValidation = SplitCandidateValidationBehavior(workerContext, attributes, candidateId, splitCandidates) _
+      def handleResults(removedSplitCandidates: CandidateSet = CandidateSet.empty): Behavior[Command] = {
+        // notify master of result
+        master ! SplitCandidatesChecked(candidateId, removedSplitCandidates)
+
+        // ready to work on next node:
+        master ! DispatchWork(context.self)
+        behavior(attributes)
+      }
 
       if (splitCandidates.nonEmpty) {
-        splitValidation(removedSplitCandidates =>
-          handleResults(attributes, candidateId, JobType.Split, removedSplitCandidates = removedSplitCandidates)
+        SplitCandidateValidationBehavior(workerContext, attributes, candidateId, splitCandidates)(
+          removedSplitCandidates => handleResults(removedSplitCandidates)
         )
       } else {
-        handleResults(attributes, candidateId, JobType.Split)
+        handleResults()
       }
 
     case CheckSwapCandidates(candidateId, swapCandidates) =>
       context.log.info("Checking swap candidates of node {}", candidateId)
 
-      val swapValidation = SwapCandidateValidationBehavior(workerContext, candidateId, swapCandidates) _
+      def handleResults(removedSwapCandidates: Seq[(Int, Int)] = Seq.empty): Behavior[Command] = {
+        // notify master of result
+        master ! SwapCandidatesChecked(candidateId, removedSwapCandidates)
+
+        // ready to work on next node:
+        master ! DispatchWork(context.self)
+        behavior(attributes)
+      }
 
       if (swapCandidates.nonEmpty) {
-        swapValidation(removedSwapCandidates =>
-          handleResults(attributes, candidateId, JobType.Swap, removedSwapCandidates = removedSwapCandidates)
+        SwapCandidateValidationBehavior(workerContext, candidateId, swapCandidates)(
+          removedSwapCandidates => handleResults(removedSwapCandidates)
         )
       } else {
-        handleResults(attributes, candidateId, JobType.Swap)
+        handleResults()
       }
 
     case WrappedPartitionEvent(event) =>
       context.log.info("Ignored {}", event)
       Behaviors.same
-  }
-
-  def handleResults(
-      attributes: Seq[Int],
-      candidateId: CandidateSet,
-      jobType: JobType,
-      removedSplitCandidates: CandidateSet = CandidateSet.empty,
-      removedSwapCandidates: Seq[(Int, Int)] = Seq.empty
-  ): Behavior[Command] = {
-
-    // notify master of result
-    master ! CandidateNodeChecked(candidateId, jobType, removedSplitCandidates, removedSwapCandidates)
-
-    // ready to work on next node:
-    master ! DispatchWork(context.self)
-    behavior(attributes)
   }
 }

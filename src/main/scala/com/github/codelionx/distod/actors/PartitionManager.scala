@@ -238,7 +238,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   ): Seq[ComputeProductJob] = {
 
     def loop(subkey: CandidateSet): Seq[ComputeProductJob] = {
-      val predecessorKeys = subkey.predecessors
+      val predecessorKeys = subkey.predecessors.toList
       val foundKeys = predecessorKeys.filter(partitions.contains)
       val missingKeys = predecessorKeys.diff(foundKeys)
 

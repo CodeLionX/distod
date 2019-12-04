@@ -39,7 +39,7 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
  *
  * @see [[scala.collection.immutable.BitSet]]
  */
-class CandidateSet(_underlying: BitSet)
+class CandidateSet(private val _underlying: BitSet)
   extends SortedSet[Int]
     with SortedSetOps[Int, SortedSet, CandidateSet]
     with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet] {
@@ -79,9 +79,35 @@ class CandidateSet(_underlying: BitSet)
    *
    * @return A new sequence of the preceding candidate sets.
    */
-  def predecessors: Seq[CandidateSet] = _underlying.unsorted.map(elem =>
+  def predecessors: Set[CandidateSet] = _underlying.unsorted.map(elem =>
     new CandidateSet(_underlying - elem)
-  ).toSeq
+  )
+
+  /**
+   * Computes the successors of this CandidateSet using the specified attributes. E.g. for CandidateSet(1, 2) and
+   * `allAttributes = Seq(0, 1, 2, 3)`, the successors are:
+   * - CandidateSet(0, 1, 2) and
+   * - CandidateSet(1, 2, 3).
+   *
+   * @param allAttributes all attributes to be considered in the computation of the successors in the lattice
+   */
+  def successors(allAttributes: Set[Int]): Set[CandidateSet] = successors(CandidateSet.fromSpecific(allAttributes))
+
+  /**
+   * Computes the successors of this CandidateSet using the specified attribute set. E.g. for CandidateSet(1, 2) and
+   * `allAttributes = Seq(0, 1, 2, 3)`, the successors are:
+   * - CandidateSet(0, 1, 2) and
+   * - CandidateSet(1, 2, 3).
+   *
+   * @param allAttributes set over all attributes to be considered in the computation of the successors in the lattice
+   */
+  def successors(allAttributes: CandidateSet): Set[CandidateSet] =
+    (allAttributes._underlying diff this._underlying)
+      .unsorted
+      .map { attribute =>
+        new CandidateSet(this._underlying + attribute)
+      }
+
 
   override def toString(): String = s"CandidateSet(${_underlying.mkString(", ")})"
 }

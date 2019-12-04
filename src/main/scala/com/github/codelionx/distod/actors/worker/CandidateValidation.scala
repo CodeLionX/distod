@@ -90,15 +90,19 @@ trait CandidateValidation {
       val results = sortedContextClasses
         .map { sortedClass =>
           val default = false -> false
-          sortedClass.sliding(2).foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
-            val list1 = lists(0)
-            val list2 = lists(1)
+          if (sortedClass.size < 2) {
+            default
+          } else {
+            sortedClass.sliding(2).foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
+              val list1 = lists(0)
+              val list2 = lists(1)
 
-            val rightValues1 = list1.map(rightTupleValueMapping)
-            val rightValues2 = list2.map(rightTupleValueMapping)
-            val isSwap = rightValues1.max > rightValues2.min
-            val isReverseSwap = rightValues2.max > rightValues1.min
-            (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
+              val rightValues1 = list1.map(rightTupleValueMapping)
+              val rightValues2 = list2.map(rightTupleValueMapping)
+              val isSwap = rightValues1.max > rightValues2.min
+              val isReverseSwap = rightValues2.max > rightValues1.min
+              (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
+            }
           }
         }
       val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }

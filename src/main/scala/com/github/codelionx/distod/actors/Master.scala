@@ -268,12 +268,11 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       // no valid descending candidates!
       (state, currentWorkQueue)
     } else {
-      val potentialNewNodes = (CandidateSet.fromSpecific(attributes) diff updatedCandidate)
-        .unsorted
+      // optimization: Usage of [[View]]s prevents the materialization of temporary collections and speeds up the
+      // iterations on larger collections.
+      val potentialNewNodes = updatedCandidate
+        .successors(attributes.toSet)
         .view
-        .map { attribute =>
-          updatedCandidate + attribute
-        }
       val newNodesSize = updatedCandidate.size + 1
 
       // splits

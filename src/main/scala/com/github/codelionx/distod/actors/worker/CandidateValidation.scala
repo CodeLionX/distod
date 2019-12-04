@@ -19,7 +19,7 @@ object CandidateValidation {
       removedCandidates: Seq[(Int, Int)]
   )
 
-  implicit class SortableStrippedPartition(p: StrippedPartition) {
+  implicit class SortableStrippedPartition(val p: StrippedPartition) extends AnyVal {
 
     def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
       val indexLUT = fullPartition.toTupleValueMap

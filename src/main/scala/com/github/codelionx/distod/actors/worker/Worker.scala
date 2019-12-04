@@ -3,9 +3,8 @@ package com.github.codelionx.distod.actors.worker
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.Master
-import com.github.codelionx.distod.actors.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
-import com.github.codelionx.distod.actors.Master.JobType.JobType
+import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
+import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.types.CandidateSet

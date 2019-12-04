@@ -1,9 +1,8 @@
-package com.github.codelionx.distod.actors
+package com.github.codelionx.distod.actors.master
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
-import com.github.codelionx.distod.actors.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
@@ -12,6 +11,8 @@ import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
+import com.github.codelionx.distod.actors.LeaderGuardian
+import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
 import scala.collection.immutable.Queue
@@ -63,7 +64,8 @@ object Master {
 }
 
 
-class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers) {
+class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers)
+  extends CandidateGeneration {
 
   import Master._
   import localPeers._
@@ -184,10 +186,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         splitCandidates = taskState.splitCandidates -- removedSplitCandidates,
         splitChecked = true
       )
-      val newState = state + (id -> updatedTaskState)
-      val newPending = pending - (id -> JobType.Split)
-      val (updatedState, updatedWorkQueue) = generateNewCandidates(attributes, newState, workQueue, newPending, id)
-      behavior(attributes, updatedState, updatedWorkQueue, newPending)
+      val removedPendingNode = id -> JobType.Split
+      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
       context.log.info("Received to-be-removed swap candidates for {}: {}", id, removedSwapCandidates)
@@ -196,10 +196,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         swapCandidates = taskState.swapCandidates.filterNot(removedSwapCandidates.contains),
         swapChecked = true
       )
-      val newState = state + (id -> updatedTaskState)
-      val newPending = pending - (id -> JobType.Swap)
-      val (updatedState, updatedWorkQueue) = generateNewCandidates(attributes, newState, workQueue, newPending, id)
-      behavior(attributes, updatedState, updatedWorkQueue, newPending)
+      val removedPendingNode = id -> JobType.Swap
+      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode)
 
     case m =>
       context.log.info("Received message: {}", m)
@@ -248,106 +246,19 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     L1candidateState.toMap
   }
 
-  private def generateNewCandidates(
+  private def updateStateAndNext(
       attributes: Seq[Int],
       state: Map[CandidateSet, CandidateState],
-      currentWorkQueue: Queue[(CandidateSet, JobType.JobType)],
+      workQueue: Queue[(CandidateSet, JobType.JobType)],
       pending: Set[(CandidateSet, JobType.JobType)],
-      updatedCandidate: CandidateSet
-  ): (Map[CandidateSet, CandidateState], Queue[(CandidateSet, JobType.JobType)]) = {
-    def filterBasedOnSplits(id: CandidateSet, candidates: Seq[(Int, Int)]): Seq[(Int, Int)] = {
-      candidates.filter { case (a, b) =>
-        state.get(id - a).fold(false)(s => s.splitCandidates.contains(b)) &&
-          state.get(id - b).fold(false)(s => s.splitCandidates.contains(a))
-      }
-    }
-
-    val currentNodeState = state(updatedCandidate)
-    // node pruning
-    if (currentNodeState.splitCandidates.isEmpty && currentNodeState.swapCandidates.isEmpty) {
-      // no valid descending candidates!
-      (state, currentWorkQueue)
-    } else {
-      // optimization: Usage of [[View]]s prevents the materialization of temporary collections and speeds up the
-      // iterations on larger collections.
-      val potentialNewNodes = updatedCandidate
-        .successors(attributes.toSet)
-        .view
-      val newNodesSize = updatedCandidate.size + 1
-
-      // splits
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      val newSplitNodes = potentialNewNodes
-        .filterNot(node => currentWorkQueue.contains(node -> JobType.Split))
-        .filterNot(node => pending.contains(node -> JobType.Split))
-        .filter { node =>
-          val predecessors = node.predecessors
-          predecessors.forall(id => state.get(id).fold(false)(_.splitChecked))
-        }
-      val splitUpdatedState = newSplitNodes.foldLeft(state) { case (acc, id) =>
-        val predecessorSplitCandidates = id.predecessors.map(state(_).splitCandidates)
-        val newSplitCandidates = predecessorSplitCandidates.reduce(_ intersect _)
-        val updatedNodeState = state.get(id) match {
-          case Some(s) =>
-            s.copy(
-              splitCandidates = newSplitCandidates,
-              splitChecked = false
-            )
-          case None => CandidateState(
-            splitCandidates = newSplitCandidates,
-            swapCandidates = Seq.empty
-          )
-        }
-        acc.updated(id, updatedNodeState)
-      }
-
-      // swaps
-      /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      val newSwapNodes = potentialNewNodes
-        .filterNot(node => currentWorkQueue.contains(node -> JobType.Swap))
-        .filterNot(node => pending.contains(node -> JobType.Swap))
-        .filter { node =>
-          val predecessors = node.predecessors
-          predecessors.forall(id =>
-            // TODO: optimize (we do not need all predecessor splits for each candidate)
-            state.get(id).fold(false)(s => s.splitChecked && s.swapChecked))
-        }
-      val swapUpdatedState =
-        newSwapNodes.foldLeft(splitUpdatedState) { case (acc, id) =>
-          val newSwapCandidates =
-            if (newNodesSize == 2) {
-              // every node (with size 2) only has one candidate (= itself)
-              val attribute1 = id.toIndexedSeq(0)
-              val attribute2 = id.toIndexedSeq(1)
-              filterBasedOnSplits(id, Seq(attribute1 -> attribute2))
-
-            } else {
-              // every new node's potential swap candidates are the union of its predecessors
-              val predecessorSwapCandidates = id.predecessors.map(splitUpdatedState(_).swapCandidates)
-              val potentialSwapCandidates = predecessorSwapCandidates.reduce(_ ++ _).distinct
-              val updatedPotentialSwapCandidates = potentialSwapCandidates.filter { case (a, b) =>
-                val referenceSet = id - a - b
-                referenceSet.forall(attribute => splitUpdatedState(id - attribute).swapCandidates.contains(a -> b))
-              }
-              filterBasedOnSplits(id, updatedPotentialSwapCandidates)
-            }
-          val updatedNodeState = splitUpdatedState.get(id) match {
-            case Some(s) =>
-              s.copy(
-                swapCandidates = newSwapCandidates,
-                swapChecked = false
-              )
-            case None => CandidateState(
-              splitCandidates = CandidateSet.empty,
-              swapCandidates = newSwapCandidates
-            )
-          }
-          acc.updated(id, updatedNodeState)
-        }
-
-      val newJobs = newSplitNodes.map(id => id -> JobType.Split) ++ newSwapNodes.map(id => id -> JobType.Swap)
-      context.log.debug("Adding the following new jobs to the queue: {}", newJobs.toSeq)
-      (swapUpdatedState, currentWorkQueue.enqueueAll(newJobs))
-    }
+      id: CandidateSet,
+      newTaskState: CandidateState,
+      removedPending: (CandidateSet, JobType.JobType)
+  ): Behavior[Command] = {
+    val newState = state + (id -> newTaskState)
+    val newPending = pending - removedPending
+    val (updatedState, newJobs) = generateNewCandidates(attributes, newState, workQueue, newPending, id)
+    behavior(attributes, updatedState, workQueue.enqueueAll(newJobs), newPending)
   }
+
 }

@@ -6,3 +6,6 @@ addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.10")
 // plugin for test coverage
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.6.1")
 addSbtPlugin("com.codacy" % "sbt-codacy-coverage" % "3.0.3")
+
+// plugin for metrics agent kanela
+addSbtPlugin("io.kamon" % "sbt-kanela-runner" % "2.0.3")

@@ -34,9 +34,13 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.8" % Test,
 
   // serialization
-  "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
+  "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
 //  "com.twitter" %% "chill-akka" % "0.9.3", // just for scala 2.12?
 //  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
+
+  // tracing and metrics
+  "io.kamon" %% "kamon-bundle" % "2.0.4",
+  "io.kamon" %% "kamon-apm-reporter" % "2.0.0",
 )
 
 // test configuration

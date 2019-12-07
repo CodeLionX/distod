@@ -87,7 +87,6 @@ class CandidateValidationSpec extends WordSpec with Matchers {
         )
       )
       val result = tester.checkSwapCandidates(candidate, swapCandidates, singletonPartitions, candidatePartitions)
-      println(result)
 
       result.validOds shouldEqual Seq(EquivalencyOrderDependency(CandidateSet.empty, 1, 2))
       result.removedCandidates shouldEqual swapCandidates

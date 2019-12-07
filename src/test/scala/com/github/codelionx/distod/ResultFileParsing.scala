@@ -25,18 +25,6 @@ object ResultFileParsing {
       reverse: Boolean = false
   ) extends ODResult
 
-
-  // just for testing
-  def main(args: Array[String]): Unit = {
-    val defaultPath = "data/results.txt"
-    val otherDefaultPath = "data/gold/test-results.txt"
-
-    val ourResults = readAndParseDistodResults(defaultPath)
-    val theirResults = readAndParseFastodResults(otherDefaultPath)
-
-    println(ourResults.zip(theirResults).map { case (a, b) => s"$a\t$b" }.mkString("\n"))
-  }
-
   def readAndParseDistodResults(path: String): Seq[ODResult] =
     withResource(new BufferedReader(new FileReader(path))) { reader =>
       val lines = reader.lines().toScala(LazyList)
@@ -111,6 +99,8 @@ object ResultFileParsing {
   }
 
   object FastodResultParser extends ResultParser {
+
+    override protected val constantSymbol = "[] ->"
 
     override def parseResult(s: String): ODResult = {
       val parts = s.split(separator).map(_.trim())

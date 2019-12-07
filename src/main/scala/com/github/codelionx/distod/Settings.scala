@@ -68,8 +68,6 @@ class Settings private(config: Config) extends Extension {
 
   val maxWorkers: Int = config.getInt(s"$namespace.max-workers")
 
-  //  val maxBatchSize: Int = config.getInt(s"$namespace.max-batch-size")
-
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 

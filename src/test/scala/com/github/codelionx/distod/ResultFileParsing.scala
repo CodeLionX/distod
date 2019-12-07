@@ -16,7 +16,10 @@ object ResultFileParsing {
     case object Equivalency extends Type
   }
 
-  sealed trait ODResult
+  sealed trait ODResult {
+
+    def context: Set[String]
+  }
   final case class ConstantODResult(context: Set[String], constantAttribute: String) extends ODResult
   final case class EquivalencyODResult(
       context: Set[String],
@@ -70,13 +73,14 @@ object ResultFileParsing {
       val part1 = s.substring(0, cuttingPoint).trim()
       val part2 = s.substring(cuttingPoint + 1, s.length).trim()
 
-      val tpe =
-        if (part2.contains(constantSymbol))
+      val tpe = part2 match {
+        case part if part.contains(constantSymbol) =>
           ODType.Constant
-        else if (part2.contains(compatibilitySymbol))
+        case part if part.contains(compatibilitySymbol) =>
           ODType.Equivalency
-        else
+        case _ =>
           throw new IllegalArgumentException(s + " is not a valid OD!")
+      }
 
       // part1 is the context attribute set
       val contextAttributes = parseContextAttributes(part1)

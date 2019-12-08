@@ -55,7 +55,7 @@ object LeaderGuardian {
       .receiveMessage[Command] {
         case AlgorithmFinished =>
           context.log.info("Received message that algorithm has finished successfully. Shutting down system.")
-          println(s"Runtime (s): ${((System.nanoTime() - timeBeforeStart) / 1e9).toInt}")
+          println(s"Runtime (ms): ${((System.nanoTime() - timeBeforeStart) / 1e6).toInt}")
           rsProxy ! FlushAndStop(rsAdapter)
           Behaviors.same
 

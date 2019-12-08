@@ -30,6 +30,7 @@ class PartitionSpec extends WordSpec with Matchers {
 
     def makePartition(classes: Set[Index]*) =
       FullPartition(
+        nTuples = classes.size,
         numberClasses = classes.size,
         numberElements = classes.map(_.size).sum,
         equivClasses = classes.toIndexedSeq
@@ -104,6 +105,7 @@ class PartitionSpec extends WordSpec with Matchers {
 
     def makePartition(classes: Set[Index]*) =
       StrippedPartition(
+        nTuples = 6,
         numberClasses = classes.size,
         numberElements = classes.map(_.size).sum,
         equivClasses = classes.toIndexedSeq

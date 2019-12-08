@@ -222,6 +222,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       )
     )
     partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
+      nTuples = nTuples,
       numberElements = nTuples,
       numberClasses = 1,
       equivClasses = IndexedSeq((0 until nTuples).toSet)

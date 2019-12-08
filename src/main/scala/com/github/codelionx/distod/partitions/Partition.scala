@@ -14,6 +14,8 @@ import scala.collection.mutable
  */
 sealed trait Partition extends CborSerializable with PartitionOps {
 
+  def nTuples: Int
+
   def numberElements: Int
 
   def numberClasses: Int
@@ -36,6 +38,7 @@ sealed trait Partition extends CborSerializable with PartitionOps {
  * @param equivClasses   sorted equivalence classes
  */
 case class FullPartition private[partitions](
+    nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
     equivClasses: IndexedSeq[Set[Index]]
@@ -66,6 +69,7 @@ case class FullPartition private[partitions](
  * @param equivClasses   remaining sorted equivalence classes
  */
 case class StrippedPartition private[partitions](
+    nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
     equivClasses: IndexedSeq[Set[Index]]
@@ -86,6 +90,7 @@ object Partition {
   def fullFrom(column: Array[String]): FullPartition = {
     val equivalenceClasses = partitionColumn(column)
     FullPartition(
+      nTuples = column.length,
       numberElements = column.length,
       numberClasses = equivalenceClasses.size,
       equivClasses = equivalenceClasses

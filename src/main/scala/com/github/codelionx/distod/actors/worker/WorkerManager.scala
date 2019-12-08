@@ -19,11 +19,10 @@ object WorkerManager {
     context.system.receptionist ! Receptionist.Subscribe(Master.MasterServiceKey, context.self)
 
     val settings = Settings(context.system)
-    val cores = Runtime.getRuntime.availableProcessors()
-    val numberOfWorkers = scala.math.min(settings.maxWorkers, cores)
+    val numberOfWorkers = settings.numberOfWorkers
 
     def spawnAndWatchWorker(master: ActorRef[Master.Command], id: Int): Unit = {
-      val ref = context.spawn(Worker(partitionManager, rsProxy, master), Worker.name(id))
+      val ref = context.spawn(Worker(partitionManager, rsProxy, master), Worker.name(id), settings.cpuBoundTaskDispatcher)
       context.watch(ref)
     }
 

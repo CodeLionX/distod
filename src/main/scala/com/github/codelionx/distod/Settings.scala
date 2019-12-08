@@ -68,6 +68,11 @@ class Settings private(config: Config) extends Extension {
 
   val maxWorkers: Int = config.getInt(s"$namespace.max-workers")
 
+  val numberOfWorkers: Int = {
+    val cores = Runtime.getRuntime.availableProcessors()
+    scala.math.min(maxWorkers, cores)
+  }
+
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 

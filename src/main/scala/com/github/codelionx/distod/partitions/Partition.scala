@@ -52,11 +52,23 @@ case class FullPartition private[partitions](
    *
    * @return Map containing tuple ID to value mapping
    */
-  def toTupleValueMap: Map[Index, Value] = {
+  @inline def toTupleValueMap: Map[Index, Value] = fastTupleValueMapper
+
+  private def functionalTupleValueMapper: Map[Index, Value] = {
     val indexedClasses = equivClasses.zipWithIndex
     indexedClasses.flatMap {
       case (set, value) => set.map(_ -> value)
     }.toMap
+  }
+
+  private def fastTupleValueMapper: Map[Index, Value] = {
+    val builder = Map.newBuilder[Index, Value]
+    equivClasses.zipWithIndex.foreach{ case (set, value) =>
+      set.foreach(index =>
+        builder.addOne(index, value)
+      )
+    }
+    builder.result()
   }
 }
 

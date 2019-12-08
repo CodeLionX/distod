@@ -35,6 +35,7 @@ object LeaderGuardian {
 
     // only spawned by leader:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    val timeBeforeStart = System.nanoTime()
 
     // temp. data reader
     val dataReader = context.spawn(DataReader(), DataReader.name)
@@ -54,6 +55,7 @@ object LeaderGuardian {
       .receiveMessage[Command] {
         case AlgorithmFinished =>
           context.log.info("Received message that algorithm has finished successfully. Shutting down system.")
+          println(s"Runtime (s): ${((System.nanoTime() - timeBeforeStart) / 1e9).toInt}")
           rsProxy ! FlushAndStop(rsAdapter)
           Behaviors.same
 

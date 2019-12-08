@@ -21,11 +21,14 @@ object CandidateValidation {
 
   implicit class SortableStrippedPartition(val p: StrippedPartition) extends AnyVal {
 
-    def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
+    def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] =
+      myFunctionalSort(fullPartition)
+
+    private def myFunctionalSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
       val indexLUT = fullPartition.toTupleValueMap
 
       p.equivClasses.map { clazz =>
-        val subClazzes = mutable.Map.empty[Int, mutable.Buffer[Int]]
+        val subClazzes = mutable.SortedMap.empty[Int, mutable.Buffer[Int]]
         for (tuple <- clazz) {
           val index = indexLUT(tuple)
           val subClazz = subClazzes.getOrElseUpdate(index, mutable.Buffer.empty)
@@ -87,20 +90,8 @@ trait CandidateValidation {
       val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
       val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val results = sortedContextClasses
-        .map { sortedClass =>
-          val default = false -> false
-          sortedClass.sliding(2).foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
-            val list1 = lists(0)
-            val list2 = lists(1)
-
-            val rightValues1 = list1.map(rightTupleValueMapping)
-            val rightValues2 = list2.map(rightTupleValueMapping)
-            val isSwap = rightValues1.max > rightValues2.min
-            val isReverseSwap = rightValues2.max > rightValues1.min
-            (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
-          }
-        }
+      val swapFinder = findSwap(rightTupleValueMapping) _
+      val results = sortedContextClasses.map(swapFinder)
       val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
 
       val normal = if (!swap)
@@ -123,5 +114,25 @@ trait CandidateValidation {
       validOds = validCandidates,
       removedCandidates = swapCandidates.filterNot(candidate => !isValid(candidate))
     )
+  }
+
+  private def findSwap(rightTupleValueMapping: Map[Int, Int])(sortedClass: IndexedSeq[Seq[Int]]): (Boolean, Boolean) = {
+    val default = false -> false
+    if (sortedClass.size < 2) {
+      default
+    } else {
+      val combinations = sortedClass.sliding(2).toArray
+      val res = combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
+        val list1 = lists(0)
+        val list2 = lists(1)
+
+        val rightValues1 = list1.map(rightTupleValueMapping)
+        val rightValues2 = list2.map(rightTupleValueMapping)
+        val isSwap = rightValues1.max > rightValues2.min
+        val isReverseSwap = rightValues2.max > rightValues1.min
+        (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
+      }
+      res
+    }
   }
 }

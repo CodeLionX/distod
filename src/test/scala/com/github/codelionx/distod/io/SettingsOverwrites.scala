@@ -14,7 +14,7 @@ object SettingsOverwrites {
 
 
   val defaultTestSettings: InputSettingsOverwrite = InputSettingsOverwrite(
-    filePath = this.getClass.getClassLoader.getResource("test.csv").getPath,
+    filePath = this.getClass.getClassLoader.getResource("data/test.csv").getPath,
     hasHeader = false,
     maxColumns = None,
     maxRows = None

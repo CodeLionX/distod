@@ -1,0 +1,14 @@
+FD: {D}: [] -> C
+REG-OD: {}: C ~ D
+REG-OD: {}: B ~ D
+REG-OD: {}: A ~ C
+REG-OD: {}: B ~ C
+FD: {B, C}: [] -> D
+FD: {B, C}: [] -> A
+FD: {A, B}: [] -> C
+BID-OD: {C}: A ~ D
+FD: {B, D}: [] -> A
+FD: {A, D}: [] -> B
+FD: {A, B}: [] -> D
+REG-OD: {B}: A ~ D
+REG-OD: {D}: A ~ B

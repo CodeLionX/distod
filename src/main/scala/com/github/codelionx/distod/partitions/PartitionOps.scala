@@ -41,10 +41,7 @@ trait PartitionOps { this: Partition =>
     // if both partitions are the same, we do not need to perform any computation
     case (p1, p2) if p1 equals p2 => p1
 
-    case (_: FullPartition, _: StrippedPartition) =>
-      throw new IllegalArgumentException("Can not build product of full and stripped partitions")
-
-    case (_: StrippedPartition, _: FullPartition) =>
+    case (_: FullPartition, _: StrippedPartition) | (_: StrippedPartition, _: FullPartition) =>
       throw new IllegalArgumentException("Can not build product of full and stripped partitions")
 
     case (p1: FullPartition, p2: FullPartition) =>

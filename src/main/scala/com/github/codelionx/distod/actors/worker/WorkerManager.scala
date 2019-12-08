@@ -40,7 +40,7 @@ object WorkerManager {
       context.watch(ref)
     }
 
-    def supervising(masterRef: ActorRef[Master.Command], nextWorkerId: Int): Behavior[Receptionist.Listing] =
+    def supervising(masterRef: ActorRef[Master.Command]): Behavior[Receptionist.Listing] =
       Behaviors
         .receiveMessage[Receptionist.Listing] { case Master.MasterServiceKey.Listing(_) =>
           context.log.error("Master service listing changed despite that the workers are already running!")
@@ -48,8 +48,7 @@ object WorkerManager {
         }
         .receiveSignal { case (ctx, Terminated(ref)) =>
           ctx.log.error("Worker {} has failed despite restart supervision!", ref)
-//          spawnAndWatchWorker(masterRef, nextWorkerId)
-          supervising(masterRef, nextWorkerId)
+          supervising(masterRef)
         }
 
     Behaviors.receiveMessage { case Master.MasterServiceKey.Listing(listings) =>
@@ -61,7 +60,7 @@ object WorkerManager {
           for (i <- 0 until numberOfWorkers) {
             spawnAndWatchWorker(masterRef, i)
           }
-          supervising(masterRef, numberOfWorkers)
+          supervising(masterRef)
       }
     }
   }

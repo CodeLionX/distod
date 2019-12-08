@@ -1,8 +1,7 @@
 package com.github.codelionx.distod.actors
 
-import akka.NotUsed
-import akka.actor.typed.{ActorRef, Behavior}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, Routers, StashBuffer}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
@@ -32,32 +31,43 @@ object PartitionManager {
   private final case class PendingError(replyTo: ActorRef[ErrorFound]) extends PendingResponse
   private final case class PendingStrippedPartition(replyTo: ActorRef[StrippedPartitionFound]) extends PendingResponse
 
-  private def partitionGenerator(jobs: Seq[ComputeProductJob], replyTo: ActorRef[ProductComputed]): Behavior[NotUsed] =
-    Behaviors.setup { _ =>
-      // actually just a stateful loop (but with immutable collections ;) )
-      @tailrec
-      def computePartition(
-          partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputeProductJob]
-      ): Unit = {
-        val job :: newRemainingJobs = remainingJobs
-        val pA = job.partitionA match {
-          case Right(p) => p
-          case Left(candidate) => partitions(candidate)
-        }
-        val pB = job.partitionB match {
-          case Right(p) => p
-          case Left(candidate) => partitions(candidate)
-        }
-        val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
-        replyTo ! ProductComputed(job.key, newPartition)
+  private final case class ComputePartitions(jobs: Seq[ComputeProductJob], replyTo: ActorRef[ProductComputed])
 
-        if (newRemainingJobs != Nil)
-          computePartition(partitions + (job.key -> newPartition), newRemainingJobs)
-      }
+  private def partitionGenerator: Behavior[ComputePartitions] = {
+    var time: Long = 0
+    var counter: Long = 0
 
-      computePartition(Map.empty, jobs)
-      Behaviors.stopped
+    Behaviors.receive {
+      case (context, ComputePartitions(jobs, replyTo)) =>
+        // actually just a stateful loop (but with immutable collections ;) )
+        @tailrec
+        def computePartition(
+            partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputeProductJob]
+        ): Unit = {
+          val job :: newRemainingJobs = remainingJobs
+          val pA = job.partitionA match {
+            case Right(p) => p
+            case Left(candidate) => partitions(candidate)
+          }
+          val pB = job.partitionB match {
+            case Right(p) => p
+            case Left(candidate) => partitions(candidate)
+          }
+          val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
+          replyTo ! ProductComputed(job.key, newPartition)
+          counter += 1
+
+          if (newRemainingJobs != Nil)
+            computePartition(partitions + (job.key -> newPartition), newRemainingJobs)
+        }
+
+        val start = System.nanoTime()
+        computePartition(Map.empty, jobs)
+        time += System.nanoTime() - start
+        context.log.info("Spend time computing {} partitions: {} ms", counter, time / 1e6)
+        Behaviors.same
     }
+  }
 }
 
 
@@ -69,6 +79,14 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   def start(): Behavior[PartitionCommand] = initialize(Seq.empty, Map.empty)
 
   private val settings = Settings(context.system)
+
+  private val generatorPool = context.spawn(
+    Routers.pool(settings.numberOfWorkers)(
+      Behaviors.supervise(partitionGenerator).onFailure[Exception](SupervisorStrategy.restart)
+    ),
+    name = "partition-generator-pool",
+    props = settings.cpuBoundTaskDispatcher
+  )
 
   private def initialize(
       attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
@@ -222,7 +240,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   ): PendingJobMap[CandidateSet, PendingResponse] = {
     val partitions = otherPartitions ++ singletonPartitions.view.mapValues(_.stripped)
     val jobs = calcJobChain(key, partitions)
-    context.spawnAnonymous(partitionGenerator(jobs, context.self), settings.cpuBoundTaskDispatcher)
+    generatorPool ! ComputePartitions(jobs, context.self)
     val x = jobs.map { job =>
       if (job.key == key)
         job.key -> Seq(pendingResponse)

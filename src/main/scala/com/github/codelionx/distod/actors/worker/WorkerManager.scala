@@ -1,12 +1,15 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.{ActorRef, Behavior, Terminated}
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy, Terminated}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
+
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 
 object WorkerManager {
@@ -22,7 +25,18 @@ object WorkerManager {
     val numberOfWorkers = settings.numberOfWorkers
 
     def spawnAndWatchWorker(master: ActorRef[Master.Command], id: Int): Unit = {
-      val ref = context.spawn(Worker(partitionManager, rsProxy, master), Worker.name(id), settings.cpuBoundTaskDispatcher)
+      val ref = context.spawn(
+        Behaviors
+          .supervise(Worker(partitionManager, rsProxy, master))
+          .onFailure[Exception](
+            SupervisorStrategy
+              .restart
+              .withLoggingEnabled(true)
+              .withLimit(3, 5 seconds)
+          ),
+        Worker.name(id),
+        settings.cpuBoundTaskDispatcher
+      )
       context.watch(ref)
     }
 
@@ -33,9 +47,9 @@ object WorkerManager {
           Behaviors.same[Receptionist.Listing]
         }
         .receiveSignal { case (ctx, Terminated(ref)) =>
-          ctx.log.error("Worker {} has failed. Starting a new instance", ref)
-          spawnAndWatchWorker(masterRef, nextWorkerId)
-          supervising(masterRef, nextWorkerId + 1)
+          ctx.log.error("Worker {} has failed despite restart supervision!", ref)
+//          spawnAndWatchWorker(masterRef, nextWorkerId)
+          supervising(masterRef, nextWorkerId)
         }
 
     Behaviors.receiveMessage { case Master.MasterServiceKey.Listing(listings) =>

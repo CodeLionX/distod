@@ -28,13 +28,13 @@ object CandidateValidation {
       val indexLUT = fullPartition.toTupleValueMap
 
       p.equivClasses.map { clazz =>
-        val subClazzes = mutable.Map.empty[Int, mutable.Buffer[Int]]
+        val subClazzes = mutable.SortedMap.empty[Int, mutable.Buffer[Int]]
         for (tuple <- clazz) {
           val index = indexLUT(tuple)
           val subClazz = subClazzes.getOrElseUpdate(index, mutable.Buffer.empty)
           subClazz += tuple
         }
-        subClazzes.toIndexedSeq.sortBy(_._1).map(_._2.toSeq)
+        subClazzes.values.map(_.toSeq).toIndexedSeq
       }
     }
   }

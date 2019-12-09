@@ -200,11 +200,11 @@ trait CandidateValidation {
       val combinations = sortedClass.sliding(2)
       // optimization: vars are faster here
       var (isSwap, isReverseSwap) = default
-      for (lists <- combinations if !isSwap && !isReverseSwap) {
+      for (lists <- combinations if !(isSwap && isReverseSwap)) {
         val rightValues1 = lists(0).map(rightTupleValueMapping)
         val rightValues2 = lists(1).map(rightTupleValueMapping)
-        isSwap = rightValues1.max > rightValues2.min
-        isReverseSwap = rightValues2.max > rightValues1.min
+        isSwap = isSwap || rightValues1.max > rightValues2.min
+        isReverseSwap = isReverseSwap || rightValues2.max > rightValues1.min
       }
       (isSwap, isReverseSwap)
     }

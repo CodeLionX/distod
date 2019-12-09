@@ -52,7 +52,7 @@ case class FullPartition private[partitions](
    *
    * @return Map containing tuple ID to value mapping
    */
-  @inline def toTupleValueMap: Map[Index, Value] = fastTupleValueMapper
+  lazy val toTupleValueMap: Map[Index, Value] = fastTupleValueMapper
 
   private def functionalTupleValueMapper: Map[Index, Value] = {
     val indexedClasses = equivClasses.zipWithIndex

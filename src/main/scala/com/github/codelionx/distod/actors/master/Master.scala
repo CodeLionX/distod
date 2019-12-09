@@ -165,12 +165,14 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       finished()
 
     case m: DispatchWork if workQueue.isEmpty && pending.nonEmpty =>
+      context.log.debug("Stashing request for work from {}", m.replyTo)
       stash.stash(m)
       Behaviors.same
 
     case DispatchWork(replyTo) if workQueue.nonEmpty =>
       val ((taskId, jobType), newWorkQueue) = workQueue.dequeue
       val taskState = state(taskId)
+      context.log.debug("Dispatching task {} {} to {}", jobType, taskId, replyTo)
       jobType match {
         case JobType.Split =>
           val splitCandidates = taskId & taskState.splitCandidates
@@ -182,7 +184,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       behavior(attributes, state, newWorkQueue, pending + (taskId -> jobType), testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
-      context.log.info("Received to-be-removed split candidates for {}: {}", id, removedSplitCandidates)
       val taskState = state(id)
       val updatedTaskState = taskState.copy(
         splitCandidates = taskState.splitCandidates -- removedSplitCandidates,
@@ -192,7 +193,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode, testedCandidates + 1)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
-      context.log.info("Received to-be-removed swap candidates for {}: {}", id, removedSwapCandidates)
       val taskState = state(id)
       val updatedTaskState = taskState.copy(
         swapCandidates = taskState.swapCandidates.filterNot(removedSwapCandidates.contains),
@@ -202,7 +202,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode, testedCandidates + 1)
 
     case m =>
-      context.log.info("Received message: {}", m)
+      context.log.warn("Received unexpected message: {}", m)
       Behaviors.same
   }
 
@@ -262,6 +262,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val newState = state + (id -> newTaskState)
     val newPending = pending - removedPending
     val (updatedState, newJobs) = generateNewCandidates(attributes, newState, workQueue, newPending, id)
+    context.log.info("Received results for {}, new jobs: {}", removedPending, newJobs.mkString(", "))
     behavior(attributes, updatedState, workQueue.enqueueAll(newJobs), newPending, testedCandidates)
   }
 

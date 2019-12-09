@@ -29,12 +29,21 @@ class NodeStateFilter(
 
     def notInPending(tpe: JobType.JobType): Iterable[CandidateSet] =
       nodes.filterNot(node => pending.contains(node -> tpe))
+
+    def notAlreadyChecked(tpe: JobType.JobType): Iterable[CandidateSet] =
+      nodes.filterNot(node =>
+        state.get(node).fold(false)(s => tpe match {
+          case JobType.Split => s.splitChecked
+          case JobType.Swap => s.swapChecked
+        })
+      )
   }
 
   def computableSplitNodes(potentialNodes: Iterable[CandidateSet]): Iterable[CandidateSet] =
     potentialNodes
       .notInQueue(JobType.Split)
       .notInPending(JobType.Split)
+      .notAlreadyChecked(JobType.Split)
       .filter { node =>
         val predecessors = node.predecessors
         predecessors.forall(id => state.get(id).fold(false)(_.splitChecked))
@@ -44,6 +53,7 @@ class NodeStateFilter(
     potentialNodes
       .notInQueue(JobType.Swap)
       .notInPending(JobType.Swap)
+      .notAlreadyChecked(JobType.Swap)
       .filter { node =>
         val predecessors = node.predecessors
         predecessors.forall(id =>

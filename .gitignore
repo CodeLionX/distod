@@ -109,3 +109,10 @@ data/*
 
 # intellij (openjdk) pid files
 .attach_pid*
+
+## profiling data
+# java flight recorder metrics
+*.jfr
+# symlinks and scripts
+oracle-java
+start-jmc.fish

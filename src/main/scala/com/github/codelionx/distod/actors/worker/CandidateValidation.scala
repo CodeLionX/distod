@@ -4,6 +4,7 @@ import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
 
+import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 
 
@@ -21,7 +22,7 @@ object CandidateValidation {
 
   implicit class SortableStrippedPartition(val p: StrippedPartition) extends AnyVal {
 
-    def sortEquivClassesBy(fullPartition: FullPartition): Array[IndexedSeq[Seq[Int]]] =
+    def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] =
       fastSort(fullPartition)
 
     private def myFunctionalSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
@@ -38,7 +39,7 @@ object CandidateValidation {
       }
     }
 
-    private def fastSort(fullPartition: FullPartition): Array[IndexedSeq[Seq[Int]]] = {
+    private def fastSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
       val indexLUT = fullPartition.toTupleValueMap
       val resultClasses = Array.ofDim[IndexedSeq[Seq[Int]]](p.numberClasses)
 
@@ -53,7 +54,10 @@ object CandidateValidation {
         }
         resultClasses(i) = subClazzes.values.map(_.result()).toIndexedSeq
       }
-      resultClasses
+      // do not copy over elements (.toIndexedSeq), just wrap the array
+      ArraySeq.unsafeWrapArray(resultClasses)
+      // From the end of this block on we have no reference to the wrapped array anymore. This means we cannot change
+      // it anymore, which would break immutability. Therefore it is safe to just wrap it before returning.
     }
 
     private def fastodSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
@@ -82,7 +86,7 @@ object CandidateValidation {
           }
         }
       }
-      resultClasses.map(clazz =>
+      ArraySeq.unsafeWrapArray(resultClasses).map(clazz =>
         clazz.map(_.result()).toIndexedSeq
       )
     }

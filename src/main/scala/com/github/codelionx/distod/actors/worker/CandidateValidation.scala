@@ -139,7 +139,7 @@ trait CandidateValidation {
       val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
       val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val swapFinder = findSwap(rightTupleValueMapping) _
+      val swapFinder = findSwapFast(rightTupleValueMapping) _
       val results = sortedContextClasses.map(swapFinder)
       val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
 
@@ -170,8 +170,8 @@ trait CandidateValidation {
     if (sortedClass.size < 2) {
       default
     } else {
-      val combinations = sortedClass.sliding(2).toArray
-      val res = combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
+      val combinations = sortedClass.sliding(2)
+      combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
         val list1 = lists(0)
         val list2 = lists(1)
 
@@ -181,7 +181,27 @@ trait CandidateValidation {
         val isReverseSwap = rightValues2.max > rightValues1.min
         (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
       }
-      res
+    }
+  }
+
+  private def findSwapFast(
+      rightTupleValueMapping: Map[Int, Int]
+  )(
+      sortedClass: IndexedSeq[Seq[Int]]
+  ): (Boolean, Boolean) = {
+    val default = false -> false
+    if (sortedClass.size < 2) {
+      default
+    } else {
+      val combinations = sortedClass.sliding(2)
+      var (isSwap, isReverseSwap) = default
+      for (lists <- combinations if !isSwap && !isReverseSwap) {
+        val rightValues1 = lists(0).map(rightTupleValueMapping)
+        val rightValues2 = lists(1).map(rightTupleValueMapping)
+        isSwap = rightValues1.max > rightValues2.min
+        isReverseSwap = rightValues2.max > rightValues1.min
+      }
+      (isSwap, isReverseSwap)
     }
   }
 }

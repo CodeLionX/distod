@@ -106,7 +106,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split).to(Queue)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         stash.unstashAll(
-          behavior(attributes, state, initialQueue, Set.empty)
+          behavior(attributes, state, initialQueue, Set.empty, 0)
         )
     }
 
@@ -157,18 +157,22 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       attributes: Seq[Int],
       state: Map[CandidateSet, CandidateState],
       workQueue: Queue[(CandidateSet, JobType.JobType)],
-      pending: Set[(CandidateSet, JobType.JobType)]
+      pending: Set[(CandidateSet, JobType.JobType)],
+      testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
     case DispatchWork(_) if workQueue.isEmpty && pending.isEmpty =>
+      println(s"Tested candidates: $testedCandidates")
       finished()
 
     case m: DispatchWork if workQueue.isEmpty && pending.nonEmpty =>
+      context.log.debug("Stashing request for work from {}", m.replyTo)
       stash.stash(m)
       Behaviors.same
 
     case DispatchWork(replyTo) if workQueue.nonEmpty =>
       val ((taskId, jobType), newWorkQueue) = workQueue.dequeue
       val taskState = state(taskId)
+      context.log.debug("Dispatching task {} {} to {}", jobType, taskId, replyTo)
       jobType match {
         case JobType.Split =>
           val splitCandidates = taskId & taskState.splitCandidates
@@ -177,30 +181,28 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
       }
-      behavior(attributes, state, newWorkQueue, pending + (taskId -> jobType))
+      behavior(attributes, state, newWorkQueue, pending + (taskId -> jobType), testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
-      context.log.info("Received to-be-removed split candidates for {}: {}", id, removedSplitCandidates)
       val taskState = state(id)
       val updatedTaskState = taskState.copy(
         splitCandidates = taskState.splitCandidates -- removedSplitCandidates,
         splitChecked = true
       )
       val removedPendingNode = id -> JobType.Split
-      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode)
+      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode, testedCandidates + 1)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
-      context.log.info("Received to-be-removed swap candidates for {}: {}", id, removedSwapCandidates)
       val taskState = state(id)
       val updatedTaskState = taskState.copy(
         swapCandidates = taskState.swapCandidates.filterNot(removedSwapCandidates.contains),
         swapChecked = true
       )
       val removedPendingNode = id -> JobType.Swap
-      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode)
+      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode, testedCandidates + 1)
 
     case m =>
-      context.log.info("Received message: {}", m)
+      context.log.warn("Received unexpected message: {}", m)
       Behaviors.same
   }
 
@@ -220,6 +222,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       )
     )
     partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
+      nTuples = nTuples,
       numberElements = nTuples,
       numberClasses = 1,
       equivClasses = IndexedSeq((0 until nTuples).toSet)
@@ -253,12 +256,14 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       pending: Set[(CandidateSet, JobType.JobType)],
       id: CandidateSet,
       newTaskState: CandidateState,
-      removedPending: (CandidateSet, JobType.JobType)
+      removedPending: (CandidateSet, JobType.JobType),
+      testedCandidates: Int
   ): Behavior[Command] = {
     val newState = state + (id -> newTaskState)
     val newPending = pending - removedPending
     val (updatedState, newJobs) = generateNewCandidates(attributes, newState, workQueue, newPending, id)
-    behavior(attributes, updatedState, workQueue.enqueueAll(newJobs), newPending)
+    context.log.info("Received results for {}, new jobs: {}", removedPending, newJobs.mkString(", "))
+    behavior(attributes, updatedState, workQueue.enqueueAll(newJobs), newPending, testedCandidates)
   }
 
 }

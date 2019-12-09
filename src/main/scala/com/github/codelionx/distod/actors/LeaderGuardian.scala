@@ -4,6 +4,7 @@ import akka.actor.typed.{Behavior, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
+import com.github.codelionx.distod.actors.partitionMgmt.PartitionManager
 import com.github.codelionx.distod.actors.worker.WorkerManager
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 
@@ -35,6 +36,7 @@ object LeaderGuardian {
 
     // only spawned by leader:
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    val timeBeforeStart = System.nanoTime()
 
     // temp. data reader
     val dataReader = context.spawn(DataReader(), DataReader.name)
@@ -54,6 +56,7 @@ object LeaderGuardian {
       .receiveMessage[Command] {
         case AlgorithmFinished =>
           context.log.info("Received message that algorithm has finished successfully. Shutting down system.")
+          println(s"Runtime (ms): ${((System.nanoTime() - timeBeforeStart) / 1e6).toInt}")
           rsProxy ! FlushAndStop(rsAdapter)
           Behaviors.same
 

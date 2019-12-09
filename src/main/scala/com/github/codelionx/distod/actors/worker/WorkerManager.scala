@@ -1,12 +1,15 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.{ActorRef, Behavior, Terminated}
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy, Terminated}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
+
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 
 object WorkerManager {
@@ -19,24 +22,33 @@ object WorkerManager {
     context.system.receptionist ! Receptionist.Subscribe(Master.MasterServiceKey, context.self)
 
     val settings = Settings(context.system)
-    val cores = Runtime.getRuntime.availableProcessors()
-    val numberOfWorkers = scala.math.min(settings.maxWorkers, cores)
+    val numberOfWorkers = settings.numberOfWorkers
 
     def spawnAndWatchWorker(master: ActorRef[Master.Command], id: Int): Unit = {
-      val ref = context.spawn(Worker(partitionManager, rsProxy, master), Worker.name(id))
+      val ref = context.spawn(
+        Behaviors
+          .supervise(Worker(partitionManager, rsProxy, master))
+          .onFailure[Exception](
+            SupervisorStrategy
+              .restart
+              .withLoggingEnabled(true)
+              .withLimit(3, 5 seconds)
+          ),
+        Worker.name(id),
+        settings.cpuBoundTaskDispatcher
+      )
       context.watch(ref)
     }
 
-    def supervising(masterRef: ActorRef[Master.Command], nextWorkerId: Int): Behavior[Receptionist.Listing] =
+    def supervising(masterRef: ActorRef[Master.Command]): Behavior[Receptionist.Listing] =
       Behaviors
         .receiveMessage[Receptionist.Listing] { case Master.MasterServiceKey.Listing(_) =>
           context.log.error("Master service listing changed despite that the workers are already running!")
           Behaviors.same[Receptionist.Listing]
         }
         .receiveSignal { case (ctx, Terminated(ref)) =>
-          ctx.log.error("Worker {} has failed. Starting a new instance", ref)
-          spawnAndWatchWorker(masterRef, nextWorkerId)
-          supervising(masterRef, nextWorkerId + 1)
+          ctx.log.error("Worker {} has failed despite restart supervision!", ref)
+          supervising(masterRef)
         }
 
     Behaviors.receiveMessage { case Master.MasterServiceKey.Listing(listings) =>
@@ -48,7 +60,7 @@ object WorkerManager {
           for (i <- 0 until numberOfWorkers) {
             spawnAndWatchWorker(masterRef, i)
           }
-          supervising(masterRef, numberOfWorkers)
+          supervising(masterRef)
       }
     }
   }

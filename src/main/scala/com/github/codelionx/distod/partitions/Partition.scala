@@ -3,6 +3,7 @@ package com.github.codelionx.distod.partitions
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.github.codelionx.distod.Serialization.CborSerializable
 
+import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 
@@ -13,6 +14,8 @@ import scala.collection.mutable
  * @see [[com.github.codelionx.distod.partitions.StrippedPartition]]
  */
 sealed trait Partition extends CborSerializable with PartitionOps {
+
+  def nTuples: Int
 
   def numberElements: Int
 
@@ -36,6 +39,7 @@ sealed trait Partition extends CborSerializable with PartitionOps {
  * @param equivClasses   sorted equivalence classes
  */
 case class FullPartition private[partitions](
+    nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
     equivClasses: IndexedSeq[Set[Index]]
@@ -49,11 +53,23 @@ case class FullPartition private[partitions](
    *
    * @return Map containing tuple ID to value mapping
    */
-  def toTupleValueMap: Map[Index, Value] = {
+  lazy val toTupleValueMap: Map[Index, Value] = fastTupleValueMapper
+
+  private def functionalTupleValueMapper: Map[Index, Value] = {
     val indexedClasses = equivClasses.zipWithIndex
     indexedClasses.flatMap {
       case (set, value) => set.map(_ -> value)
     }.toMap
+  }
+
+  private def fastTupleValueMapper: Map[Index, Value] = {
+    val builder = HashMap.newBuilder[Index, Value]
+    equivClasses.zipWithIndex.foreach{ case (set, value) =>
+      set.foreach(index =>
+        builder.addOne(index, value)
+      )
+    }
+    builder.result()
   }
 }
 
@@ -66,6 +82,7 @@ case class FullPartition private[partitions](
  * @param equivClasses   remaining sorted equivalence classes
  */
 case class StrippedPartition private[partitions](
+    nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
     equivClasses: IndexedSeq[Set[Index]]
@@ -86,6 +103,7 @@ object Partition {
   def fullFrom(column: Array[String]): FullPartition = {
     val equivalenceClasses = partitionColumn(column)
     FullPartition(
+      nTuples = column.length,
       numberElements = column.length,
       numberClasses = equivalenceClasses.size,
       equivClasses = equivalenceClasses

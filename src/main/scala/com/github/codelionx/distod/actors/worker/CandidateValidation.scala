@@ -4,6 +4,7 @@ import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
 
+import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 
 
@@ -22,7 +23,7 @@ object CandidateValidation {
   implicit class SortableStrippedPartition(val p: StrippedPartition) extends AnyVal {
 
     def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] =
-      myFunctionalSort(fullPartition)
+      fastSort(fullPartition)
 
     private def myFunctionalSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
       val indexLUT = fullPartition.toTupleValueMap
@@ -36,6 +37,58 @@ object CandidateValidation {
         }
         subClazzes.values.map(_.toSeq).toIndexedSeq
       }
+    }
+
+    private def fastSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
+      val indexLUT = fullPartition.toTupleValueMap
+      val resultClasses = Array.ofDim[IndexedSeq[Seq[Int]]](p.numberClasses)
+
+      val classes = p.equivClasses
+      for (i <- 0 until classes.size) {
+        val clazz = classes(i)
+        val subClazzes = mutable.SortedMap.empty[Int, mutable.Builder[Int, Seq[Int]]]
+        for (tuple <- clazz) {
+          val index = indexLUT(tuple)
+          val subClazz = subClazzes.getOrElseUpdate(index, Seq.newBuilder[Int])
+          subClazz += tuple
+        }
+        resultClasses(i) = subClazzes.values.map(_.result()).toIndexedSeq
+      }
+      // do not copy over elements (.toIndexedSeq), just wrap the array
+      ArraySeq.unsafeWrapArray(resultClasses)
+      // From the end of this block on we have no reference to the wrapped array anymore. This means we cannot change
+      // it anymore, which would break immutability. Therefore it is safe to just wrap it before returning.
+    }
+
+    private def fastodSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
+      val builder = Map.newBuilder[Int, Int]
+      p.equivClasses.zipWithIndex.foreach { case (set, value) =>
+        set.foreach(index =>
+          builder.addOne(index, value)
+        )
+      }
+      val indexLUT = builder.result()
+      val resultClasses = Array.fill(p.numberClasses)(mutable.ArrayBuffer.empty[mutable.Builder[Int, Seq[Int]]])
+
+      for (clazz <- fullPartition.equivClasses) {
+        val seen = mutable.BitSet.empty
+        for (tuple <- clazz) {
+          indexLUT.get(tuple) match {
+            case Some(index) =>
+              if (!seen.contains(index)) {
+                seen.add(index)
+                resultClasses(index).addOne(Seq.newBuilder)
+              }
+              val currentResultClass = resultClasses(index)
+              val lastIndex = currentResultClass.size - 1
+              currentResultClass(lastIndex).addOne(tuple)
+            case _ =>
+          }
+        }
+      }
+      ArraySeq.unsafeWrapArray(resultClasses).map(clazz =>
+        clazz.map(_.result()).toIndexedSeq
+      )
     }
   }
 }
@@ -90,7 +143,7 @@ trait CandidateValidation {
       val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
       val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val swapFinder = findSwap(rightTupleValueMapping) _
+      val swapFinder = findSwapFast(rightTupleValueMapping) _
       val results = sortedContextClasses.map(swapFinder)
       val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
 
@@ -121,8 +174,8 @@ trait CandidateValidation {
     if (sortedClass.size < 2) {
       default
     } else {
-      val combinations = sortedClass.sliding(2).toArray
-      val res = combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
+      val combinations = sortedClass.sliding(2)
+      combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
         val list1 = lists(0)
         val list2 = lists(1)
 
@@ -132,7 +185,28 @@ trait CandidateValidation {
         val isReverseSwap = rightValues2.max > rightValues1.min
         (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
       }
-      res
+    }
+  }
+
+  private def findSwapFast(
+      rightTupleValueMapping: Map[Int, Int]
+  )(
+      sortedClass: IndexedSeq[Seq[Int]]
+  ): (Boolean, Boolean) = {
+    val default = false -> false
+    if (sortedClass.size < 2) {
+      default
+    } else {
+      val combinations = sortedClass.sliding(2)
+      // optimization: vars are faster here
+      var (isSwap, isReverseSwap) = default
+      for (lists <- combinations if !(isSwap && isReverseSwap)) {
+        val rightValues1 = lists(0).map(rightTupleValueMapping)
+        val rightValues2 = lists(1).map(rightTupleValueMapping)
+        isSwap = isSwap || rightValues1.max > rightValues2.min
+        isReverseSwap = isReverseSwap || rightValues2.max > rightValues1.min
+      }
+      (isSwap, isReverseSwap)
     }
   }
 }

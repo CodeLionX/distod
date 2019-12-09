@@ -1,20 +1,22 @@
-package com.github.codelionx.distod.actors
+package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.NotUsed
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
+import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
 
-import scala.annotation.tailrec
-
 
 object PartitionManager {
 
-  private case class ProductComputed(key: CandidateSet, partition: StrippedPartition) extends PartitionCommand
+  private[partitionMgmt] case class ProductComputed(key: CandidateSet, partition: StrippedPartition)
+    extends PartitionCommand
 
+  private sealed trait PendingResponse
+  private final case class PendingError(replyTo: ActorRef[ErrorFound]) extends PendingResponse
+  private final case class PendingStrippedPartition(replyTo: ActorRef[StrippedPartitionFound]) extends PendingResponse
 
   val name = "partition-manager"
 
@@ -22,42 +24,6 @@ object PartitionManager {
     new PartitionManager(context, stash).start()
   })
 
-  private case class ComputeProductJob(
-      key: CandidateSet,
-      partitionA: Either[CandidateSet, StrippedPartition],
-      partitionB: Either[CandidateSet, StrippedPartition]
-  )
-
-  private sealed trait PendingResponse
-  private final case class PendingError(replyTo: ActorRef[ErrorFound]) extends PendingResponse
-  private final case class PendingStrippedPartition(replyTo: ActorRef[StrippedPartitionFound]) extends PendingResponse
-
-  private def partitionGenerator(jobs: Seq[ComputeProductJob], replyTo: ActorRef[ProductComputed]): Behavior[NotUsed] =
-    Behaviors.setup { _ =>
-      // actually just a stateful loop (but with immutable collections ;) )
-      @tailrec
-      def computePartition(
-          partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputeProductJob]
-      ): Unit = {
-        val job :: newRemainingJobs = remainingJobs
-        val pA = job.partitionA match {
-          case Right(p) => p
-          case Left(candidate) => partitions(candidate)
-        }
-        val pB = job.partitionB match {
-          case Right(p) => p
-          case Left(candidate) => partitions(candidate)
-        }
-        val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
-        replyTo ! ProductComputed(job.key, newPartition)
-
-        if (newRemainingJobs != Nil)
-          computePartition(partitions + (job.key -> newPartition), newRemainingJobs)
-      }
-
-      computePartition(Map.empty, jobs)
-      Behaviors.stopped
-    }
 }
 
 
@@ -69,6 +35,12 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   def start(): Behavior[PartitionCommand] = initialize(Seq.empty, Map.empty)
 
   private val settings = Settings(context.system)
+
+  private val generatorPool = context.spawn(
+    PartitionGenerator.createPool(settings.numberOfWorkers),
+    name = PartitionGenerator.poolName,
+    props = settings.cpuBoundTaskDispatcher
+  )
 
   private def initialize(
       attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
@@ -222,7 +194,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   ): PendingJobMap[CandidateSet, PendingResponse] = {
     val partitions = otherPartitions ++ singletonPartitions.view.mapValues(_.stripped)
     val jobs = calcJobChain(key, partitions)
-    context.spawnAnonymous(partitionGenerator(jobs, context.self), settings.cpuBoundTaskDispatcher)
+    generatorPool ! ComputePartitions(jobs, context.self)
     val x = jobs.map { job =>
       if (job.key == key)
         job.key -> Seq(pendingResponse)
@@ -235,9 +207,9 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   private def calcJobChain(
       key: CandidateSet,
       partitions: Map[CandidateSet, StrippedPartition]
-  ): Seq[ComputeProductJob] = {
+  ): Seq[ComputePartitionProductJob] = {
 
-    def loop(subkey: CandidateSet): Seq[ComputeProductJob] = {
+    def loop(subkey: CandidateSet): Seq[ComputePartitionProductJob] = {
       val predecessorKeys = subkey.predecessors.toList
       val foundKeys = predecessorKeys.filter(partitions.contains)
       val missingKeys = predecessorKeys.diff(foundKeys)
@@ -245,14 +217,14 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       foundKeys match {
         case Nil =>
           val nextPred1 :: nextPred2 :: _ = missingKeys
-          loop(nextPred1) ++ loop(nextPred2) :+ ComputeProductJob(subkey, Left(nextPred1), Left(nextPred2))
+          loop(nextPred1) ++ loop(nextPred2) :+ ComputePartitionProductJob(subkey, Left(nextPred1), Left(nextPred2))
 
         case nextPred :: Nil =>
-          loop(nextPred) :+ ComputeProductJob(subkey, Right(partitions(foundKeys.head)), Left(nextPred))
+          loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundKeys.head)), Left(nextPred))
 
         case _ =>
           val p1 :: p2 :: _ = foundKeys.map(partitions).take(2)
-          Seq(ComputeProductJob(subkey, Right(p1), Right(p2)))
+          Seq(ComputePartitionProductJob(subkey, Right(p1), Right(p2)))
       }
     }
 

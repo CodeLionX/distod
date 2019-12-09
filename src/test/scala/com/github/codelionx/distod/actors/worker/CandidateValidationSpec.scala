@@ -41,6 +41,7 @@ class CandidateValidationSpec extends WordSpec with Matchers {
       )
       val candidatePartitions = Map(
         CandidateSet.empty -> StrippedPartition(
+          nTuples = attributes.size,
           numberElements = attributes.size,
           numberClasses = 1,
           equivClasses = IndexedSeq(attributes.toSet)
@@ -81,6 +82,7 @@ class CandidateValidationSpec extends WordSpec with Matchers {
       )
       val candidatePartitions = Map(
         CandidateSet.empty -> StrippedPartition(
+          nTuples = attributes.size,
           numberElements = attributes.size,
           numberClasses = 1,
           equivClasses = IndexedSeq(attributes.toSet)

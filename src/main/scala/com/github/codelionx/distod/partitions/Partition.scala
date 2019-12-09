@@ -3,6 +3,7 @@ package com.github.codelionx.distod.partitions
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.github.codelionx.distod.Serialization.CborSerializable
 
+import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 
@@ -62,7 +63,7 @@ case class FullPartition private[partitions](
   }
 
   private def fastTupleValueMapper: Map[Index, Value] = {
-    val builder = Map.newBuilder[Index, Value]
+    val builder = HashMap.newBuilder[Index, Value]
     equivClasses.zipWithIndex.foreach{ case (set, value) =>
       set.foreach(index =>
         builder.addOne(index, value)

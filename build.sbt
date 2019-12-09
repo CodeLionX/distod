@@ -53,6 +53,9 @@ test in assembly := {}
 
 // don't include logging configuration file
 assemblyMergeStrategy in assembly := {
+  // discard JDK11 module infos from libs (not required for assembly and JDK8)
+  case "module-info.class" => MergeStrategy.discard
+  // discard logging configuration (set during deployment)
   case PathList("logback.xml") => MergeStrategy.discard
   case x =>
     val oldStrategy = (assemblyMergeStrategy in assembly).value

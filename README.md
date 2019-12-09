@@ -16,6 +16,12 @@ Or inside the SBT shell (`sbt`-command):
 ; set javaOptions += "-Dconfig.file=path/to/config.conf"; run
 ```
 
+Running DISTOD with a custom logging configuration:
+
+```bash
+java -Dlogback.configurationFile=deployment/logback.xml -jar distod.jar
+```
+
 ## Profiling with JMC
 
 [JMC](https://www.oracle.com/technetwork/java/javaseproducts/mission-control/index.html) is a tool to analyze metric recordings with the Java Flight Recorder (JFR).
@@ -35,3 +41,20 @@ If you use a JDK older then version 11, you also have to enable the commercial f
 You can adjust the filename of the results in the parameters.
 Afterwards the profiling results can be examined using the JDK Mission Control (JMC).
 You can download it from [this site](https://www.oracle.com/technetwork/java/javase/downloads/jmc7-downloads-5868868.html).
+
+## Profiling with VisualVM
+
+Start a longer running job with DISTOD, then open [VisualVM](https://visualvm.github.io/) and connect to the running VM.
+You can profile the process using the sample tab ("CPU").
+Stop it at any time to inspect the results without them changing constantly.
+
+## Useful commands
+
+Pin a process to a CPU core (or multiple).
+The CPU number starts with 1.
+This command only works on linux:
+
+```bash
+taskset --cpu-list 1,2 <cmd>
+```
+

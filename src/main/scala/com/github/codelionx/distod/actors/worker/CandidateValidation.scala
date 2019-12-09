@@ -21,7 +21,7 @@ object CandidateValidation {
 
   implicit class SortableStrippedPartition(val p: StrippedPartition) extends AnyVal {
 
-    def sortEquivClassesBy(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] =
+    def sortEquivClassesBy(fullPartition: FullPartition): Array[IndexedSeq[Seq[Int]]] =
       fastSort(fullPartition)
 
     private def myFunctionalSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
@@ -38,7 +38,7 @@ object CandidateValidation {
       }
     }
 
-    private def fastSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
+    private def fastSort(fullPartition: FullPartition): Array[IndexedSeq[Seq[Int]]] = {
       val indexLUT = fullPartition.toTupleValueMap
       val resultClasses = Array.ofDim[IndexedSeq[Seq[Int]]](p.numberClasses)
 
@@ -58,7 +58,7 @@ object CandidateValidation {
 
     private def fastodSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
       val builder = Map.newBuilder[Int, Int]
-      p.equivClasses.zipWithIndex.foreach{ case (set, value) =>
+      p.equivClasses.zipWithIndex.foreach { case (set, value) =>
         set.foreach(index =>
           builder.addOne(index, value)
         )

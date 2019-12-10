@@ -66,7 +66,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   ): Behavior[PartitionCommand] =
     if (attributes.nonEmpty && singletonPartitions.size == attributes.size) {
       stash.unstashAll(
-        behavior(attributes, singletonPartitions, Map.empty, PendingJobMap.empty)
+        behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty)
       )
     } else {
       initialize(attributes, singletonPartitions)
@@ -74,8 +74,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   private def behavior(
       attributes: Seq[Int],
-      singletonPartitions: Map[CandidateSet, FullPartition], // keys of size == 1
-      partitions: Map[CandidateSet, StrippedPartition], // keys of size != 1
+      partitions: PartitionMap,
       pendingJobs: PendingJobMap[CandidateSet, PendingResponse]
   ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
 
@@ -90,7 +89,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
     case InsertPartition(key, value: StrippedPartition) =>
       context.log.info("Inserting partition for key {}", key)
-      behavior(attributes, singletonPartitions, partitions + (key -> value), pendingJobs)
+      behavior(attributes, partitions + (key -> value), pendingJobs)
 
     // request attributes
     case LookupAttributes(replyTo) =>
@@ -99,7 +98,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
     // single-attr keys
     case LookupError(key, replyTo) if key.size == 1 =>
-      singletonPartitions.get(key) match {
+      partitions.getSingletonPartition(key) match {
         case Some(p) =>
           replyTo ! ErrorFound(key, p.stripped.error)
           Behaviors.same
@@ -108,7 +107,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       }
 
     case LookupPartition(key, replyTo) if key.size == 1 =>
-      singletonPartitions.get(key) match {
+      partitions.getSingletonPartition(key) match {
         case Some(p) =>
           replyTo ! PartitionFound(key, p)
           Behaviors.same
@@ -117,7 +116,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       }
 
     case LookupStrippedPartition(key, replyTo) if key.size == 1 =>
-      singletonPartitions.get(key) match {
+      partitions.getSingletonPartition(key) match {
         case Some(p) =>
           replyTo ! StrippedPartitionFound(key, p.stripped)
           Behaviors.same
@@ -133,17 +132,16 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           Behaviors.same
         case None if pendingJobs.contains(key) =>
           context.log.debug("Error is being computed, queuing request for key {}", key)
-          behavior(attributes, singletonPartitions, partitions, pendingJobs + (key -> PendingError(replyTo)))
+          behavior(attributes, partitions, pendingJobs + (key -> PendingError(replyTo)))
         case None =>
           context.log.info("Partition to compute error not found. Starting background job to compute {}", key)
           val newJobs = generateStrippedPartitionJobs(
             key,
-            singletonPartitions,
             partitions,
             pendingJobs,
             PendingError(replyTo)
           )
-          behavior(attributes, singletonPartitions, partitions, newJobs)
+          behavior(attributes, partitions, newJobs)
       }
 
     case LookupPartition(key, _) if key.size != 1 =>
@@ -158,17 +156,16 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           Behaviors.same
         case None if pendingJobs.contains(key) =>
           context.log.debug("Partition is being computed, queuing request for key {}", key)
-          behavior(attributes, singletonPartitions, partitions, pendingJobs + (key -> PendingStrippedPartition(replyTo)))
+          behavior(attributes, partitions, pendingJobs + (key -> PendingStrippedPartition(replyTo)))
         case None =>
           context.log.info("Partition not found. Starting background job to compute {}", key)
           val newJobs = generateStrippedPartitionJobs(
             key,
-            singletonPartitions,
             partitions,
             pendingJobs,
             PendingStrippedPartition(replyTo)
           )
-          behavior(attributes, singletonPartitions, partitions, newJobs)
+          behavior(attributes, partitions, newJobs)
       }
 
     case ProductComputed(key, partition) =>
@@ -183,16 +180,15 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         }
         case None => // do nothing
       }
-      behavior(attributes, singletonPartitions, updatedPartitions, pendingJobs.keyRemoved(key))
+      behavior(attributes, updatedPartitions, pendingJobs.keyRemoved(key))
   }
 
   private def generateStrippedPartitionJobs(
       key: CandidateSet,
-      singletonPartitions: Map[CandidateSet, FullPartition], otherPartitions: Map[CandidateSet, StrippedPartition],
+      partitions: PartitionMap,
       pendingJobs: PendingJobMap[CandidateSet, PendingResponse],
       pendingResponse: PendingResponse
   ): PendingJobMap[CandidateSet, PendingResponse] = {
-    val partitions = otherPartitions ++ singletonPartitions.view.mapValues(_.stripped)
     val jobs = calcJobChain(key, partitions)
     generatorPool ! ComputePartitions(jobs, context.self)
     val x = jobs.map { job =>
@@ -206,11 +202,11 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   private def calcJobChain(
       key: CandidateSet,
-      partitions: Map[CandidateSet, StrippedPartition]
+      partitions: PartitionMap
   ): Seq[ComputePartitionProductJob] = {
 
     def loop(subkey: CandidateSet): Seq[ComputePartitionProductJob] = {
-      val predecessorKeys = subkey.predecessors.toList
+      val predecessorKeys = subkey.predecessors.toSeq
       val foundKeys = predecessorKeys.filter(partitions.contains)
       val missingKeys = predecessorKeys.diff(foundKeys)
 
@@ -223,7 +219,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundKeys.head)), Left(nextPred))
 
         case _ =>
-          val p1 :: p2 :: _ = foundKeys.map(partitions).take(2)
+          val p1 :: p2 :: _ = foundKeys.map(partitions.apply).take(2)
           Seq(ComputePartitionProductJob(subkey, Right(p1), Right(p2)))
       }
     }

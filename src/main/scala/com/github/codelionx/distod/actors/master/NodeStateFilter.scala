@@ -3,32 +3,20 @@ package com.github.codelionx.distod.actors.master
 import com.github.codelionx.distod.actors.master.Master.{CandidateState, JobType}
 import com.github.codelionx.distod.types.CandidateSet
 
-import scala.collection.immutable.Queue
-
 
 object NodeStateFilter {
 
-  def createWithState(
-      state: Map[CandidateSet, CandidateState],
-      queue: Queue[(CandidateSet, JobType.JobType)],
-      pending: Set[(CandidateSet, JobType.JobType)]
-  ): NodeStateFilter = new NodeStateFilter(state, queue, pending)
+  def createWithState(state: Map[CandidateSet, CandidateState], queue: WorkQueue): NodeStateFilter =
+    new NodeStateFilter(state, queue)
 }
 
 
-class NodeStateFilter(
-    state: Map[CandidateSet, CandidateState],
-    queue: Queue[(CandidateSet, JobType.JobType)],
-    pending: Set[(CandidateSet, JobType.JobType)]
-) {
+class NodeStateFilter(state: Map[CandidateSet, CandidateState], queue: WorkQueue) {
 
-  implicit class NotInQueueAndPendingFilterable(val nodes: Iterable[CandidateSet]) {
+  implicit class NotInQueueAndStateFilterable(val nodes: Iterable[CandidateSet]) {
 
-    def notInQueue(tpe: JobType.JobType): Iterable[CandidateSet] =
+    def notInWorkQueue(tpe: JobType.JobType): Iterable[CandidateSet] =
       nodes.filterNot(node => queue.contains(node -> tpe))
-
-    def notInPending(tpe: JobType.JobType): Iterable[CandidateSet] =
-      nodes.filterNot(node => pending.contains(node -> tpe))
 
     def notAlreadyChecked(tpe: JobType.JobType): Iterable[CandidateSet] =
       nodes.filterNot(node =>
@@ -41,8 +29,7 @@ class NodeStateFilter(
 
   def computableSplitNodes(potentialNodes: Iterable[CandidateSet]): Iterable[CandidateSet] =
     potentialNodes
-      .notInQueue(JobType.Split)
-      .notInPending(JobType.Split)
+      .notInWorkQueue(JobType.Split)
       .notAlreadyChecked(JobType.Split)
       .filter { node =>
         val predecessors = node.predecessors
@@ -51,8 +38,7 @@ class NodeStateFilter(
 
   def computableSwapNodes(potentialNodes: Iterable[CandidateSet]): Iterable[CandidateSet] =
     potentialNodes
-      .notInQueue(JobType.Swap)
-      .notInPending(JobType.Swap)
+      .notInWorkQueue(JobType.Swap)
       .notAlreadyChecked(JobType.Swap)
       .filter { node =>
         val predecessors = node.predecessors

@@ -11,8 +11,7 @@ trait CandidateGeneration {
   def generateNewCandidates(
       attributes: Seq[Int],
       state: Map[CandidateSet, CandidateState],
-      currentWorkQueue: Queue[(CandidateSet, JobType.JobType)],
-      pending: Set[(CandidateSet, JobType.JobType)],
+      currentWorkQueue: WorkQueue,
       updatedCandidate: CandidateSet
   ): (Map[CandidateSet, CandidateState], Seq[(CandidateSet, JobType.JobType)]) = {
 
@@ -30,7 +29,7 @@ trait CandidateGeneration {
       val newNodesSize = updatedCandidate.size + 1
 
       // filtered candidates --> computable nodes
-      val nodeFilter = NodeStateFilter.createWithState(state, currentWorkQueue, pending)
+      val nodeFilter = NodeStateFilter.createWithState(state, currentWorkQueue)
       val newSplitNodes = nodeFilter.computableSplitNodes(potentialNewNodes)
       val newSwapNodes = nodeFilter.computableSwapNodes(potentialNewNodes)
 

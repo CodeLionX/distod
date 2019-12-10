@@ -21,11 +21,7 @@ trait CandidateGeneration {
       // no valid descending candidates!
       (state, Seq.empty)
     } else {
-      // optimization: Usage of [[View]]s prevents the materialization of temporary collections and speeds up the
-      // iterations on larger collections.
-      val potentialNewNodes = updatedCandidate
-        .successors(attributes.toSet)
-        .view
+      val potentialNewNodes = updatedCandidate.successors(attributes.toSet)
       val newNodesSize = updatedCandidate.size + 1
 
       // filtered candidates --> computable nodes

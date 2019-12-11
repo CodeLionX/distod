@@ -15,7 +15,7 @@ import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
-import scala.collection.immutable.Queue
+import scala.collection.immutable.{Queue, SortedSet}
 
 
 object Master {
@@ -103,10 +103,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 //         testPartitionMgmt()
 
         val state = rootCandidateState ++ L1candidateState
-        val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split).to(Queue)
+        val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         stash.unstashAll(
-          behavior(attributes, state, initialQueue, Set.empty, 0)
+          behavior(attributes, state, WorkQueue.from(initialQueue), 0)
         )
     }
 
@@ -156,21 +156,20 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   private def behavior(
       attributes: Seq[Int],
       state: Map[CandidateSet, CandidateState],
-      workQueue: Queue[(CandidateSet, JobType.JobType)],
-      pending: Set[(CandidateSet, JobType.JobType)],
+      workQueue: WorkQueue,
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
-    case DispatchWork(_) if workQueue.isEmpty && pending.isEmpty =>
+    case DispatchWork(_) if workQueue.isEmpty =>
       println(s"Tested candidates: $testedCandidates")
       finished()
 
-    case m: DispatchWork if workQueue.isEmpty && pending.nonEmpty =>
+    case m: DispatchWork if workQueue.noWork && workQueue.hasPending =>
       context.log.debug("Stashing request for work from {}", m.replyTo)
       stash.stash(m)
       Behaviors.same
 
-    case DispatchWork(replyTo) if workQueue.nonEmpty =>
-      val ((taskId, jobType), newWorkQueue) = workQueue.dequeue
+    case DispatchWork(replyTo) if workQueue.hasWork =>
+      val ((taskId, jobType), newWorkQueue) = workQueue.dequeue()
       val taskState = state(taskId)
       context.log.debug("Dispatching task {} {} to {}", jobType, taskId, replyTo)
       jobType match {
@@ -181,7 +180,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
       }
-      behavior(attributes, state, newWorkQueue, pending + (taskId -> jobType), testedCandidates)
+      behavior(attributes, state, newWorkQueue, testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
       val taskState = state(id)
@@ -189,8 +188,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         splitCandidates = taskState.splitCandidates -- removedSplitCandidates,
         splitChecked = true
       )
-      val removedPendingNode = id -> JobType.Split
-      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode, testedCandidates + 1)
+      val newWorkQueue = workQueue.removePending(id, JobType.Split)
+      updateStateAndNext(attributes, state, newWorkQueue, id, updatedTaskState, testedCandidates + 1)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
       val taskState = state(id)
@@ -198,8 +197,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         swapCandidates = taskState.swapCandidates.filterNot(removedSwapCandidates.contains),
         swapChecked = true
       )
-      val removedPendingNode = id -> JobType.Swap
-      updateStateAndNext(attributes, state, workQueue, pending, id, updatedTaskState, removedPendingNode, testedCandidates + 1)
+      val newWorkQueue = workQueue.removePending(id, JobType.Swap)
+      updateStateAndNext(attributes, state, newWorkQueue, id, updatedTaskState, testedCandidates + 1)
 
     case m =>
       context.log.warn("Received unexpected message: {}", m)
@@ -252,18 +251,16 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   private def updateStateAndNext(
       attributes: Seq[Int],
       state: Map[CandidateSet, CandidateState],
-      workQueue: Queue[(CandidateSet, JobType.JobType)],
-      pending: Set[(CandidateSet, JobType.JobType)],
+      workQueue: WorkQueue,
       id: CandidateSet,
       newTaskState: CandidateState,
-      removedPending: (CandidateSet, JobType.JobType),
       testedCandidates: Int
   ): Behavior[Command] = {
     val newState = state + (id -> newTaskState)
-    val newPending = pending - removedPending
-    val (updatedState, newJobs) = generateNewCandidates(attributes, newState, workQueue, newPending, id)
-    context.log.info("Received results for {}, new jobs: {}", removedPending, newJobs.mkString(", "))
-    behavior(attributes, updatedState, workQueue.enqueueAll(newJobs), newPending, testedCandidates)
+    val (updatedState, newJobs) = generateNewCandidates(attributes, newState, workQueue, id)
+    val newQueue = workQueue.enqueueAll(newJobs)
+    context.log.info("Received results for {}, new jobs: {}", id, newJobs.mkString(", "))
+    behavior(attributes, updatedState, newQueue, testedCandidates)
   }
 
 }

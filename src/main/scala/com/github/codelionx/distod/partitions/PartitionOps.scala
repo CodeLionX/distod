@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.partitions
 
+import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 
@@ -8,7 +9,7 @@ trait PartitionOps { this: Partition =>
   /**
    * Converts this partition to a stripped partition by removing equivalence classes with size 1.
    */
-  @inline def stripped: StrippedPartition = toStripped
+  def stripped: StrippedPartition
 
   /**
    * Alias to [[com.github.codelionx.distod.partitions.PartitionOps#product]].
@@ -27,18 +28,6 @@ trait PartitionOps { this: Partition =>
    * @throws IllegalArgumentException if two different partition types should be multiplied
    */
   def product(other: Partition): Partition = product(this, other)
-
-  private def toStripped: StrippedPartition = this match {
-    case p: FullPartition =>
-      val strippedClasses = stripClasses(p.equivClasses)
-      StrippedPartition(
-        nTuples = p.nTuples,
-        numberElements = strippedClasses.map(_.size).sum,
-        numberClasses = strippedClasses.size,
-        equivClasses = strippedClasses
-      )
-    case p: StrippedPartition => p
-  }
 
   private def product(partition1: Partition, partition2: Partition): Partition = (partition1, partition2) match {
     // if both partitions are the same, we do not need to perform any computation
@@ -127,6 +116,25 @@ trait PartitionOps { this: Partition =>
     )
   }
 
-  private def stripClasses(classes: IndexedSeq[Set[Index]]): IndexedSeq[Set[Index]] =
+  protected def stripClasses(classes: IndexedSeq[Set[Index]]): IndexedSeq[Set[Index]] =
     classes.filterNot { indexSet => indexSet.size <= 1 }
+
+  protected def convertToTupleValueMap: Map[Index, Value] = fastTupleValueMapper
+
+  private def functionalTupleValueMapper: Map[Index, Value] = {
+    val indexedClasses = equivClasses.zipWithIndex
+    indexedClasses.flatMap {
+      case (set, value) => set.map(_ -> value)
+    }.toMap
+  }
+
+  private def fastTupleValueMapper: Map[Index, Value] = {
+    val builder = HashMap.newBuilder[Index, Value]
+    equivClasses.zipWithIndex.foreach{ case (set, value) =>
+      set.foreach(index =>
+        builder.addOne(index, value)
+      )
+    }
+    builder.result()
+  }
 }

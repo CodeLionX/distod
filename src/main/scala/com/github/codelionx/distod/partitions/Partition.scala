@@ -3,7 +3,6 @@ package com.github.codelionx.distod.partitions
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.github.codelionx.distod.Serialization.CborSerializable
 
-import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 
@@ -47,30 +46,25 @@ case class FullPartition private[partitions](
 
   override def error: Double = 1 - numberClasses
 
+  override def stripped: StrippedPartition = _stripped
+
+  private lazy val _stripped: StrippedPartition = {
+    val strippedClasses = stripClasses(equivClasses)
+    StrippedPartition(
+      nTuples = nTuples,
+      numberElements = strippedClasses.map(_.size).sum,
+      numberClasses = strippedClasses.size,
+      equivClasses = strippedClasses
+    )
+  }
+
   /**
    * Converts this full partition to a tuple-value-map, mapping each tuple ID to its value equivalent (position of
    * the corresponding equivalence class in the sorted partition).
    *
    * @return Map containing tuple ID to value mapping
    */
-  lazy val toTupleValueMap: Map[Index, Value] = fastTupleValueMapper
-
-  private def functionalTupleValueMapper: Map[Index, Value] = {
-    val indexedClasses = equivClasses.zipWithIndex
-    indexedClasses.flatMap {
-      case (set, value) => set.map(_ -> value)
-    }.toMap
-  }
-
-  private def fastTupleValueMapper: Map[Index, Value] = {
-    val builder = HashMap.newBuilder[Index, Value]
-    equivClasses.zipWithIndex.foreach{ case (set, value) =>
-      set.foreach(index =>
-        builder.addOne(index, value)
-      )
-    }
-    builder.result()
-  }
+  lazy val toTupleValueMap: Map[Index, Value] = convertToTupleValueMap
 }
 
 
@@ -89,6 +83,8 @@ case class StrippedPartition private[partitions](
 ) extends Partition {
 
   override def error: Double = numberElements - numberClasses
+
+  override def stripped: StrippedPartition = this
 }
 
 

@@ -11,8 +11,7 @@ trait CandidateGeneration {
   def generateNewCandidates(
       attributes: Seq[Int],
       state: Map[CandidateSet, CandidateState],
-      currentWorkQueue: Queue[(CandidateSet, JobType.JobType)],
-      pending: Set[(CandidateSet, JobType.JobType)],
+      currentWorkQueue: WorkQueue,
       updatedCandidate: CandidateSet
   ): (Map[CandidateSet, CandidateState], Seq[(CandidateSet, JobType.JobType)]) = {
 
@@ -22,15 +21,11 @@ trait CandidateGeneration {
       // no valid descending candidates!
       (state, Seq.empty)
     } else {
-      // optimization: Usage of [[View]]s prevents the materialization of temporary collections and speeds up the
-      // iterations on larger collections.
-      val potentialNewNodes = updatedCandidate
-        .successors(attributes.toSet)
-        .view
+      val potentialNewNodes = updatedCandidate.successors(attributes.toSet)
       val newNodesSize = updatedCandidate.size + 1
 
       // filtered candidates --> computable nodes
-      val nodeFilter = NodeStateFilter.createWithState(state, currentWorkQueue, pending)
+      val nodeFilter = NodeStateFilter.createWithState(state, currentWorkQueue)
       val newSplitNodes = nodeFilter.computableSplitNodes(potentialNewNodes)
       val newSwapNodes = nodeFilter.computableSwapNodes(potentialNewNodes)
 

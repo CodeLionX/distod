@@ -6,7 +6,7 @@ import scala.collection.immutable.{BitSet, SortedSet, SortedSetOps, StrictOptimi
 
 object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
 
-  def empty: CandidateSet = new CandidateSet(BitSet.empty)
+  def empty: CandidateSet = new CandidateSet(BitSet.empty, 0)
 
   def from(candidates: Int*): CandidateSet = fromSpecific(candidates)
 
@@ -15,21 +15,27 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
 
   def fromBitMask(elems: Array[Long]): CandidateSet = apply(BitSet.fromBitMask(elems))
 
-  def apply(bitset: BitSet): CandidateSet = new CandidateSet(bitset)
+  def apply(bitset: BitSet): CandidateSet = new CandidateSet(bitset, bitset.size)
 
   override def newBuilder: mutable.Builder[Int, CandidateSet] =
     new mutable.Builder[Int, CandidateSet] {
       private val bitSetBuilder = BitSet.newBuilder
+      private var size = 0
 
-      override def clear(): Unit = bitSetBuilder.clear()
+      override def clear(): Unit = {
+        size = 0
+        bitSetBuilder.clear()
+      }
 
-      override def result(): CandidateSet = apply(bitSetBuilder.result())
+      override def result(): CandidateSet = new CandidateSet(bitSetBuilder.result(), size)
 
       override def addOne(elem: Int): this.type = {
         bitSetBuilder.addOne(elem)
+        size += 1
         this
       }
     }
+
 }
 
 
@@ -37,9 +43,11 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
  * Represents a set of candidates (column Ids). It uses a [[scala.collection.immutable.BitSet]] as underlying data
  * structure that allows space-efficient storage and efficient set-inclusion testing and set-combination operations.
  *
+ * This wrapper caches the size of the underlying BitSet (set bits) to allow fast comparison and size requests.
+ *
  * @see [[scala.collection.immutable.BitSet]]
  */
-class CandidateSet(private val _underlying: BitSet)
+class CandidateSet(private val _underlying: BitSet, private val _size: Int)
   extends SortedSet[Int]
     with SortedSetOps[Int, SortedSet, CandidateSet]
     with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet] {
@@ -56,11 +64,11 @@ class CandidateSet(private val _underlying: BitSet)
 
   override def incl(elem: Int): CandidateSet =
     if (contains(elem)) this
-    else new CandidateSet(_underlying.incl(elem))
+    else new CandidateSet(_underlying.incl(elem), _size + 1)
 
   override def excl(elem: Int): CandidateSet =
     if (!contains(elem)) this
-    else new CandidateSet(_underlying.excl(elem))
+    else new CandidateSet(_underlying.excl(elem), _size - 1)
 
   override def contains(elem: Int): Boolean = _underlying.contains(elem)
 
@@ -68,8 +76,12 @@ class CandidateSet(private val _underlying: BitSet)
 
   override def ordering: Ordering[Int] = _underlying.ordering
 
-  override def rangeImpl(from: Option[Int], until: Option[Int]): CandidateSet =
-    new CandidateSet(_underlying.rangeImpl(from, until))
+  override def rangeImpl(from: Option[Int], until: Option[Int]): CandidateSet = {
+    val bitset = _underlying.rangeImpl(from, until)
+    new CandidateSet(bitset, bitset.size)
+  }
+
+  override def size: Int = _size
 
   /**
    * Computes the predecessors of this CandidateSet. E.g. for CandidateSet(0, 1, 2), the predecessors are:
@@ -80,7 +92,7 @@ class CandidateSet(private val _underlying: BitSet)
    * @return A new sequence of the preceding candidate sets.
    */
   def predecessors: Set[CandidateSet] = _underlying.unsorted.map(elem =>
-    new CandidateSet(_underlying - elem)
+    new CandidateSet(_underlying - elem, _size - 1)
   )
 
   /**
@@ -105,7 +117,7 @@ class CandidateSet(private val _underlying: BitSet)
     (allAttributes._underlying diff this._underlying)
       .unsorted
       .map { attribute =>
-        new CandidateSet(this._underlying + attribute)
+        new CandidateSet(this._underlying + attribute, this._size + 1)
       }
 
 

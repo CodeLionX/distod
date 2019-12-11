@@ -15,8 +15,6 @@ import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
-import scala.collection.immutable.{Queue, SortedSet}
-
 
 object Master {
 
@@ -49,18 +47,6 @@ object Master {
       partitionManager: ActorRef[PartitionCommand],
       resultCollector: ActorRef[ResultCommand]
   )
-  case class CandidateState(
-      splitCandidates: CandidateSet,
-      swapCandidates: Seq[(Int, Int)],
-      splitChecked: Boolean = false,
-      swapChecked: Boolean = false
-  )
-
-  object JobType {
-    sealed trait JobType
-    case object Split extends JobType
-    case object Swap extends JobType
-  }
 }
 
 
@@ -82,8 +68,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
     dataReader ! LoadPartitions(loadingEventMapper)
 
-    def onLoadingEvent(loadingEvent: DataLoadingEvent): Behavior[Command] = loadingEvent match {
-      case PartitionsLoaded(table @ PartitionedTable(name, headers, partitions)) =>
+    Behaviors.receiveMessagePartial[Command] {
+      case m: DispatchWork =>
+        context.log.debug("Worker {} is ready for work, stashing request", m.replyTo)
+        stash.stash(m)
+        Behaviors.same
+
+      case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
 
         // stop data reader to free up resources
@@ -108,16 +99,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         stash.unstashAll(
           behavior(attributes, state, WorkQueue.from(initialQueue), 0)
         )
-    }
-
-    Behaviors.receiveMessagePartial[Command] {
-      case m: DispatchWork =>
-        context.log.debug("Woker {} is ready for work, stashing request", m.replyTo)
-        stash.stash(m)
-        Behaviors.same
-
-      case WrappedLoadingEvent(event) =>
-        onLoadingEvent(event)
     }
   }
 
@@ -212,13 +193,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def generateLevel0(attributes: Seq[Int], nTuples: Int): Map[CandidateSet, CandidateState] = {
     val L0CandidateState = Map(
-      CandidateSet.empty -> CandidateState(
-        splitCandidates = CandidateSet.fromSpecific(attributes),
-        swapCandidates = Seq.empty,
-        // we do not need to check for splits and swaps in level 0 (empty set)
-        splitChecked = true,
-        swapChecked = true
-      )
+      CandidateSet.empty -> CandidateState.forL0(CandidateSet.fromSpecific(attributes))
     )
     partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
       nTuples = nTuples,
@@ -236,11 +211,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   ): Map[CandidateSet, CandidateState] = {
     val L1candidates = attributes.map(columnId => CandidateSet.from(columnId))
     val L1candidateState = L1candidates.map { candidate =>
-      candidate -> CandidateState(
-        splitCandidates = CandidateSet.fromSpecific(attributes),
-        swapCandidates = Seq.empty,
-        swapChecked = true // we do not need to check for swaps in level 1 (single attribute nodes)
-      )
+      candidate -> CandidateState.forL1(CandidateSet.fromSpecific(attributes))
     }
     L1candidates.zipWithIndex.foreach { case (candidate, index) =>
       partitionManager ! InsertPartition(candidate, partitions(index))

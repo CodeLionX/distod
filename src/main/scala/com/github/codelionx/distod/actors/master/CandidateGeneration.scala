@@ -1,9 +1,6 @@
 package com.github.codelionx.distod.actors.master
 
-import com.github.codelionx.distod.actors.master.Master.{CandidateState, JobType}
 import com.github.codelionx.distod.types.CandidateSet
-
-import scala.collection.immutable.Queue
 
 
 trait CandidateGeneration {
@@ -54,8 +51,7 @@ trait CandidateGeneration {
             splitChecked = false
           )
         case None => CandidateState(
-          splitCandidates = newSplitCandidates,
-          swapCandidates = Seq.empty
+          splitCandidates = newSplitCandidates
         )
       }
       acc.updated(id, updatedNodeState)
@@ -99,7 +95,6 @@ trait CandidateGeneration {
             swapChecked = false
           )
         case None => CandidateState(
-          splitCandidates = CandidateSet.empty,
           swapCandidates = newSwapCandidates
         )
       }

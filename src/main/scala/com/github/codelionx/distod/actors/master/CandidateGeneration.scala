@@ -10,13 +10,13 @@ trait CandidateGeneration {
       state: Map[CandidateSet, CandidateState],
       currentWorkQueue: WorkQueue,
       updatedCandidate: CandidateSet
-  ): (Map[CandidateSet, CandidateState], Seq[(CandidateSet, JobType.JobType)]) = {
+  ): (Iterable[(CandidateSet, JobType.JobType)], Iterable[(CandidateSet, CandidateState.Delta)]) = {
 
     val currentNodeState = state(updatedCandidate)
     // node pruning
     if (currentNodeState.splitCandidates.isEmpty && currentNodeState.swapCandidates.isEmpty) {
       // no valid descending candidates!
-      (state, Seq.empty)
+      (Seq.empty, Map.empty)
     } else {
       val potentialNewNodes = updatedCandidate.successors(attributes.toSet)
       val newNodesSize = updatedCandidate.size + 1
@@ -26,42 +26,33 @@ trait CandidateGeneration {
       val newSplitNodes = nodeFilter.computableSplitNodes(potentialNewNodes)
       val newSwapNodes = nodeFilter.computableSwapNodes(potentialNewNodes)
 
-      // update state
-      val splitUpdatedState = updateStateForSplitNodes(newSplitNodes, state)
-      val swapUpdatedState = updateStateForSwapNodes(newSwapNodes, newNodesSize, splitUpdatedState)
+      // state updates
+      val splitUpdates = updateStateForSplitNodes(newSplitNodes, state)
+      val swapUpdates = updateStateForSwapNodes(newSwapNodes, newNodesSize, state)
 
       val newJobs = (
         newSplitNodes.map(id => id -> JobType.Split)
           ++ newSwapNodes.map(id => id -> JobType.Swap)
-        ).toSeq
-      (swapUpdatedState, newJobs)
+        )
+      val updates = splitUpdates ++ swapUpdates
+      (newJobs, updates)
     }
   }
 
   private def updateStateForSplitNodes(
       newNodes: Iterable[CandidateSet], state: Map[CandidateSet, CandidateState]
-  ): Map[CandidateSet, CandidateState] =
-    newNodes.foldLeft(state) { case (acc, id) =>
+  ): Iterable[(CandidateSet, CandidateState.Delta)] =
+    newNodes.map { id =>
       val predecessorSplitCandidates = id.predecessors.map(state(_).splitCandidates)
       val newSplitCandidates = predecessorSplitCandidates.reduce(_ intersect _)
-      val updatedNodeState = state.get(id) match {
-        case Some(s) =>
-          s.copy(
-            splitCandidates = newSplitCandidates,
-            splitChecked = false
-          )
-        case None => CandidateState(
-          splitCandidates = newSplitCandidates
-        )
-      }
-      acc.updated(id, updatedNodeState)
+      id -> CandidateState.NewSplitCandidates(newSplitCandidates)
     }
 
   private def updateStateForSwapNodes(
       newNodes: Iterable[CandidateSet],
       newNodesSize: Int,
       state: Map[CandidateSet, CandidateState]
-  ): Map[CandidateSet, CandidateState] = {
+  ): Iterable[(CandidateSet, CandidateState.Delta)] = {
     def filterBasedOnSplits(id: CandidateSet, candidates: Seq[(Int, Int)]): Seq[(Int, Int)] = {
       candidates.filter { case (a, b) =>
         state.get(id - a).fold(false)(s => s.splitCandidates.contains(b)) &&
@@ -69,7 +60,7 @@ trait CandidateGeneration {
       }
     }
 
-    newNodes.foldLeft(state) { case (acc, id) =>
+    newNodes.map { id =>
       val newSwapCandidates =
         if (newNodesSize == 2) {
           // every node (with size 2) only has one candidate (= itself)
@@ -87,19 +78,7 @@ trait CandidateGeneration {
           }
           filterBasedOnSplits(id, updatedPotentialSwapCandidates)
         }
-
-      val updatedNodeState = state.get(id) match {
-        case Some(s) =>
-          s.copy(
-            swapCandidates = newSwapCandidates,
-            swapChecked = false
-          )
-        case None => CandidateState(
-          swapCandidates = newSwapCandidates
-        )
-      }
-
-      acc.updated(id, updatedNodeState)
+      id -> CandidateState.NewSwapCandidates(newSwapCandidates)
     }
   }
 }

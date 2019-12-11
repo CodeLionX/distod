@@ -228,7 +228,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       testedCandidates: Int
   ): Behavior[Command] = {
     val newState = state + (id -> newTaskState)
-    val (updatedState, newJobs) = generateNewCandidates(attributes, newState, workQueue, id)
+    val (newJobs, stateDeltas) = generateNewCandidates(attributes, newState, workQueue, id)
+    val updatedState = stateDeltas.foldLeft(newState) { case (acc, (id, delta)) =>
+      acc.get(id) match {
+        case None => acc.updated(id, CandidateState.createFromDelta(delta))
+        case Some(s) => acc.updated(id, s.updated(delta))
+      }
+    }
     val newQueue = workQueue.enqueueAll(newJobs)
     context.log.info("Received results for {}, new jobs: {}", id, newJobs.mkString(", "))
     behavior(attributes, updatedState, newQueue, testedCandidates)

@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.actors.master
 
+import com.github.codelionx.distod.actors.master.CandidateState.{NewSplitCandidates, NewSwapCandidates}
 import com.github.codelionx.distod.types.CandidateSet
 
 
@@ -18,6 +19,18 @@ object CandidateState {
     swapCandidates = Seq.empty,
     swapChecked = true // we do not need to check for swaps in level 1 (single attribute nodes)
   )
+
+  def createFromDelta(delta: Delta): CandidateState = delta match {
+    case NewSplitCandidates(newSplitCandidates) => CandidateState(splitCandidates = newSplitCandidates)
+    case NewSwapCandidates(newSwapCandidates) => CandidateState(swapCandidates = newSwapCandidates)
+  }
+
+  def createFromDeltas(deltas: Iterable[Delta]): CandidateState = CandidateState().updatedAll(deltas)
+
+  sealed trait Delta
+  final case class NewSplitCandidates(splitCandidates: CandidateSet) extends Delta
+  final case class NewSwapCandidates(swapCandidates: Seq[(Int, Int)]) extends Delta
+
 }
 
 case class CandidateState(
@@ -25,4 +38,21 @@ case class CandidateState(
     swapCandidates: Seq[(Int, Int)] = Seq.empty,
     splitChecked: Boolean = false,
     swapChecked: Boolean = false
-)
+) {
+
+  def updatedAll(deltas: Iterable[CandidateState.Delta]): CandidateState =
+    deltas.foldLeft(this) { case (state, delta) =>
+      state.updated(delta)
+    }
+
+  def updated(delta: CandidateState.Delta): CandidateState = delta match {
+    case NewSplitCandidates(newSplitCandidates) => this.copy(
+      splitCandidates = newSplitCandidates,
+      splitChecked = false
+    )
+    case NewSwapCandidates(newSwapCandidates) => this.copy(
+      swapCandidates = newSwapCandidates,
+      swapChecked = false
+    )
+  }
+}

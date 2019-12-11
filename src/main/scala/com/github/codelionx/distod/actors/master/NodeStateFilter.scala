@@ -1,6 +1,5 @@
 package com.github.codelionx.distod.actors.master
 
-import com.github.codelionx.distod.actors.master.Master.{CandidateState, JobType}
 import com.github.codelionx.distod.types.CandidateSet
 
 

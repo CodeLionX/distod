@@ -91,9 +91,16 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
    *
    * @return A new sequence of the preceding candidate sets.
    */
-  def predecessors: Set[CandidateSet] = _underlying.unsorted.map(elem =>
+  def predecessors: Set[CandidateSet] = fastPredecessors
+
+  private def functionalPredecessors: Set[CandidateSet] = _underlying.unsorted.map(elem =>
     new CandidateSet(_underlying - elem, _size - 1)
   )
+
+  private def fastPredecessors: Set[CandidateSet] = _underlying.toSeq
+    .combinations(size - 1)
+    .map(bits => new CandidateSet(BitSet.fromSpecific(bits), _size - 1))
+    .toSet
 
   /**
    * Computes the successors of this CandidateSet using the specified attributes. E.g. for CandidateSet(1, 2) and

@@ -14,7 +14,7 @@ ThisBuild / version := "0.0.1"
 ThisBuild / fork in run := true
 
 lazy val root = (project in file("."))
-  .aggregate(benchmarking)
+  .aggregate(distod, benchmarking)
 
 lazy val distod = (project in file("distod"))
   .settings(

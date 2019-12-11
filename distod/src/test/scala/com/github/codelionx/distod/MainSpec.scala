@@ -11,14 +11,14 @@ class MainSpec extends WordSpec with Matchers with LogCapturing {
   "distod" should {
 
     "compute the correct dependencies for the test.csv dataset" in {
-      val inputFilePath = "src/test/resources/data/test.csv"
-      val resultFilePath = "src/test/resources/data/test-results-gold.txt"
+      val inputFilePath = TestUtil.findResource("data/test.csv")
+      val resultFilePath = TestUtil.findResource("data/test-results-gold.txt")
       performSystemTestFor(inputFilePath, resultFilePath)
     }
 
     "compute the correct dependencies for the iris.csv dataset" in {
-      val inputFilePath = "src/test/resources/data/iris.csv"
-      val resultFilePath = "src/test/resources/data/iris-results-gold.txt"
+      val inputFilePath = TestUtil.findResource("data/iris.csv")
+      val resultFilePath = TestUtil.findResource("data/iris-results-gold.txt")
       performSystemTestFor(inputFilePath, resultFilePath)
     }
   }

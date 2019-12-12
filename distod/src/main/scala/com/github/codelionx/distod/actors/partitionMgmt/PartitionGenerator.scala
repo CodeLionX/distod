@@ -25,7 +25,7 @@ object PartitionGenerator {
         .withLoggingEnabled(true)
         .withLimit(3, 10 seconds)
     )
-  )
+  ).withRoundRobinRouting()
 
   private def apply(): Behavior[ComputePartitions] = Behaviors.setup(context =>
     new PartitionGenerator(context).start()

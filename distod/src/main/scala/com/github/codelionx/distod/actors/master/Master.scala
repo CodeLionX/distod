@@ -10,7 +10,7 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.worker.Worker
-import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
+import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates, GenerateCandidates}
 import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
@@ -24,6 +24,11 @@ object Master {
     extends Command with CborSerializable
   final case class SwapCandidatesChecked(id: CandidateSet, removedSwapCandidates: Seq[(Int, Int)])
     extends Command with CborSerializable
+  final case class NewCandidates(
+      id: CandidateSet,
+      newJobs: Iterable[(CandidateSet, JobType.JobType)],
+      stateUpdates: Iterable[(CandidateSet, CandidateState.Delta)]
+  ) extends Command with CborSerializable
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
 
@@ -50,8 +55,7 @@ object Master {
 }
 
 
-class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers)
-  extends CandidateGeneration {
+class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers) {
 
   import Master._
   import localPeers._
@@ -141,8 +145,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
     case DispatchWork(_) if workQueue.isEmpty =>
-      println(s"Tested candidates: $testedCandidates")
-      finished()
+      context.log.debug("Request for work, but no more work available and no pending requests: algo finished!")
+      finished(testedCandidates)
 
     case m: DispatchWork if workQueue.noWork && workQueue.hasPending =>
       context.log.debug("Stashing request for work from {}", m.replyTo)
@@ -160,6 +164,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         case JobType.Swap =>
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
+        case JobType.Generation =>
+          replyTo ! GenerateCandidates(taskId, state, newWorkQueue)
       }
       behavior(attributes, state, newWorkQueue, testedCandidates)
 
@@ -181,14 +187,43 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       val newWorkQueue = workQueue.removePending(id, JobType.Swap)
       updateStateAndNext(attributes, state, newWorkQueue, id, updatedTaskState, testedCandidates + 1)
 
+    case NewCandidates(id, newJobs, stateUpdates) =>
+      // remove duplicate results (caused by workers having old copy of the state and queue)
+      val filteredJobs = newJobs.filterNot(workQueue.contains)
+      val updatedState = stateUpdates
+        // new candidates should be the same as before and if we already checked the candidate, we will ignore the update
+//        .filterNot {
+//          case (id, CandidateState.NewSwapCandidates(_)) => workQueue.contains(id -> JobType.Swap)
+//          case (id, CandidateState.NewSplitCandidates(_)) => workQueue.contains(id -> JobType.Split)
+//        }
+        .foldLeft(state) { case (acc, (id, delta)) =>
+          acc.get(id) match {
+            case None => acc.updated(id, CandidateState.createFromDelta(delta))
+            case Some(s) => acc.updated(id, s.updated(delta))
+          }
+        }
+      context.log.info("Received new jobs: {}", newJobs.mkString(", "))
+      val newQueue = workQueue.removePending(id -> JobType.Generation).enqueueAll(filteredJobs)
+      stash.unstashAll(
+        behavior(attributes, updatedState, newQueue, testedCandidates)
+      )
+
     case m =>
       context.log.warn("Received unexpected message: {}", m)
       Behaviors.same
   }
 
-  private def finished(): Behavior[Command] = {
+  private def finished(testedCandidates: Int): Behavior[Command] = {
+    println(s"Tested candidates: $testedCandidates")
     guardian ! LeaderGuardian.AlgorithmFinished
-    Behaviors.same
+    Behaviors.receiveMessage {
+      case DispatchWork(_) =>
+        // can be ignored without issues, because we are out of work
+        Behaviors.same
+      case m =>
+        context.log.warn("Ignoring message because we are in shutdown: {}", m)
+        Behaviors.same
+    }
   }
 
   private def generateLevel0(attributes: Seq[Int], nTuples: Int): Map[CandidateSet, CandidateState] = {
@@ -228,16 +263,19 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       testedCandidates: Int
   ): Behavior[Command] = {
     val newState = state + (id -> newTaskState)
-    val (newJobs, stateDeltas) = generateNewCandidates(attributes, newState, workQueue, id)
-    val updatedState = stateDeltas.foldLeft(newState) { case (acc, (id, delta)) =>
-      acc.get(id) match {
-        case None => acc.updated(id, CandidateState.createFromDelta(delta))
-        case Some(s) => acc.updated(id, s.updated(delta))
-      }
+    if (id == CandidateSet.from(0, 1, 2, 3)) {
+      println("DEBUG")
     }
-    val newQueue = workQueue.enqueueAll(newJobs)
-    context.log.info("Received results for {}, new jobs: {}", id, newJobs.mkString(", "))
-    behavior(attributes, updatedState, newQueue, testedCandidates)
+    // node pruning
+    val pruneNode = newTaskState.splitCandidates.isEmpty && newTaskState.swapCandidates.isEmpty
+    val newWorkQueue =
+      if (!pruneNode && !workQueue.containsPending(id -> JobType.Generation)) {
+        workQueue.enqueue(id -> JobType.Generation)
+      } else {
+        workQueue
+      }
+    context.log.info("Received results for {}", id)
+    behavior(attributes, newState, newWorkQueue, testedCandidates)
   }
 
 }

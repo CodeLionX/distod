@@ -14,7 +14,7 @@ trait CandidateGeneration {
   ): (Iterable[(CandidateSet, JobType.JobType)], Iterable[(CandidateSet, CandidateState.Delta)]) = {
 
     val currentNodeState = state(updatedCandidate)
-    // node pruning
+    // node pruning (again), see master
     if (currentNodeState.splitCandidates.isEmpty && currentNodeState.swapCandidates.isEmpty) {
       // no valid descending candidates!
       (Seq.empty, Map.empty)

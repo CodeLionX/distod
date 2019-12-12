@@ -22,6 +22,7 @@ class NodeStateFilter(state: Map[CandidateSet, CandidateState], queue: WorkQueue
         state.get(node).fold(false)(s => tpe match {
           case JobType.Split => s.splitChecked
           case JobType.Swap => s.swapChecked
+          case JobType.Generation => false
         })
       )
   }

@@ -46,13 +46,13 @@ case class CandidateState(
     }
 
   def updated(delta: CandidateState.Delta): CandidateState = delta match {
-    case NewSplitCandidates(newSplitCandidates) => this.copy(
-      splitCandidates = newSplitCandidates,
-      splitChecked = false
+    // only consider updates if we did not yet check the candidates (otherwise the update is obsolete
+    case NewSplitCandidates(newSplitCandidates) if !this.splitChecked => this.copy(
+      splitCandidates = newSplitCandidates
     )
-    case NewSwapCandidates(newSwapCandidates) => this.copy(
-      swapCandidates = newSwapCandidates,
-      swapChecked = false
+    case NewSwapCandidates(newSwapCandidates) if !this.swapChecked => this.copy(
+      swapCandidates = newSwapCandidates
     )
+    case _ => this
   }
 }

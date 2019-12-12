@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.actors.worker
 
+import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.partitions.{Partition, StrippedPartition}
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}

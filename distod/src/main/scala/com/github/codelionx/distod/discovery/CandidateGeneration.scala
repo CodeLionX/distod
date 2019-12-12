@@ -1,5 +1,6 @@
-package com.github.codelionx.distod.actors.master
+package com.github.codelionx.distod.discovery
 
+import com.github.codelionx.distod.actors.master.{CandidateState, JobType, NodeStateFilter, WorkQueue}
 import com.github.codelionx.distod.types.CandidateSet
 
 

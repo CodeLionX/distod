@@ -3,6 +3,7 @@ package com.github.codelionx.distod.actors.worker
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.actors.worker.Worker.{Command, WrappedPartitionEvent}
+import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.{ErrorFound, LookupError}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDependencies
 import com.github.codelionx.distod.types.CandidateSet

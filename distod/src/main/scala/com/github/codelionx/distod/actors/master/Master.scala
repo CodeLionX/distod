@@ -13,6 +13,7 @@ import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates, GenerateCandidates}
 import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
+import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.PrimaryPartitionManager
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 
 
@@ -29,6 +30,8 @@ object Master {
       newJobs: Iterable[(CandidateSet, JobType.JobType)],
       stateUpdates: Iterable[(CandidateSet, CandidateState.Delta)]
   ) extends Command with CborSerializable
+  final case class GetPrimaryPartitionManager(replyTo: ActorRef[PrimaryPartitionManager])
+    extends Command with CborSerializable
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
 
@@ -76,6 +79,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       case m: DispatchWork =>
         context.log.debug("Worker {} is ready for work, stashing request", m.replyTo)
         stash.stash(m)
+        Behaviors.same
+
+      case GetPrimaryPartitionManager(replyTo) =>
+        replyTo ! PrimaryPartitionManager(partitionManager)
         Behaviors.same
 
       case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
@@ -144,6 +151,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       workQueue: WorkQueue,
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
+    case GetPrimaryPartitionManager(replyTo) =>
+      replyTo ! PrimaryPartitionManager(partitionManager)
+      Behaviors.same
+
     case DispatchWork(_) if workQueue.isEmpty =>
       context.log.debug("Request for work, but no more work available and no pending requests: algo finished!")
       finished(testedCandidates)
@@ -263,9 +274,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       testedCandidates: Int
   ): Behavior[Command] = {
     val newState = state + (id -> newTaskState)
-    if (id == CandidateSet.from(0, 1, 2, 3)) {
-      println("DEBUG")
-    }
     // node pruning
     val pruneNode = newTaskState.splitCandidates.isEmpty && newTaskState.swapCandidates.isEmpty
     val newWorkQueue =

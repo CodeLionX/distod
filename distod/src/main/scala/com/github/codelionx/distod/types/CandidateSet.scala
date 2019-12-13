@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.types
 
 import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
-import com.github.codelionx.distod.Serialization.{CandidateSetDeserializer, CandidateSetSerializer, CborSerializable}
+import com.github.codelionx.distod.Serialization.{CandidateSetDeserializer, CandidateSetSerializer}
 
 import scala.collection.{mutable, SpecificIterableFactory}
 import scala.collection.immutable.{BitSet, SortedSet, SortedSetOps, StrictOptimizedSortedSetOps}
@@ -54,8 +54,7 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
 class CandidateSet(private val _underlying: BitSet, private val _size: Int)
   extends SortedSet[Int]
     with SortedSetOps[Int, SortedSet, CandidateSet]
-    with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet]
-    with CborSerializable {
+    with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet] {
 
   private def factory: SpecificIterableFactory[Int, CandidateSet] = CandidateSet
 

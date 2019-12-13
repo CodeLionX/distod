@@ -61,6 +61,7 @@ case class FullPartition private[partitions](
    *
    * @return Map containing tuple ID to value mapping
    */
+  @transient
   lazy val toTupleValueMap: Map[Index, Value] = convertToTupleValueMap
 }
 

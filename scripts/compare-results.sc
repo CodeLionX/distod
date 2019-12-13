@@ -4,6 +4,7 @@ import com.github.codelionx.distod.ResultFileParsing._
 import org.scalatest.enablers.Aggregating
 import org.scalatest.enablers.Aggregating._
 
+
 val resultPath = "/home/sebastian/Projects/distod/data/results.txt"
 val goldResultPath = "/home/sebastian/Projects/distod/data/gold/test-results.txt"
 
@@ -16,8 +17,8 @@ val isSameResult = aggregating.containsTheSameElementsAs(ourResults, theirResult
 
 if (!isSameResult) {
   def sorter(result: ODResult): String = result match {
-    case ConstantODResult(context, _) => context.mkString("")
-    case EquivalencyODResult(context, _, _, _) => context.mkString("")
+    case ConstantODResult(context, _) => "0" + context.mkString("")
+    case EquivalencyODResult(context, _, _, _) => "1" + context.mkString("")
   }
 
   println("=== Our results")
@@ -26,5 +27,4 @@ if (!isSameResult) {
   println(theirResults.sortBy(sorter).mkString("\n"))
 }
 
-assert(isSameResult, "Did not contain the same alements as the gold standard")
-
+assert(isSameResult, "Did not contain the same elements as the gold standard")

@@ -5,59 +5,73 @@ lazy val clistVersion = "3.5.1"
 lazy val scala212 = "2.12.10"
 lazy val scala213 = "2.13.1"
 
-scalaVersion := scala213
+ThisBuild / scalaVersion := scala213
 //crossScalaVersions := scala212 :: scala213 :: Nil
 
-organization := "com.github.codelionx"
-name := "distod"
-version := "0.0.1"
+ThisBuild / organization := "com.github.codelionx"
+ThisBuild / version := "0.0.1"
 
-libraryDependencies ++= Seq(
-  // akka
-  "com.typesafe.akka" %% "akka-actor" % akkaVersion,
-  "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
-  "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
-  "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
-//  "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
-//  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
+ThisBuild / fork in run := true
 
-  // csv parsing
-  "com.univocity" % "univocity-parsers" % univocityVersion,
+lazy val root = (project in file("."))
+  .aggregate(distod, benchmarking)
 
-  // logging
-  "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.2.3",
+lazy val distod = (project in file("distod"))
+  .settings(
+    name := "distod",
+    libraryDependencies ++= Seq(
+      // akka
+      "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
+      //  "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
+      //  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
 
-  // test
-  "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
-  "org.scalactic" %% "scalactic" % "3.0.8",
-  "org.scalatest" %% "scalatest" % "3.0.8" % Test,
+      // csv parsing
+      "com.univocity" % "univocity-parsers" % univocityVersion,
 
-  // serialization
-  "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
-//  "com.twitter" %% "chill-akka" % "0.9.3", // just for scala 2.12?
-//  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
-)
+      // logging
+      "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
 
-// test configuration
-parallelExecution in Test := true
-logBuffered in Test := false
+      // test
+      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
+      "org.scalactic" %% "scalactic" % "3.0.8",
+      "org.scalatest" %% "scalatest" % "3.0.8" % Test,
 
-fork in run := true
+      // serialization
+      "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion
+      //  "com.twitter" %% "chill-akka" % "0.9.3", // just for scala 2.12?
+      //  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
+    ),
+    // test configuration
+    parallelExecution in Test := true,
+    logBuffered in Test := false,
 
-// set main class for assembly
-mainClass in assembly := Some("com.github.codelionx.distod.Main")
+    // set main class for assembly
+    mainClass in assembly := Some("com.github.codelionx.distod.Main"),
 
-// skip tests during assembly
-test in assembly := {}
+    // skip tests during assembly
+    test in assembly := {},
 
-// don't include logging configuration file
-assemblyMergeStrategy in assembly := {
-  // discard JDK11 module infos from libs (not required for assembly and JDK8)
-  case "module-info.class" => MergeStrategy.discard
-  // discard logging configuration (set during deployment)
-  case PathList("logback.xml") => MergeStrategy.discard
-  case x =>
-    val oldStrategy = (assemblyMergeStrategy in assembly).value
-    oldStrategy(x)
-}
+    // don't include logging configuration file
+    assemblyMergeStrategy in assembly := {
+      // discard JDK11 module infos from libs (not required for assembly and JDK8)
+      case "module-info.class" => MergeStrategy.discard
+      // discard logging configuration (set during deployment)
+      case PathList("logback.xml") => MergeStrategy.discard
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+  )
+
+// documentation at https://github.com/ktoso/sbt-jmh
+lazy val benchmarking = (project in file("benchmarking"))
+  .settings(
+    javaOptions in run ++= Seq("-Xms2G", "-Xmx2G")
+  )
+  .enablePlugins(JmhPlugin)
+//  .dependsOn(distod)
+

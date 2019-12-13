@@ -56,7 +56,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       nextBehavior(attributes, newSingletonPartitions)
 
     case m =>
-      context.log.debug("Stashing request {}", m)
+      context.log.warn("Stashing request {}", m)
       stash.stash(m)
       Behaviors.same
   }
@@ -65,6 +65,11 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
   ): Behavior[PartitionCommand] =
     if (attributes.nonEmpty && singletonPartitions.size == attributes.size) {
+      context.log.info(
+        "Initialization of partition manager finished, received {} attributes and {} partitions",
+        attributes.size,
+        singletonPartitions.size
+      )
       stash.unstashAll(
         behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty)
       )

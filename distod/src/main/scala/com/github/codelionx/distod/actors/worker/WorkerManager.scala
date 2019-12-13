@@ -56,7 +56,7 @@ object WorkerManager {
         case None =>
           Behaviors.same
         case Some(masterRef) =>
-          context.log.info("Spawning {} workers", numberOfWorkers)
+          context.log.info("Found master at {}. Spawning {} workers", masterRef, numberOfWorkers)
           for (i <- 0 until numberOfWorkers) {
             spawnAndWatchWorker(masterRef, i)
           }

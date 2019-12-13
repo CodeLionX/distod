@@ -1,5 +1,15 @@
 package com.github.codelionx.distod
 
+import java.lang.reflect.Type
+
+import com.fasterxml.jackson.core.{JsonGenerator, JsonParser, JsonToken}
+import com.fasterxml.jackson.databind.{DeserializationContext, JsonNode, SerializerProvider}
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer
+import com.fasterxml.jackson.databind.ser.std.StdSerializer
+import com.github.codelionx.distod.types.CandidateSet
+
+import scala.collection.mutable
+
 
 object Serialization {
 
@@ -13,4 +23,32 @@ object Serialization {
    */
   trait CborSerializable
 
+  class CandidateSetSerializer extends StdSerializer[CandidateSet](classOf[CandidateSet]) {
+
+    override def serialize(value: CandidateSet, gen: JsonGenerator, provider: SerializerProvider): Unit = {
+      val bitmask = value.toBitMask
+      gen.writeArray(bitmask, 0, bitmask.length)
+    }
+
+    override def getSchema(provider: SerializerProvider, typeHint: Type): JsonNode =
+      createSchemaNode("CandidateSet")
+
+  }
+
+  class CandidateSetDeserializer extends StdDeserializer[CandidateSet](classOf[CandidateSet]) {
+
+    override def deserialize(p: JsonParser, ctxt: DeserializationContext): CandidateSet = {
+      if (p.currentToken() == JsonToken.START_ARRAY) {
+        p.nextToken()
+        val longs = mutable.ArrayBuilder.make[Long]
+        do {
+          val item = _parseLongPrimitive(p, ctxt)
+          longs.addOne(item)
+        } while (p.nextToken() != null && p.currentToken() != JsonToken.END_ARRAY)
+        CandidateSet.fromBitMask(longs.result())
+      } else {
+        throw ctxt.wrongTokenException(p, _valueClass, JsonToken.START_ARRAY, "")
+      }
+    }
+  }
 }

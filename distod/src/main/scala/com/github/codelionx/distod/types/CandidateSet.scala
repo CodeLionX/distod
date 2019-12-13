@@ -1,5 +1,8 @@
 package com.github.codelionx.distod.types
 
+import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
+import com.github.codelionx.distod.Serialization.{CandidateSetDeserializer, CandidateSetSerializer, CborSerializable}
+
 import scala.collection.{mutable, SpecificIterableFactory}
 import scala.collection.immutable.{BitSet, SortedSet, SortedSetOps, StrictOptimizedSortedSetOps}
 
@@ -35,7 +38,6 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
         this
       }
     }
-
 }
 
 
@@ -47,10 +49,13 @@ object CandidateSet extends SpecificIterableFactory[Int, CandidateSet] {
  *
  * @see [[scala.collection.immutable.BitSet]]
  */
+@JsonSerialize(using = classOf[CandidateSetSerializer])
+@JsonDeserialize(using = classOf[CandidateSetDeserializer])
 class CandidateSet(private val _underlying: BitSet, private val _size: Int)
   extends SortedSet[Int]
     with SortedSetOps[Int, SortedSet, CandidateSet]
-    with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet] {
+    with StrictOptimizedSortedSetOps[Int, SortedSet, CandidateSet]
+    with CborSerializable {
 
   private def factory: SpecificIterableFactory[Int, CandidateSet] = CandidateSet
 
@@ -126,6 +131,8 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
       .map { attribute =>
         new CandidateSet(this._underlying + attribute, this._size + 1)
       }
+
+  def toBitMask: Array[Long] = _underlying.toBitMask
 
 
   override def toString(): String = s"CandidateSet(${_underlying.mkString(", ")})"

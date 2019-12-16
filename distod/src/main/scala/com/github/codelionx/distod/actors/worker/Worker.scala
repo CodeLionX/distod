@@ -2,7 +2,8 @@ package com.github.codelionx.distod.actors.worker
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import com.github.codelionx.distod.Serialization.CborSerializable
+import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
+import com.github.codelionx.distod.Serialization.{CandidateSetKeyDeserializer, CandidateSetKeySerializer, CborSerializable}
 import com.github.codelionx.distod.actors.master.{CandidateState, Master, WorkQueue}
 import com.github.codelionx.distod.actors.master.Master.{DispatchWork, NewCandidates, SplitCandidatesChecked, SwapCandidatesChecked}
 import com.github.codelionx.distod.discovery.CandidateGeneration
@@ -24,6 +25,8 @@ object Worker {
   ) extends Command
   final case class GenerateCandidates(
       candidateId: CandidateSet,
+      @JsonSerialize(keyUsing = classOf[CandidateSetKeySerializer])
+      @JsonDeserialize(keyUsing = classOf[CandidateSetKeyDeserializer])
       state: Map[CandidateSet, CandidateState],
       workQueue: WorkQueue
   ) extends Command

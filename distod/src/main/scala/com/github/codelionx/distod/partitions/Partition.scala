@@ -20,10 +20,7 @@ sealed trait Partition extends CborSerializable with PartitionOps {
 
   def numberClasses: Int
 
-  @JsonDeserialize(
-    keyAs = classOf[Value],
-    contentAs = classOf[Set[Index]]
-  )
+  @JsonDeserialize(contentAs = classOf[Set[Index]])
   def equivClasses: IndexedSeq[Set[Index]]
 
   def error: Double
@@ -64,6 +61,7 @@ case class FullPartition private[partitions](
    *
    * @return Map containing tuple ID to value mapping
    */
+  @transient
   lazy val toTupleValueMap: Map[Index, Value] = convertToTupleValueMap
 }
 

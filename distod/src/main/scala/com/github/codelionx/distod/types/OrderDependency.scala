@@ -1,7 +1,15 @@
 package com.github.codelionx.distod.types
 
+import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo, JsonTypeName}
+import com.github.codelionx.distod.Serialization.{CborSerializable, JsonSerializable}
 
-sealed trait OrderDependency {
+
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes(Array(
+  new JsonSubTypes.Type(value = classOf[OrderDependency.ConstantOrderDependency]),
+  new JsonSubTypes.Type(value = classOf[OrderDependency.EquivalencyOrderDependency]),
+))
+sealed trait OrderDependency extends CborSerializable with JsonSerializable {
 
   implicit class RichCandidateSet(set: CandidateSet) {
 
@@ -15,6 +23,8 @@ sealed trait OrderDependency {
 
 
 object OrderDependency {
+
+  @JsonTypeName("ConstantOrderDependency")
   final case class ConstantOrderDependency(context: CandidateSet, constantAttribute: Int) extends OrderDependency {
 
     override def toString: String = s"${context.toSetString}: [] ↦ $constantAttribute"
@@ -29,6 +39,7 @@ object OrderDependency {
       }
   }
 
+  @JsonTypeName("EquivalencyOrderDependency")
   final case class EquivalencyOrderDependency(
       context: CandidateSet,
       attribute1: Int,

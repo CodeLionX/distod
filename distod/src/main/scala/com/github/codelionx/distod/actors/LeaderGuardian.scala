@@ -1,11 +1,10 @@
 package com.github.codelionx.distod.actors
 
-import akka.actor.typed.{Behavior, Terminated}
+import akka.actor.typed.{ActorRef, Behavior, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
-import com.github.codelionx.distod.actors.partitionMgmt.PartitionManager
-import com.github.codelionx.distod.actors.worker.WorkerManager
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 
 
@@ -19,36 +18,13 @@ object LeaderGuardian {
     val rsAdapter = context.messageAdapter(WrappedRSProxyEvent)
     context.log.info("LeaderGuardian started, spawning actors ...")
 
-    context.spawn[Nothing](ClusterTester(), ClusterTester.name)
-    // testCPUhogging(context)
+    // spawn follower actors for local computation
+    val (partitionManager, rsProxy) = FollowerGuardian.startFollowerActors(context)
 
-    // local partition manager
-    val partitionManager = context.spawn(PartitionManager(), PartitionManager.name)
-    context.watch(partitionManager)
-
-    // local result collector proxy
-    val rsProxy = context.spawn(ResultCollectorProxy(), ResultCollectorProxy.name)
-    context.watch(rsProxy)
-
-    // local worker manager spawns the workers
-    val workerManager = context.spawn(WorkerManager(partitionManager, rsProxy), WorkerManager.name)
-    context.watch(workerManager)
-
-    // only spawned by leader:
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     val timeBeforeStart = System.nanoTime()
 
-    // temp. data reader
-    val dataReader = context.spawn(DataReader(), DataReader.name)
-    // don't watch data reader, because it will be shut down after initialization
-
-    // the single result collector
-    val rs = context.spawn(ResultCollector(), ResultCollector.name)
-    context.watch(rs)
-
-    // master
-    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name)
-    context.watch(master)
+    // spawn leader actors
+    startLeaderActors(context, partitionManager)
 
     context.log.info("Actors started, algorithm is running")
 
@@ -74,6 +50,20 @@ object LeaderGuardian {
             Behaviors.same
           }
       }
+  }
+
+  def startLeaderActors(context: ActorContext[Command], partitionManager: ActorRef[PartitionCommand]): Unit = {
+    // temp. data reader
+    val dataReader = context.spawn(DataReader(), DataReader.name)
+    // don't watch data reader, because it will be shut down after initialization
+
+    // the single result collector
+    val rs = context.spawn(ResultCollector(), ResultCollector.name)
+    context.watch(rs)
+
+    // master
+    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name)
+    context.watch(master)
   }
 
   private def testCPUhogging(context: ActorContext[Command]): Unit = {

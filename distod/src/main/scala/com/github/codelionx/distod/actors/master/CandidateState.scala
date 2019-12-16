@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.actors.master
 
+import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo, JsonTypeName}
 import com.github.codelionx.distod.actors.master.CandidateState.{NewSplitCandidates, NewSwapCandidates}
 import com.github.codelionx.distod.types.CandidateSet
 
@@ -27,8 +28,15 @@ object CandidateState {
 
   def createFromDeltas(deltas: Iterable[Delta]): CandidateState = CandidateState().updatedAll(deltas)
 
+  @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+  @JsonSubTypes(Array(
+    new JsonSubTypes.Type(value = classOf[NewSplitCandidates]),
+    new JsonSubTypes.Type(value = classOf[NewSwapCandidates]),
+  ))
   sealed trait Delta
+  @JsonTypeName("NewSplitCandidates")
   final case class NewSplitCandidates(splitCandidates: CandidateSet) extends Delta
+  @JsonTypeName("NewSwapCandidates")
   final case class NewSwapCandidates(swapCandidates: Seq[(Int, Int)]) extends Delta
 
 }

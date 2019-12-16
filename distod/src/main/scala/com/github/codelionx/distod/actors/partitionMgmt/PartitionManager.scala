@@ -1,6 +1,6 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, Behavior, Props}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
@@ -56,7 +56,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       nextBehavior(attributes, newSingletonPartitions)
 
     case m =>
-      context.log.warn("Stashing request {}", m)
+      context.log.warn("Stashing request {}", m.getClass.getSimpleName)
       stash.stash(m)
       Behaviors.same
   }

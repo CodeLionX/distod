@@ -49,13 +49,14 @@ object Serialization {
   class CandidateSetDeserializer extends StdDeserializer[CandidateSet](classOf[CandidateSet]) {
 
     override def deserialize(p: JsonParser, ctxt: DeserializationContext): CandidateSet =
-      if (p.currentToken() == JsonToken.START_ARRAY) {
+      if (p.hasToken(JsonToken.START_ARRAY)) {
         p.nextToken()
+        // optimization using mutable collection and while loop
         val longs = mutable.ArrayBuilder.make[Long]
         do {
           val item = _parseLongPrimitive(p, ctxt)
           longs.addOne(item)
-        } while (p.nextToken() != null && p.currentToken() != JsonToken.END_ARRAY)
+        } while (p.nextToken() != null && !p.hasToken(JsonToken.END_ARRAY))
         CandidateSet.fromBitMask(longs.result())
       } else {
         throw ctxt.wrongTokenException(p, _valueClass, JsonToken.START_ARRAY, "")

@@ -4,7 +4,7 @@ import com.github.codelionx.distod.types.CandidateSet
 import org.scalatest.{Matchers, WordSpec}
 
 
-object CandidatePrefixTrieSpec {
+object CandidateTrieSpec {
 
   implicit class ExpectingCandidateSet(val cs: CandidateSet) extends AnyVal {
 
@@ -15,13 +15,13 @@ object CandidatePrefixTrieSpec {
 }
 
 
-class CandidatePrefixTrieSpec extends WordSpec with Matchers {
+class CandidateTrieSpec extends WordSpec with Matchers {
 
-  import CandidatePrefixTrieSpec._
+  import CandidateTrieSpec._
 
 
-  "A CandidatePrefixTrie for CandidateSets" should {
-    val map = CandidatePrefixTrie.empty[String]
+  "A CandidateTrie for CandidateSets" should {
+    val map = CandidateTrie.empty[String]
 
     val csEmpty = CandidateSet.empty
     val cs0 = CandidateSet.from(0)
@@ -68,7 +68,7 @@ class CandidatePrefixTrieSpec extends WordSpec with Matchers {
     }
 
     "update" in {
-      val inner = CandidatePrefixTrie.empty[String]
+      val inner = CandidateTrie.empty[String]
 
       noException shouldBe thrownBy {
         // trie creates missing path (nodes)
@@ -93,7 +93,7 @@ class CandidatePrefixTrieSpec extends WordSpec with Matchers {
     }
 
     "flatMap" in {
-      val flatMapped = map.flatMap { case (key, value) => value.map(key -> _) }.to(CandidatePrefixTrie)
+      val flatMapped = map.flatMap { case (key, value) => value.map(key -> _) }.to(CandidateTrie)
       flatMapped.iterator.toSeq should contain theSameElementsInOrderAs Seq(
         csEmpty -> '}',
         cs01 -> '}',
@@ -117,7 +117,7 @@ class CandidatePrefixTrieSpec extends WordSpec with Matchers {
     }
 
     "empty" in {
-      val emptyTrie = CandidatePrefixTrie.empty[String]
+      val emptyTrie = CandidateTrie.empty[String]
       emptyTrie shouldBe empty
       emptyTrie.get(cs012) shouldEqual None
     }

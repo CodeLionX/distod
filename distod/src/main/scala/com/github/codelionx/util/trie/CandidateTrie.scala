@@ -45,6 +45,7 @@ class CandidateTrie[V]
 
   override def subtractOne(key: K): CandidateTrie.this.type = {
     if (key.isEmpty) {
+      // TODO: delete also all suffix refs? do the deletion in the parent and also delete the node?
       value = None
     } else {
       // key.head is safe here
@@ -62,6 +63,13 @@ class CandidateTrie[V]
       (suffixPart, v) <- otherMap
     } yield (suffixPart incl suffix, v)
     thisNode ++ suffixesIter
+  }
+
+  override def updateWith(key: K)(remappingFunction: Option[V] => Option[V]): Option[V] = {
+    val trie = withPrefix(key) // returns correct node for key
+    val newValue = remappingFunction(trie.value)
+    trie.value = newValue
+    newValue
   }
 
   // Overloading of transformation methods that should return a CandidateTrie

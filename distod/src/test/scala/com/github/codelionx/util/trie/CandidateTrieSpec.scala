@@ -109,6 +109,18 @@ class CandidateTrieSpec extends WordSpec with Matchers {
       )
     }
 
+    "updateWith" in {
+      // do not change
+      map.updateWith(cs012)(_ => None)
+      map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple)
+      // create new node
+      map.updateWith(cs012)(_ => Some("test"))
+      map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012 -> "test")
+      // update existing node
+      map.updateWith(cs012)(_ => Some(cs012.strRepr))
+      map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012.tuple)
+    }
+
     "clear" in {
       noException shouldBe thrownBy {
         map.clear()

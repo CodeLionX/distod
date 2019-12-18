@@ -60,7 +60,7 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
         writer.write(namedDep.toString)
         writer.write("\n")
         if (settings.outputToConsole)
-          context.log.info("Found OD: {}", namedDep)
+          println(s"Found OD: $namedDep")
       }
       writer.flush()
     } catch {

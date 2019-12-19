@@ -7,7 +7,8 @@ import com.github.codelionx.distod.types.CandidateSet
 
 object CandidateState {
 
-  def forL0(splitCandidates: CandidateSet): CandidateState = CandidateState(
+  def forL0(id: CandidateSet, splitCandidates: CandidateSet): CandidateState = CandidateState(
+    id,
     splitCandidates,
     swapCandidates = Seq.empty,
     // we do not need to check for splits and swaps in level 0 (empty set)
@@ -15,18 +16,20 @@ object CandidateState {
     swapChecked = true
   )
 
-  def forL1(splitCandidates: CandidateSet): CandidateState = CandidateState(
+  def forL1(id: CandidateSet, splitCandidates: CandidateSet): CandidateState = CandidateState(
+    id,
     splitCandidates,
     swapCandidates = Seq.empty,
     swapChecked = true // we do not need to check for swaps in level 1 (single attribute nodes)
   )
 
-  def createFromDelta(delta: Delta): CandidateState = delta match {
-    case NewSplitCandidates(newSplitCandidates) => CandidateState(splitCandidates = newSplitCandidates)
-    case NewSwapCandidates(newSwapCandidates) => CandidateState(swapCandidates = newSwapCandidates)
+  def createFromDelta(id: CandidateSet, delta: Delta): CandidateState = delta match {
+    case NewSplitCandidates(newSplitCandidates) => CandidateState(id, splitCandidates = newSplitCandidates)
+    case NewSwapCandidates(newSwapCandidates) => CandidateState(id, swapCandidates = newSwapCandidates)
   }
 
-  def createFromDeltas(deltas: Iterable[Delta]): CandidateState = CandidateState().updatedAll(deltas)
+  def createFromDeltas(id: CandidateSet, deltas: Iterable[Delta]): CandidateState =
+    CandidateState(id).updatedAll(deltas)
 
   @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
   @JsonSubTypes(Array(
@@ -34,19 +37,32 @@ object CandidateState {
     new JsonSubTypes.Type(value = classOf[NewSwapCandidates]),
   ))
   sealed trait Delta
+
   @JsonTypeName("NewSplitCandidates")
   final case class NewSplitCandidates(splitCandidates: CandidateSet) extends Delta
+
   @JsonTypeName("NewSwapCandidates")
   final case class NewSwapCandidates(swapCandidates: Seq[(Int, Int)]) extends Delta
 
 }
 
 case class CandidateState(
+    id: CandidateSet,
     splitCandidates: CandidateSet = CandidateSet.empty,
     swapCandidates: Seq[(Int, Int)] = Seq.empty,
     splitChecked: Boolean = false,
-    swapChecked: Boolean = false
-) {
+    swapChecked: Boolean = false,
+    splitPreconditions: Int = 0,
+    swapPreconditions: Int = 0
+  ) {
+
+  def isReady(jobType: JobType.JobType): Boolean = jobType match {
+    case JobType.Split => id.size == splitPreconditions
+    case JobType.Swap => id.size == swapPreconditions
+    case JobType.Generation => false
+  }
+
+  def notReady(jobType: JobType.JobType): Boolean = !isReady(jobType)
 
   def updatedAll(deltas: Iterable[CandidateState.Delta]): CandidateState =
     deltas.foldLeft(this) { case (state, delta) =>

@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.master
 
 import com.fasterxml.jackson.annotation.{JsonSubTypes, JsonTypeInfo, JsonTypeName}
-import com.github.codelionx.distod.actors.master.CandidateState.{NewSplitCandidates, NewSwapCandidates}
+import com.github.codelionx.distod.actors.master.CandidateState.{NewSplitCandidates, NewSwapCandidates, SplitChecked, SwapChecked}
 import com.github.codelionx.distod.types.CandidateSet
 
 
@@ -26,6 +26,8 @@ object CandidateState {
   def createFromDelta(id: CandidateSet, delta: Delta): CandidateState = delta match {
     case NewSplitCandidates(newSplitCandidates) => CandidateState(id, splitCandidates = newSplitCandidates)
     case NewSwapCandidates(newSwapCandidates) => CandidateState(id, swapCandidates = newSwapCandidates)
+    case s@(SplitChecked(_) | SwapChecked(_)) =>
+      throw new IllegalArgumentException(s"Cannot create CandidateState from delta: $s")
   }
 
   def createFromDeltas(id: CandidateSet, deltas: Iterable[Delta]): CandidateState =
@@ -35,6 +37,8 @@ object CandidateState {
   @JsonSubTypes(Array(
     new JsonSubTypes.Type(value = classOf[NewSplitCandidates]),
     new JsonSubTypes.Type(value = classOf[NewSwapCandidates]),
+    new JsonSubTypes.Type(value = classOf[SplitChecked]),
+    new JsonSubTypes.Type(value = classOf[SwapChecked]),
   ))
   sealed trait Delta
 
@@ -43,6 +47,12 @@ object CandidateState {
 
   @JsonTypeName("NewSwapCandidates")
   final case class NewSwapCandidates(swapCandidates: Seq[(Int, Int)]) extends Delta
+
+  @JsonTypeName("SplitChecked")
+  final case class SplitChecked(removedCandidates: CandidateSet) extends Delta
+
+  @JsonTypeName("SwapChecked")
+  final case class SwapChecked(removedCandidates: Seq[(Int, Int)]) extends Delta
 
 }
 
@@ -100,6 +110,14 @@ case class CandidateState(
     case NewSwapCandidates(newSwapCandidates) if !this.swapChecked => this.copy(
       swapCandidates = newSwapCandidates
     )
-    case _ => this
+    case NewSplitCandidates(_) | NewSwapCandidates(_) => this
+    case SplitChecked(removedCandidates) => this.copy(
+      splitCandidates = this.splitCandidates -- removedCandidates,
+      splitChecked = true
+    )
+    case SwapChecked(removedCandidates) => this.copy(
+      swapCandidates = this.swapCandidates.filterNot(removedCandidates.contains),
+      swapChecked = true
+    )
   }
 }

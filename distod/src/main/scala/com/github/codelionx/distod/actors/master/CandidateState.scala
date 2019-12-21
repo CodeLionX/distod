@@ -23,6 +23,12 @@ object CandidateState {
     swapChecked = true // we do not need to check for swaps in level 1 (single attribute nodes)
   )
 
+  def initForL2(id: CandidateSet): CandidateState = CandidateState(
+    id,
+    // predecessors (L1) do not perform swap checks, so the preconditions for the L2 swap checks are already met
+    swapPreconditions = id.size
+  )
+
   def createFromDelta(id: CandidateSet, delta: Delta): CandidateState = delta match {
     case NewSplitCandidates(newSplitCandidates) => CandidateState(id, splitCandidates = newSplitCandidates)
     case NewSwapCandidates(newSwapCandidates) => CandidateState(id, swapCandidates = newSwapCandidates)

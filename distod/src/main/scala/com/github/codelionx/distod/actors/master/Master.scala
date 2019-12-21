@@ -110,27 +110,19 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // L1: single attribute candidate nodes
         val L1candidateState = generateLevel1(attributes, partitions)
 
+        // L2: two attribute candidate nodes (initialized states)
+        val L2canddiateState = generateLevel2(attributes, L1candidateState.keys)
+
         // TODO: remove
 //         testPartitionMgmt()
 
-        state ++= rootCandidateState ++ L1candidateState
+        state ++= rootCandidateState ++ L1candidateState ++ L2canddiateState
 
-        // prepare L2 nodes:
-        val suffixCandidateSets = attributes.map(CandidateSet.from(_))
-        for(l1Node <- L1candidateState.keySet) {
-          val prefixedState = state.withPrefix(l1Node)
-          val prefixId = prefixedState(CandidateSet.empty).id
-          for(a <- attributes if a > prefixId.head) {
-            // L1 nodes do not perform swap checks, so the preconditions for L2 nodes and swap checks are already met
-            val state = CandidateState(prefixId + a).incSwapPreconditions.incSwapPreconditions
-            prefixedState.update(CandidateSet.from(a), state)
-          }
-        }
         val initialQueue = L1candidateState.keys.map(key => key -> JobType.Split)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         context.log.info("initial state: {}", state.mkString(", "))
         stash.unstashAll(
-          behavior(attributes, suffixCandidateSets, WorkQueue.from(initialQueue), 0)
+          behavior(attributes, WorkQueue.from(initialQueue), 0)
         )
     }
   }
@@ -169,8 +161,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def behavior(
       attributes: Seq[Int],
-      attributeCandidateSets: Seq[CandidateSet],
-//      state: Map[CandidateSet, CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
@@ -199,17 +189,17 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
       }
-      behavior(attributes, attributeCandidateSets, newWorkQueue, testedCandidates)
+      behavior(attributes, newWorkQueue, testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
       val job = id -> JobType.Split
       val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-      updateStateAndNext(attributes, attributeCandidateSets, workQueue, testedCandidates + 1, job, stateUpdate)
+      updateStateAndNext(attributes, workQueue, testedCandidates + 1, job, stateUpdate)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
       val job = id -> JobType.Swap
       val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-      updateStateAndNext(attributes, attributeCandidateSets, workQueue, testedCandidates + 1, job, stateUpdate)
+      updateStateAndNext(attributes, workQueue, testedCandidates + 1, job, stateUpdate)
 
     case NewCandidates(id, jobType, stateUpdate) =>
       val job = id -> jobType
@@ -220,7 +210,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       context.log.info("Received new candidates for job {}", job)
       val newQueue = workQueue.enqueue(job).removePendingGeneration(job)
       stash.unstashAll(
-        behavior(attributes, attributeCandidateSets, newQueue, testedCandidates)
+        behavior(attributes, newQueue, testedCandidates)
       )
 
     case m =>
@@ -269,9 +259,20 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     L1candidateState.toMap
   }
 
+  private def generateLevel2(
+      attributes: Seq[Int],
+      L1candidates: Iterable[CandidateSet]
+  ): Map[CandidateSet, CandidateState] = {
+    val states = for {
+      l1Node <- L1candidates
+      successors = l1Node.successors(attributes.toSet)
+      successorId <- successors
+    } yield successorId -> CandidateState.initForL2(successorId)
+    states.toMap
+  }
+
   private def updateStateAndNext(
       attributes: Seq[Int],
-      attributeCandidateSets: Seq[CandidateSet],
       workQueue: WorkQueue,
       testedCandidates: Int,
       job: (CandidateSet, JobType.JobType),
@@ -327,7 +328,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         }
       }
     val newWorkQueue2 = newWorkQueue.addPendingGenerationAll(newGenerationJobs)
-    behavior(attributes, attributeCandidateSets, newWorkQueue2, testedCandidates + 1)
+    behavior(attributes, newWorkQueue2, testedCandidates + 1)
   }
 
 }

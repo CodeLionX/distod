@@ -56,13 +56,36 @@ case class CandidateState(
     swapPreconditions: Int = 0
   ) {
 
-  def isReady(jobType: JobType.JobType): Boolean = jobType match {
+  def isPruned: Boolean = isFullyChecked && splitCandidates.isEmpty && swapCandidates.isEmpty
+
+  def nonPruned: Boolean = !isPruned
+
+  def isFullyChecked: Boolean = splitChecked && swapChecked
+
+  def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => id.size == splitPreconditions
-    case JobType.Swap => id.size == swapPreconditions
-    case JobType.Generation => false
+    case JobType.Swap => id.size == splitPreconditions && id.size == swapPreconditions
   }
 
-  def notReady(jobType: JobType.JobType): Boolean = !isReady(jobType)
+  def notReadyToCheck(jobType: JobType.JobType): Boolean = !isReadyToCheck(jobType)
+
+  def incAndTestReadyToCheck(jobType: JobType.JobType): (CandidateState, Boolean) = {
+    val newState = incPreconditions(jobType)
+    (newState, newState.isReadyToCheck(jobType))
+  }
+
+  def incPreconditions(jobType: JobType.JobType): CandidateState = jobType match {
+    case JobType.Split => this.incSplitPreconditions
+    case JobType.Swap => this.incSwapPreconditions
+  }
+
+  def incSplitPreconditions: CandidateState = this.copy(
+    splitPreconditions = this.splitPreconditions + 1
+  )
+
+  def incSwapPreconditions: CandidateState = this.copy(
+    swapPreconditions = this.swapPreconditions + 1
+  )
 
   def updatedAll(deltas: Iterable[CandidateState.Delta]): CandidateState =
     deltas.foldLeft(this) { case (state, delta) =>

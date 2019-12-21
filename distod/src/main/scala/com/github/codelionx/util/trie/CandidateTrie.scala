@@ -18,25 +18,24 @@ class CandidateTrie[V]
   private val suffixes: mutable.Map[A, CandidateTrie[V]] = mutable.Map.empty
   private var value: Option[V] = None
 
-  override def get(key: K): Option[V] =
-    if (key.isEmpty) value
-    else
-    // key.head is safe here
-      suffixes.get(key.head).flatMap(_.get(key.tail))
+  override def get(key: K): Option[V] = key.headOption match {
+    case None =>
+      value
+    case Some(head) =>
+      suffixes.get(head).flatMap(_.get(key.tail))
+  }
 
   @tailrec
-  final def withPrefix(prefix: K): CandidateTrie[V] =
-    if (prefix.isEmpty) this
-    else {
-      // prefix.head is safe here
-      val head = prefix.head
+  final def withPrefix(prefix: K): CandidateTrie[V] = prefix.headOption match {
+    case None => this
+    case Some(head) =>
       suffixes.get(head) match {
         case None =>
           suffixes.update(head, empty)
         case _ =>
       }
       suffixes(head).withPrefix(prefix.tail)
-    }
+  }
 
   override def addOne(elem: (K, V)): CandidateTrie.this.type = {
     withPrefix(elem._1).value = Some(elem._2)
@@ -44,12 +43,12 @@ class CandidateTrie[V]
   }
 
   override def subtractOne(key: K): CandidateTrie.this.type = {
-    if (key.isEmpty) {
-      // TODO: delete also all suffix refs? do the deletion in the parent and also delete the node?
-      value = None
-    } else {
-      // key.head is safe here
-      suffixes.get(key.head).flatMap(_.remove(key.tail))
+    key.headOption match {
+      case None =>
+        // TODO: delete also all suffix refs? do the deletion in the parent and also delete the node?
+        value = None
+      case Some(head) =>
+        suffixes.get(head).flatMap(_.remove(key.tail))
     }
     this
   }

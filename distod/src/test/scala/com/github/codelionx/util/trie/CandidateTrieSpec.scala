@@ -121,6 +121,16 @@ class CandidateTrieSpec extends WordSpec with Matchers {
       map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012.tuple)
     }
 
+    "updateIfDefinedWith" in {
+      val m = CandidateTrie(cs01.tuple)
+      // do not change if value not defined
+      m.updateIfDefinedWith(cs0)(_ => "test")
+      m.toSeq should contain theSameElementsInOrderAs Seq(cs01.tuple)
+      // change value if value defined
+      m.updateIfDefinedWith(cs01)(_ => "test")
+      m.toSeq should contain theSameElementsInOrderAs Seq(cs01 -> "test")
+    }
+
     "clear" in {
       noException shouldBe thrownBy {
         map.clear()

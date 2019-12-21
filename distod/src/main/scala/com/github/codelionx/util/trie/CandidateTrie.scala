@@ -72,6 +72,13 @@ class CandidateTrie[V]
     newValue
   }
 
+  def updateIfDefinedWith(key: K)(remappingFunction: V => V): Option[V] = {
+    val trie = withPrefix(key)
+    val newValue = trie.value.map(remappingFunction)
+    trie.value = newValue
+    newValue
+  }
+
   // Overloading of transformation methods that should return a CandidateTrie
   def map[W](f: ((K, V)) => (K, W)): CandidateTrie[W] =
     strictOptimizedMap(CandidateTrie.newBuilder, f)

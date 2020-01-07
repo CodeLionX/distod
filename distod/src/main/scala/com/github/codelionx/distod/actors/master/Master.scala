@@ -195,12 +195,12 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
       val job = id -> JobType.Split
       val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-      updateStateAndNext(attributes, workQueue, testedCandidates + 1, job, stateUpdate)
+      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
       val job = id -> JobType.Swap
       val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-      updateStateAndNext(attributes, workQueue, testedCandidates + 1, job, stateUpdate)
+      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
 
     case NewCandidates(id, jobType, stateUpdate) =>
       val job = id -> jobType

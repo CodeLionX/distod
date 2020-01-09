@@ -77,7 +77,6 @@ object Serialization {
       val stringValue = value match {
         case JobType.Split => "JobType.Split"
         case JobType.Swap => "JobType.Swap"
-        case JobType.Generation => "JobType.Generation"
       }
       gen.writeString(stringValue)
     }
@@ -89,7 +88,6 @@ object Serialization {
       p.getText match {
         case "JobType.Split" => JobType.Split
         case "JobType.Swap" => JobType.Swap
-        case "JobType.Generation" => JobType.Generation
       }
     }
   }

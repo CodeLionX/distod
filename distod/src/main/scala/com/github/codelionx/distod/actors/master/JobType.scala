@@ -14,5 +14,4 @@ object JobType {
   sealed trait JobType
   case object Split extends JobType
   case object Swap extends JobType
-  case object Generation extends JobType
 }

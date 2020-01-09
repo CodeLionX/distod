@@ -23,13 +23,6 @@ object Worker {
       candidateId: CandidateSet,
       swapCandidates: Seq[(Int, Int)]
   ) extends Command
-  final case class GenerateCandidates(
-      candidateId: CandidateSet,
-      @JsonSerialize(keyUsing = classOf[CandidateSetKeySerializer])
-      @JsonDeserialize(keyUsing = classOf[CandidateSetKeyDeserializer])
-      state: Map[CandidateSet, CandidateState],
-      workQueue: WorkQueue
-  ) extends Command
   private[worker] case class WrappedPartitionEvent(event: PartitionEvent) extends Command
 
   def name(n: Int): String = s"worker-$n"
@@ -106,13 +99,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
       } else {
         handleResults()
       }
-
-    case GenerateCandidates(candidateId, state, workQueue) =>
-      context.log.info("Generating new candidates from node {}", candidateId)
-      val (jobs, stateUpdates) = generateNewCandidates(attributes, state, workQueue, candidateId)
-      master ! NewCandidates(candidateId, jobs, stateUpdates)
-      master ! DispatchWork(context.self)
-      Behaviors.same
 
     case WrappedPartitionEvent(event) =>
       context.log.info("Ignored {}", event)

@@ -6,7 +6,7 @@
         <file>distod.log</file>
         <append>true</append>
         <encoder>
-            <pattern>[%d{HH:mm:ss.SSS} %-5level] %60.60X{akkaSource:-local}| %msg%n</pattern>
+            <pattern>[%d{HH:mm:ss.SSS} %-5level] %40.40X{akkaSource:-local}| %msg%n</pattern>
         </encoder>
     </appender>
 

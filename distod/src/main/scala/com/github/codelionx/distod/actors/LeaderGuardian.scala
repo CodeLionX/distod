@@ -6,12 +6,14 @@ import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
+import com.github.codelionx.distod.protocols.ShutdownProtocol
 
 
 object LeaderGuardian {
 
   sealed trait Command
   case object AlgorithmFinished extends Command
+  case object Shutdown extends Command
   case class WrappedRSProxyEvent(event: FlushFinished.type) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
@@ -20,6 +22,10 @@ object LeaderGuardian {
 
     // spawn follower actors for local computation
     val (partitionManager, rsProxy) = FollowerGuardian.startFollowerActors(context)
+
+    // shutdown coordinator first stops the followers and then the leader when algorithm has finished
+    val shutdownCoordinator = context.spawn(ShutdownCoordinator(context.self), ShutdownCoordinator.name)
+    context.watch(shutdownCoordinator)
 
     val timeBeforeStart = System.nanoTime()
 
@@ -31,12 +37,16 @@ object LeaderGuardian {
     Behaviors
       .receiveMessage[Command] {
         case AlgorithmFinished =>
-          context.log.info("Received message that algorithm has finished successfully. Shutting down system.")
           println(s"Runtime (ms): ${((System.nanoTime() - timeBeforeStart) / 1e6).toInt}")
+          shutdownCoordinator ! ShutdownProtocol.AlgorithmFinished
+          Behaviors.same
+
+        case Shutdown =>
           rsProxy ! FlushAndStop(rsAdapter)
           Behaviors.same
 
         case WrappedRSProxyEvent(FlushFinished) =>
+          context.log.info("Stopping leader node!")
           context.unwatch(rsProxy)
           Behaviors.stopped
       }

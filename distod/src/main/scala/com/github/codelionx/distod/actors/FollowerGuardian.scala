@@ -1,6 +1,5 @@
 package com.github.codelionx.distod.actors
 
-import akka.NotUsed
 import akka.actor.typed.{ActorRef, Behavior, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.actors.partitionMgmt.{PartitionManager, PartitionReplicator}
@@ -11,18 +10,33 @@ import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProx
 
 object FollowerGuardian {
 
-  def apply(): Behavior[NotUsed] = Behaviors.setup { context =>
+  sealed trait Command
+  case object Shutdown extends Command
+
+
+  def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.log.info("FollowerGuardian started, spawning actors ...")
 
-    val (partitionManager, _) = startFollowerActors(context)
+    val (partitionManager, rsProxy) = startFollowerActors(context)
+
+    // executioner stops the actor system when the algorithm is finished
+    // needs to flush the result collector beforehand
+    val executioner = context.spawn(Executioner(context.self, rsProxy, Shutdown), Executioner.name)
+    context.watch(executioner)
 
     val partitionReplicator = context.spawn(PartitionReplicator(partitionManager), PartitionReplicator.name)
     context.watch(partitionReplicator)
 
-    Behaviors.receiveSignal {
-      case (context, Terminated(ref)) =>
-        context.log.info(s"$ref has stopped working!")
-        Behaviors.stopped
+    Behaviors
+      .receiveMessage[Command] {
+        case Shutdown =>
+          context.log.info("FollowerGuardian is shutting down the local system!")
+          Behaviors.stopped
+      }
+      .receiveSignal {
+        case (context, Terminated(ref)) =>
+          context.log.warn(s"$ref has stopped working!")
+          Behaviors.stopped
     }
   }
 

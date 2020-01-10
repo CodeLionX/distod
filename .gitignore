@@ -104,6 +104,9 @@ atlassian-ide-plugin.xml
 #####################
 # Custom
 
+# results files
+results.txt
+
 # data folder
 data/*
 

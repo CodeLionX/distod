@@ -25,7 +25,7 @@ object DataReader {
 
   def partitioner(columnId: Int, column: Array[String], replyTo: ActorRef[PartitioningFinished]): Behavior[NotUsed] =
     Behaviors.setup { context =>
-      context.log.debug("Partitioning column {}", columnId)
+      context.log.trace("Partitioning column {}", columnId)
       val partition = Partition.fullFrom(column)
       replyTo ! PartitioningFinished(columnId, partition)
       Behaviors.stopped
@@ -41,7 +41,7 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
   private val settings = Settings(context.system)
   private val parser = CSVParser(settings)
 
-  context.log.info("DataReader started, parsing data from {}", settings.inputParsingSettings.filePath)
+  context.log.debug("DataReader started, parsing data from {}", settings.inputParsingSettings.filePath)
   private val table = parser.parse()
 
   private def start(): Behavior[DataLoadingCommand] = {
@@ -69,9 +69,9 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
 
       case PartitioningFinished(columnId, partition) =>
         val newPartitions = partitions.updated(columnId, partition)
-        context.log.debug("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
+        context.log.trace("Received partition for column {}, ({}/{})", columnId, newPartitions.size, expected)
         if (newPartitions.size == expected) {
-          context.log.info("Data ready")
+          context.log.debug("Data ready")
           val orderedPartitions = newPartitions.toSeq.sortBy { case (id, _) => id }
           val partitionsArray = orderedPartitions.map { case (_, partition) => partition }.toArray
           buffer.unstashAll(dataReady(partitionsArray))
@@ -91,7 +91,7 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
         Behaviors.same
 
       case Stop =>
-        context.log.info("Data reader was stopped by request.")
+        context.log.debug("Data reader was stopped by request.")
         Behaviors.stopped
     }
 }

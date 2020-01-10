@@ -32,7 +32,7 @@ object LeaderGuardian {
     // spawn leader actors
     startLeaderActors(context, partitionManager)
 
-    context.log.info("Actors started, algorithm is running")
+    context.log.debug("Actors started, algorithm is running")
 
     Behaviors
       .receiveMessage[Command] {
@@ -52,9 +52,9 @@ object LeaderGuardian {
       }
       .receiveSignal {
         case (context, Terminated(ref)) =>
-          context.log.info("{} has stopped working!", ref)
+          context.log.warn("{} has stopped working!", ref)
           if (context.children.isEmpty) {
-            context.log.info("There are no child actors left. Shutting down system.")
+            context.log.error("There are no child actors left. Shutting down system.")
             Behaviors.stopped
           } else {
             Behaviors.same

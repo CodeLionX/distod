@@ -29,7 +29,7 @@ object PartitionReplicator {
         ls.headOption match {
           case None =>
           case Some(masterRef) =>
-            context.log.info("Found master at {}. Asking for primary partition manager", masterRef)
+            context.log.debug("Found master at {}. Asking for primary partition manager", masterRef)
             masterRef ! GetPrimaryPartitionManager(context.self)
         }
         Behaviors.same

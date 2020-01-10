@@ -37,13 +37,13 @@ class ShutdownCoordinator(context: ActorContext[ShutdownCoordinatorCommand], lea
 
       case AlgorithmFinished if executioners.isEmpty =>
         context.log.info("Algorithm finished, shutting down system.")
-        context.log.info("No nodes registered, leader can shut down")
+        context.log.debug("No nodes registered, leader can shut down")
         leader ! LeaderGuardian.Shutdown
         Behaviors.same
 
       case AlgorithmFinished if executioners.nonEmpty =>
         context.log.info("Algorithm finished, shutting down system.")
-        context.log.info("Asking nodes {} to shut down.", executioners)
+        context.log.debug("Asking nodes {} to shut down.", executioners)
         executioners.foreach(_ ! PerformShutdown(context.self))
         shuttingDown(executioners, executioners)
 
@@ -69,7 +69,7 @@ class ShutdownCoordinator(context: ActorContext[ShutdownCoordinatorCommand], lea
       val newEntries = listings -- executioners
       newEntries.foreach(_ ! PerformShutdown(context.self))
 
-      context.log.info("Listing changed, new nodes: {}, removed nodes: {}", newEntries, removedEntries)
+      context.log.debug("Listing changed, new nodes: {}, removed nodes: {}", newEntries, removedEntries)
       val updatedExecutioners = executioners ++ newEntries
       val updatedPending = pendingResonses -- removedEntries ++ newEntries
       next(updatedExecutioners, updatedPending)
@@ -77,11 +77,11 @@ class ShutdownCoordinator(context: ActorContext[ShutdownCoordinatorCommand], lea
 
   def next(executioners: Set[ActorRef[ShutdownCommand]], pendingResonses: Set[ActorRef[ShutdownCommand]]): Behavior[ShutdownCoordinatorCommand] =
     if (pendingResonses.isEmpty) {
-      context.log.info("All nodes were shut down, leader can shut down")
+      context.log.debug("All nodes were shut down, leader can shut down")
       leader ! LeaderGuardian.Shutdown
       behavior(executioners)
     } else {
-      context.log.info("Missing shut down ACKs: {}", pendingResonses.size)
+      context.log.debug("Missing shut down ACKs: {}", pendingResonses.size)
       shuttingDown(executioners, pendingResonses)
     }
 }

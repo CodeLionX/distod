@@ -47,16 +47,16 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
 
     case SetAttributes(newAttributes) =>
-      context.log.info("Received attributes: {}", newAttributes)
+      context.log.debug("Received attributes: {}", newAttributes)
       nextBehavior(newAttributes, singletonPartitions)
 
     case InsertPartition(key, value: FullPartition) if key.size == 1 =>
-      context.log.info("Inserting full partition for key {}", key)
+      context.log.debug("Inserting full partition for key {}", key)
       val newSingletonPartitions = singletonPartitions + (key -> value)
       nextBehavior(attributes, newSingletonPartitions)
 
     case m =>
-      context.log.warn("Stashing request {}", m.getClass.getSimpleName)
+      context.log.debug("Stashing request {}", m.getClass.getSimpleName)
       stash.stash(m)
       Behaviors.same
   }
@@ -93,7 +93,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       Behaviors.same
 
     case InsertPartition(key, value: StrippedPartition) =>
-      context.log.info("Inserting partition for key {}", key)
+      context.log.debug("Inserting partition for key {}", key)
       behavior(attributes, partitions + (key -> value), pendingJobs)
 
     // request attributes
@@ -136,10 +136,10 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           replyTo ! ErrorFound(key, p.error)
           Behaviors.same
         case None if pendingJobs.contains(key) =>
-          context.log.debug("Error is being computed, queuing request for key {}", key)
+          context.log.trace("Error is being computed, queuing request for key {}", key)
           behavior(attributes, partitions, pendingJobs + (key -> PendingError(replyTo)))
         case None =>
-          context.log.info("Partition to compute error not found. Starting background job to compute {}", key)
+          context.log.debug("Partition to compute error not found. Starting background job to compute {}", key)
           val newJobs = generateStrippedPartitionJobs(
             key,
             partitions,
@@ -160,10 +160,10 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           replyTo ! StrippedPartitionFound(key, p)
           Behaviors.same
         case None if pendingJobs.contains(key) =>
-          context.log.debug("Partition is being computed, queuing request for key {}", key)
+          context.log.trace("Partition is being computed, queuing request for key {}", key)
           behavior(attributes, partitions, pendingJobs + (key -> PendingStrippedPartition(replyTo)))
         case None =>
-          context.log.info("Partition not found. Starting background job to compute {}", key)
+          context.log.debug("Partition not found. Starting background job to compute {}", key)
           val newJobs = generateStrippedPartitionJobs(
             key,
             partitions,
@@ -174,7 +174,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       }
 
     case ProductComputed(key, partition) =>
-      context.log.debug("Received computed partition for key {}", key)
+      context.log.trace("Received computed partition for key {}", key)
       val updatedPartitions = partitions + (key -> partition)
       pendingJobs.get(key) match {
         case Some(pendingResponses) => pendingResponses.foreach {

@@ -191,10 +191,10 @@ class WorkQueue private(
   }
 
   override def toString: String =
-    s"""WorkQueue(
-       |    queue=${workQueue.size}
-       |    work=${work.size}
-       |    pending=${pending.size}
-       |    generationPending=${pendingGeneration.size}
-       |)""".stripMargin
+    "WorkQueue(" +
+      s"queue=${workQueue.size}," +
+      s"work=${work.size}," +
+      s"pending=${pending.size}," +
+      s"generationPending=${pendingGeneration.size}" +
+      ")"
 }

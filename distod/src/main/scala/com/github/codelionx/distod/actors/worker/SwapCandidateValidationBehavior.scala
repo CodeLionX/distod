@@ -34,7 +34,7 @@ class SwapCandidateValidationBehavior(
 
 
   def start(): Behavior[Command] = {
-    context.log.debug("Loading partitions for all swap checks")
+    context.log.trace("Loading partitions for all swap checks")
 
     val distinctAttributes = swapCandidates.flatMap { case (attr1, attr2) => Seq(attr1, attr2) }.distinct
     val singletonPartitionKeys = distinctAttributes.map(attribute => CandidateSet.from(attribute))
@@ -65,12 +65,12 @@ class SwapCandidateValidationBehavior(
 
     Behaviors.receiveMessagePartial {
       case WrappedPartitionEvent(PartitionFound(key, value)) =>
-        context.log.debug("Received full partition {}", key)
+        context.log.trace("Received full partition {}", key)
         val newPartitions = singletonPartitions + (key -> value)
         nextBehavior(newPartitions, candidatePartitions)
 
       case WrappedPartitionEvent(StrippedPartitionFound(key, value)) =>
-        context.log.debug("Received stripped partition {}", key)
+        context.log.trace("Received stripped partition {}", key)
         val newPartitions = candidatePartitions + (key -> value)
         nextBehavior(singletonPartitions, newPartitions)
 
@@ -83,10 +83,10 @@ class SwapCandidateValidationBehavior(
     val result = checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
 
     if (result.validOds.nonEmpty) {
-      context.log.debug("Found valid candidates: {}", result.validOds.mkString(", "))
+      context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
       rsProxy ! FoundDependencies(result.validOds)
     } else {
-      context.log.debug("No valid equivalency candidates found")
+      context.log.trace("No valid equivalency candidates found")
     }
 
     next(result.removedCandidates)

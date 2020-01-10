@@ -53,7 +53,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
     Behaviors.receiveMessagePartial {
       case WrappedPartitionEvent(AttributesFound(attributes)) =>
-        context.log.debug("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
+        context.log.trace("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
         master ! DispatchWork(context.self)
         behavior(attributes)
     }
@@ -61,7 +61,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
   def behavior(attributes: Seq[Int]): Behavior[Command] = Behaviors.receiveMessage {
     case CheckSplitCandidates(candidateId, splitCandidates) =>
-      context.log.info("Checking split candidates of node {}", candidateId)
+      context.log.debug("Checking split candidates of node {}", candidateId)
 
       def handleResults(removedSplitCandidates: CandidateSet = CandidateSet.empty): Behavior[Command] = {
         // notify master of result
@@ -81,7 +81,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
       }
 
     case CheckSwapCandidates(candidateId, swapCandidates) =>
-      context.log.info("Checking swap candidates of node {}", candidateId)
+      context.log.debug("Checking swap candidates of node {}", candidateId)
 
       def handleResults(removedSwapCandidates: Seq[(Int, Int)] = Seq.empty): Behavior[Command] = {
         // notify master of result

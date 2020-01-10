@@ -4,13 +4,13 @@
 
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <file>distod.log</file>
-        <append>true</append>
+        <append>false</append>
         <encoder>
-            <pattern>[%d{HH:mm:ss.SSS} %-5level] %40.40X{akkaSource:-local}| %msg%n</pattern>
+            <pattern>[%d{HH:mm:ss.SSS} %-5level] %30.30X{akkaSource:-local}| %msg%n</pattern>
         </encoder>
     </appender>
 
-    <root level="INFO">
+    <root level="TRACE">
         <appender-ref ref="FILE"/>
     </root>
 </configuration>

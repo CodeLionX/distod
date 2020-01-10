@@ -3,6 +3,8 @@ package com.github.codelionx.distod.discovery
 import com.github.codelionx.distod.actors.master.{CandidateState, JobType, NodeStateFilter, WorkQueue}
 import com.github.codelionx.distod.types.CandidateSet
 
+import scala.collection.MapView
+
 
 trait CandidateGeneration {
 
@@ -39,12 +41,12 @@ trait CandidateGeneration {
     }
   }
 
-  def generateSplitCandidates(id: CandidateSet, state: Map[CandidateSet, CandidateState]): CandidateSet = {
+  def generateSplitCandidates(id: CandidateSet, state: MapView[CandidateSet, CandidateState]): CandidateSet = {
     val predecessorSplitCandidates = id.predecessors.map(state(_).splitCandidates)
     predecessorSplitCandidates.reduce(_ intersect _)
   }
 
-  def generateSwapCandidates(id: CandidateSet, state: Map[CandidateSet, CandidateState]): Seq[(Int, Int)] = {
+  def generateSwapCandidates(id: CandidateSet, state: MapView[CandidateSet, CandidateState]): Seq[(Int, Int)] = {
     def filterBasedOnSplits(id: CandidateSet, candidates: Seq[(Int, Int)]): Seq[(Int, Int)] = {
       candidates.filter { case (a, b) =>
         state.get(id - a).fold(false)(s => s.splitCandidates.contains(b)) &&
@@ -75,7 +77,7 @@ trait CandidateGeneration {
       newNodes: Iterable[CandidateSet], state: Map[CandidateSet, CandidateState]
   ): Iterable[(CandidateSet, CandidateState.Delta)] =
     newNodes.map { id =>
-      val newSplitCandidates = generateSplitCandidates(id, state)
+      val newSplitCandidates = generateSplitCandidates(id, state.view)
       id -> CandidateState.NewSplitCandidates(newSplitCandidates)
     }
 
@@ -84,7 +86,7 @@ trait CandidateGeneration {
       state: Map[CandidateSet, CandidateState]
   ): Iterable[(CandidateSet, CandidateState.Delta)] =
     newNodes.map { id =>
-      val newSwapCandidates = generateSwapCandidates(id, state)
+      val newSwapCandidates = generateSwapCandidates(id, state.view)
       id -> CandidateState.NewSwapCandidates(newSwapCandidates)
     }
 }

@@ -41,8 +41,8 @@ object FollowerGuardian {
   }
 
   def startFollowerActors[T](context: ActorContext[T]): (ActorRef[PartitionCommand], ActorRef[ResultProxyCommand]) = {
-    val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
-    context.watch(clusterTester)
+//    val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
+//    context.watch(clusterTester)
 
     // local partition manager
     val partitionManager = context.spawn(PartitionManager(), PartitionManager.name)

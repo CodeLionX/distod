@@ -20,7 +20,7 @@ object PartitionManager {
 
   val name = "partition-manager"
 
-  def apply(): Behavior[PartitionCommand] = Behaviors.setup(context => Behaviors.withStash(20) { stash =>
+  def apply(): Behavior[PartitionCommand] = Behaviors.setup(context => Behaviors.withStash(300) { stash =>
     new PartitionManager(context, stash).start()
   })
 

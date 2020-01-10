@@ -48,7 +48,7 @@ object Master {
       partitionManager: ActorRef[PartitionCommand],
       resultCollector: ActorRef[ResultCommand]
   ): Behavior[Command] = Behaviors.setup(context =>
-    Behaviors.withStash(100) { stash =>
+    Behaviors.withStash(300) { stash =>
       new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
     })
 

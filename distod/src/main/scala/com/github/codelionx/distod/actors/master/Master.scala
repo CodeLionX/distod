@@ -19,6 +19,8 @@ import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.Prim
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 import com.github.codelionx.util.trie.CandidateTrie
 
+import scala.annotation.tailrec
+
 
 object Master {
 
@@ -290,10 +292,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val nodeIsPruned = newTaskState.exists(_.isPruned)
     val newGenerationJobs =
       if(nodeIsPruned) {
-        // node pruning! --> invalidate all successing nodes
-        successors.foreach(s =>
-          state.remove(s)
-        )
         Seq.empty
       } else {
         // update counters of successors and send new generation jobs
@@ -328,7 +326,19 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           splitJobs ++ swapJobs
         }
       }
-    val newWorkQueue2 = newWorkQueue.addPendingGenerationAll(newGenerationJobs)
+    val newWorkQueue2 =
+      if(nodeIsPruned) {
+        context.log.info("Pruning node {} and all successors", id)
+        // node pruning! --> invalidate all successing nodes
+        successors.foreach(s =>
+          state.remove(s)
+        )
+        // remove all jobs that involve one of the pruned successors
+        newWorkQueue.removeAll(successors)
+      } else {
+        newWorkQueue.addPendingGenerationAll(newGenerationJobs)
+      }
+
     behavior(attributes, newWorkQueue2, testedCandidates + 1)
   }
 

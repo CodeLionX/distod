@@ -1,25 +1,23 @@
 package com.github.codelionx.distod.actors.master
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
-import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
-import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
-import com.github.codelionx.distod.protocols.DataLoadingProtocol._
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
-import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.worker.Worker
-import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
 import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateSplitCandidates, GenerateSwapCandidates}
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.PrimaryPartitionManager
+import com.github.codelionx.distod.actors.worker.Worker
+import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
+import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
+import com.github.codelionx.distod.protocols.DataLoadingProtocol._
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
+import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
+import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.util.trie.CandidateTrie
-
-import scala.annotation.tailrec
 
 
 object Master {

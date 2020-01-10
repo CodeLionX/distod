@@ -48,6 +48,14 @@ Start a longer running job with DISTOD, then open [VisualVM](https://visualvm.gi
 You can profile the process using the sample tab ("CPU").
 Stop it at any time to inspect the results without them changing constantly.
 
+If you want to monitor a remote process, you can start the following deamon for VisualVM to connect to:
+
+```bash
+jstatd -J-Djava.security.policy=jstatd.all.policy
+```
+
+If you want to use the sampler, you have to enable JMX as well.
+
 ## Useful commands
 
 Pin a process to a CPU core (or multiple).

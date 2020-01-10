@@ -39,7 +39,7 @@ class MasterHelper(context: ActorContext[Command], master: ActorRef[Master.Comma
 
   def start(): Behavior[Command] = Behaviors.receiveMessage {
     case MasterHelper.GenerateSplitCandidates(candidateId, state) =>
-      val candidates = generateSplitCandidates(candidateId, state.toMap)
+      val candidates = generateSplitCandidates(candidateId, state.view)
       master ! NewCandidates(
         candidateId,
         JobType.Split,
@@ -47,7 +47,7 @@ class MasterHelper(context: ActorContext[Command], master: ActorRef[Master.Comma
       )
       Behaviors.same
     case MasterHelper.GenerateSwapCandidates(candidateId, state) =>
-      val candidates = generateSwapCandidates(candidateId, state.toMap)
+      val candidates = generateSwapCandidates(candidateId, state.view)
       master ! NewCandidates(
         candidateId,
         JobType.Swap,

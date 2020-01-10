@@ -334,6 +334,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // remove all jobs that involve one of the pruned successors
         newWorkQueue.removeAll(successors)
       } else {
+        context.log.debug("Adding {} new pending generation jobs", newGenerationJobs.size)
         newWorkQueue.addPendingGenerationAll(newGenerationJobs)
       }
 

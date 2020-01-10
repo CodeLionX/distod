@@ -28,7 +28,7 @@ object WorkerManager {
       val ref = context.spawn(
         Behaviors
           .supervise(Worker(partitionManager, rsProxy, master))
-          .onFailure[Exception](
+          .onFailure(
             SupervisorStrategy
               .restart
               .withLoggingEnabled(true)

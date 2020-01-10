@@ -20,13 +20,18 @@ object ResultFileParsing {
 
     def context: Set[String]
   }
-  final case class ConstantODResult(context: Set[String], constantAttribute: String) extends ODResult
+  final case class ConstantODResult(context: Set[String], constantAttribute: String) extends ODResult {
+    override def toString: String = s"ConstantOD: {${context.toSeq.sorted}}: ${constantAttribute}"
+  }
   final case class EquivalencyODResult(
       context: Set[String],
       attribute1: String,
       attribute2: String,
       reverse: Boolean = false
-  ) extends ODResult
+  ) extends ODResult {
+    override def toString: String =
+      s"EquivalencyOD: {${context.toSeq.sorted}}: $attribute1 ~ $attribute2, reverse:${reverse}"
+  }
 
   def readAndParseDistodResults(path: String): Seq[ODResult] =
     withResource(new BufferedReader(new FileReader(path))) { reader =>

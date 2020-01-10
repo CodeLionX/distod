@@ -2,6 +2,7 @@ package com.github.codelionx.distod.actors.master
 
 import com.github.codelionx.distod.types.CandidateSet
 
+import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 
 
@@ -72,10 +73,24 @@ class WorkQueue private(
    * @return a tuple with the first element in the queue, and the new queue with the element put into the pending set
    */
   def dequeue(): (WorkQueue.Item, WorkQueue) = {
-    val (item, newQueue) = workQueue.dequeue
+    val (item, newQueue) = internalDequeue(workQueue)
     val newWork = work - item
     val newPending = pending + item
     (item, new WorkQueue(newQueue, newWork, newPending, pendingGeneration))
+  }
+
+  /**
+   * Jumps over all items in the queue that were already removed (from the work set).
+   * This is a performance optimization (compared to actually removing them from the queue)!
+   */
+  @tailrec
+  private final def internalDequeue(queue: Queue[(CandidateSet, JobType.JobType)]): (WorkQueue.Item, Queue[(CandidateSet, JobType.JobType)]) = {
+    val (item, newQueue) = queue.dequeue
+    if(work.contains(item)) {
+      (item, newQueue)
+    } else {
+      internalDequeue(newQueue)
+    }
   }
 
   /**
@@ -165,4 +180,21 @@ class WorkQueue private(
    * @see [[com.github.codelionx.distod.actors.master.WorkQueue#contains]]
    */
   def containsPendingGeneration(item: WorkQueue.Item): Boolean = pendingGeneration.contains(item)
+
+  /**
+   * Removes all entries from the queue that contain one of the candidates. Does not touch the pending queues.
+   */
+  def removeAll(candidates: Set[CandidateSet]): WorkQueue = {
+    val jobs: Set[(CandidateSet, JobType.JobType)] = candidates.flatMap(c => Seq(c -> JobType.Split, c -> JobType.Swap))
+    val newWork = work -- jobs
+    new WorkQueue(workQueue, newWork, pending, pendingGeneration)
+  }
+
+  override def toString: String =
+    s"""WorkQueue(
+       |    queue=${workQueue.size}
+       |    work=${work.size}
+       |    pending=${pending.size}
+       |    generationPending=${pendingGeneration.size}
+       |)""".stripMargin
 }

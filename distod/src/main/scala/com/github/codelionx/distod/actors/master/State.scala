@@ -84,4 +84,32 @@ class State[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
       levels.apply(key.size).get(key)
 
   override def iterator: Iterator[(CandidateSet, V)] = levels.iterator.flatMap(_.iterator)
+
+//  override def updatedWith[V1 >: V](key: CandidateSet)(remappingFunction: Option[V] => Option[V1]): State[V1] = {
+//    val previousValue = this.get(key)
+//    val nextValue = remappingFunction(previousValue)
+//    (previousValue, nextValue) match {
+//      case (None, None) => this.asInstanceOf[State[V1]]
+//      case (Some(_), None) => this.removed(key).asInstanceOf[State[V1]]
+//      case (_, Some(v)) => this.updated(key, v)
+//    }
+//  }
+
+  // we only call updatedWith with the same value type
+  def updatedWith(key: CandidateSet)(remappingFunction: Option[V] => Option[V]): State[V] = {
+    val previousValue = this.get(key)
+    val nextValue = remappingFunction(previousValue)
+    (previousValue, nextValue) match {
+      case (None, None) => this
+      case (Some(_), None) => this.removed(key)
+      case (_, Some(v)) => this.updated(key, v)
+    }
+  }
+
+  // overrides that make return types more specific
+  override def concat[V1 >: V](suffix: collection.IterableOnce[(CandidateSet, V1)]): State[V1] = {
+    val b = new State.StateBuilder[V1](levels)
+    b.addAll(suffix)
+    b.result()
+  }
 }

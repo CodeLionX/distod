@@ -94,18 +94,17 @@ class StateSpec extends WordSpec with Matchers {
       )
     }
 
-//    "updateWith" in {
-//      // do not change
-//      map.updateWith(cs012)(_ => None)
-//      map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple)
-//      // create new node
-//      map.updateWith(cs012)(_ => Some("test"))
-//      map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012 -> "test")
-//      // update existing node
-//      map.updateWith(cs012)(_ => Some(cs012.stateRepr))
-//      map.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012.tuple)
-//    }
-//
+    "updatedWith" in {
+      val notChanged = map.updatedWith(cs012)(_ => None)
+      notChanged.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple)
+
+      val newEntry = map.updatedWith(cs012)(_ => Some(CandidateState(csEmpty)))
+      newEntry.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012 -> CandidateState(csEmpty))
+
+      val updatedExisting = map.updatedWith(cs012)(_ => Some(cs012.stateRepr))
+      updatedExisting.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012.tuple)
+    }
+
 //    "updateIfDefinedWith" in {
 //      val m = CandidateTrie(cs01.tuple)
 //      // do not change if value not defined

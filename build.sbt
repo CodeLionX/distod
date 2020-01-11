@@ -28,6 +28,9 @@ lazy val distod = (project in file("distod"))
       //  "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
       //  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
 
+      // fastutil
+      "it.unimi.dsi" % "fastutil" % "8.3.0",
+
       // csv parsing
       "com.univocity" % "univocity-parsers" % univocityVersion,
 

@@ -14,11 +14,11 @@ object MasterHelper {
   trait Command
   final case class GenerateSplitCandidates(
                                             candidateId: CandidateSet,
-                                            state: CandidateTrie[CandidateState]
+                                            state: State[CandidateState]
                                           ) extends Command
   final case class GenerateSwapCandidates(
                                            candidateId: CandidateSet,
-                                           state: CandidateTrie[CandidateState]
+                                           state: State[CandidateState]
                                          ) extends Command
 
   val poolName: String = "master-helper-pool"

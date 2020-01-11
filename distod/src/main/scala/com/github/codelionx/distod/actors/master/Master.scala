@@ -71,7 +71,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     MasterHelper.pool(settings.numberOfWorkers, context.self),
     MasterHelper.poolName
   )
-  private val state: CandidateTrie[CandidateState] = CandidateTrie.empty
 
   def start(): Behavior[Command] = initialize()
 
@@ -117,13 +116,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // TODO: remove
 //         testPartitionMgmt()
 
-        state ++= rootCandidateState ++ L1candidateState ++ L2canddiateState
+        val state = State.fromSpecific(rootCandidateState ++ L1candidateState ++ L2canddiateState)
 
         val initialQueue = L1candidates.map(key => key -> JobType.Split)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         context.log.trace("Initial state:\n{}", state.mkString("\n"))
         stash.unstashAll(
-          behavior(attributes, WorkQueue.from(initialQueue), 0)
+          behavior(attributes, state, WorkQueue.from(initialQueue), 0)
         )
     }
   }
@@ -162,6 +161,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def behavior(
       attributes: Seq[Int],
+      state: State[CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
@@ -190,28 +190,28 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
       }
-      behavior(attributes, newWorkQueue, testedCandidates)
+      behavior(attributes, state, newWorkQueue, testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
       val job = id -> JobType.Split
       val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
+      updateStateAndNext(attributes, state, workQueue, testedCandidates, job, stateUpdate)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
       val job = id -> JobType.Swap
       val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
+      updateStateAndNext(attributes, state, workQueue, testedCandidates, job, stateUpdate)
 
     case NewCandidates(id, jobType, stateUpdate) =>
       val job = id -> jobType
-      state.updateWith(id){
+      val updatedState = state.updatedWith(id){
         case None => Some(CandidateState.createFromDelta(id, stateUpdate))
         case Some(s) => Some(s.updated(stateUpdate))
       }
       context.log.debug("Received new candidates for job {}", job)
       val newQueue = workQueue.enqueue(job).removePendingGeneration(job)
       stash.unstashAll(
-        behavior(attributes, newQueue, testedCandidates)
+        behavior(attributes, updatedState, newQueue, testedCandidates)
       )
 
     case m =>
@@ -274,6 +274,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def updateStateAndNext(
       attributes: Seq[Int],
+      state: State[CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int,
       job: (CandidateSet, JobType.JobType),
@@ -283,7 +284,11 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val (id, jobType) = job
     // update state based on received results
     val newWorkQueue = workQueue.removePending(job)
-    val newTaskState = state.updateIfDefinedWith(id)(_.updated(stateUpdate))
+    var newState = state.updatedWith(id) {
+      case None => None
+      case Some(s) => Some(s.updated(stateUpdate))
+    }
+    val newTaskState = state.get(id)
 
     // update successors and get new generation jobs
     val successors = id.successors(attributes.toSet)
@@ -296,7 +301,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         successors.flatMap { successor =>
           val oldState = state.getOrElse(successor, CandidateState(successor))
           val successorState = oldState.incPreconditions(jobType)
-          state.update(successor, successorState)
+          newState = newState.updated(successor, successorState)
           // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
           // the new generation of split candidates)
           val splitReady =
@@ -307,16 +312,14 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           // isReadyToCheck should only be true once
           val splitJobs =
             if(splitReady /*&& !workQueue.containsPending(successorState.id -> JobType.GenerateSplit)*/) {
-              // FIXME: make immutable View of state
-              helperPool ! GenerateSplitCandidates(successorState.id, state)
+              helperPool ! GenerateSplitCandidates(successorState.id, newState)
               Seq(successorState.id -> JobType.Split)
             } else {
               Seq.empty
             }
           val swapJobs =
             if(swapReady /*&& !workQueue.containsPending(successorState.id -> JobType.GenerateSwap)*/) {
-              // FIXME: make immutable view of state
-              helperPool ! GenerateSwapCandidates(successorState.id, state)
+              helperPool ! GenerateSwapCandidates(successorState.id, newState)
               Seq(successorState.id -> JobType.Swap)
             } else {
               Seq.empty
@@ -329,7 +332,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         context.log.debug("Pruning node {} and all successors", id)
         // node pruning! --> invalidate all successing nodes
         successors.foreach(s =>
-          state.remove(s)
+          newState = newState.removed(s)
         )
         // remove all jobs that involve one of the pruned successors
         newWorkQueue.removeAll(successors)
@@ -338,7 +341,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         newWorkQueue.addPendingGenerationAll(newGenerationJobs)
       }
 
-    behavior(attributes, newWorkQueue2, testedCandidates + 1)
+    behavior(attributes, newState, newWorkQueue2, testedCandidates + 1)
   }
 
 }

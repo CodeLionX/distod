@@ -48,7 +48,7 @@ object Master {
       partitionManager: ActorRef[PartitionCommand],
       resultCollector: ActorRef[ResultCommand]
   ): Behavior[Command] = Behaviors.setup(context =>
-    Behaviors.withStash(100) { stash =>
+    Behaviors.withStash(300) { stash =>
       new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
     })
 
@@ -121,7 +121,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
         val initialQueue = L1candidates.map(key => key -> JobType.Split)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
-        context.log.info("initial state:\n{}", state.mkString("\n"))
+        context.log.trace("Initial state:\n{}", state.mkString("\n"))
         stash.unstashAll(
           behavior(attributes, WorkQueue.from(initialQueue), 0)
         )
@@ -170,18 +170,18 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       Behaviors.same
 
     case DispatchWork(_) if workQueue.isEmpty =>
-      context.log.debug("Request for work, but no more work available and no pending requests: algo finished!")
+      context.log.trace("Request for work, but no more work available and no pending requests: algo finished!")
       finished(testedCandidates)
 
     case m: DispatchWork if workQueue.noWork && workQueue.hasPending =>
-      context.log.debug("Stashing request for work from {}", m.replyTo)
+      context.log.trace("Stashing request for work from {}", m.replyTo)
       stash.stash(m)
       Behaviors.same
 
     case DispatchWork(replyTo) if workQueue.hasWork =>
       val ((taskId, jobType), newWorkQueue) = workQueue.dequeue()
       val taskState = state(taskId)
-      context.log.debug("Dispatching task {} {} to {}", jobType, taskId, replyTo)
+      context.log.debug("Dispatching task {} to {}", taskId -> jobType, replyTo)
       jobType match {
         case JobType.Split =>
           val splitCandidates = taskId & taskState.splitCandidates
@@ -208,7 +208,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         case None => Some(CandidateState.createFromDelta(id, stateUpdate))
         case Some(s) => Some(s.updated(stateUpdate))
       }
-      context.log.info("Received new candidates for job {}", job)
+      context.log.debug("Received new candidates for job {}", job)
       val newQueue = workQueue.enqueue(job).removePendingGeneration(job)
       stash.unstashAll(
         behavior(attributes, newQueue, testedCandidates)
@@ -279,7 +279,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       job: (CandidateSet, JobType.JobType),
       stateUpdate: CandidateState.Delta
   ): Behavior[Command] = {
-    context.log.info("Received results for {}", job)
+    context.log.debug("Received results for {}", job)
     val (id, jobType) = job
     // update state based on received results
     val newWorkQueue = workQueue.removePending(job)
@@ -326,7 +326,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       }
     val newWorkQueue2 =
       if(nodeIsPruned) {
-        context.log.info("Pruning node {} and all successors", id)
+        context.log.debug("Pruning node {} and all successors", id)
         // node pruning! --> invalidate all successing nodes
         successors.foreach(s =>
           state.remove(s)
@@ -334,6 +334,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // remove all jobs that involve one of the pruned successors
         newWorkQueue.removeAll(successors)
       } else {
+        context.log.debug("Adding {} new pending generation jobs", newGenerationJobs.size)
         newWorkQueue.addPendingGenerationAll(newGenerationJobs)
       }
 

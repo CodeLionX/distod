@@ -52,7 +52,7 @@ class ResultCollectorProxy(
 
     Behaviors.receiveMessage {
       case m: FoundDependencies =>
-        context.log.debug("Stashing message: {}", m)
+        context.log.trace("Stashing message: {}", m)
         stash.stash(m)
         Behaviors.same
       case _: AckBatch =>
@@ -110,19 +110,19 @@ class ResultCollectorProxy(
       }
 
     case FlushAndStop(replyTo) if buffer.isEmpty && pendingAcks.isEmpty =>
-      context.log.info("Buffer and pending buffer are empty, finished.")
+      context.log.debug("Buffer and pending buffer are empty, finished.")
       replyTo ! FlushFinished
       Behaviors.stopped
 
     case FlushAndStop(replyTo) if buffer.isEmpty && pendingAcks.nonEmpty =>
-      context.log.info("Nothing to flush, waiting for {} pending acks", pendingAcks.size)
+      context.log.debug("Nothing to flush, waiting for {} pending acks", pendingAcks.size)
       flushing(pendingAcks, Seq(replyTo))
 
     case FlushAndStop(replyTo) if buffer.nonEmpty =>
       val cancellable = scheduleSendingBatch(collector, nextId, buffer)
       timers.startSingleTimer(timoutTimerKey, Timeout, 2 seconds)
       val newPendingAcks = pendingAcks + (nextId -> cancellable)
-      context.log.info("Flushed buffer, pending acks: {}", newPendingAcks.size)
+      context.log.debug("Flushed buffer, pending acks: {}", newPendingAcks.size)
       flushing(newPendingAcks, Seq(replyTo))
   }
 
@@ -138,11 +138,11 @@ class ResultCollectorProxy(
       pendingAcks(id).cancel()
       val newPending = pendingAcks - id
       if (newPending.isEmpty) {
-        context.log.info("Successfully flushed buffer to result collector")
+        context.log.debug("Successfully flushed buffer to result collector")
         ackReceivers.foreach(_ ! FlushFinished)
         Behaviors.stopped
       } else {
-        context.log.debug("Current pending acks: {}", newPending.keys)
+        context.log.trace("Current pending acks: {}", newPending.keys)
         flushing(newPending, ackReceivers)
       }
 

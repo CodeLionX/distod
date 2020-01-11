@@ -35,7 +35,7 @@ class SplitCandidateValidationBehavior(
 
 
   def start(): Behavior[Command] = {
-    context.log.debug("Loading partition errors for all split checks")
+    context.log.trace("Loading partition errors for all split checks")
     partitionManager ! LookupError(candidateId, partitionEventMapper)
 
     for (c <- splitCandidates) {
@@ -49,7 +49,7 @@ class SplitCandidateValidationBehavior(
   def collectErrors(errors: Map[CandidateSet, Double], expected: Int): Behavior[Command] =
     Behaviors.receiveMessagePartial {
       case WrappedPartitionEvent(ErrorFound(key, value)) =>
-        context.log.debug("Received partition error value: {}, {}", key, value)
+        context.log.trace("Received partition error value: {}, {}", key, value)
         val newErrorMap = errors + (key -> value)
         if (newErrorMap.size == expected) {
           performCheck(newErrorMap)
@@ -62,10 +62,10 @@ class SplitCandidateValidationBehavior(
     val result = checkSplitCandidates(candidateId, splitCandidates, attributes, errors)
 
     if (result.validOds.nonEmpty) {
-      context.log.debug("Found valid candidates: {}", result.validOds.mkString(", "))
+      context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
       rsProxy ! FoundDependencies(result.validOds)
     } else {
-      context.log.debug("No valid constant candidates found")
+      context.log.trace("No valid constant candidates found")
     }
 
     next(result.removedCandidates)

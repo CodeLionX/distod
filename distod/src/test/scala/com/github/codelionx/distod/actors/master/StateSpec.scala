@@ -127,6 +127,7 @@ class StateSpec extends WordSpec with Matchers {
       val emptyMap = State.empty[String]
       emptyMap shouldBe empty
       emptyMap.get(cs012) shouldEqual None
+      emptyMap.empty shouldEqual emptyMap
     }
   }
 }

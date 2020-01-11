@@ -1,11 +1,12 @@
-package com.github.codelionx.distod.actors.master
+package com.github.codelionx.util.largeMap
 
+import com.github.codelionx.distod.actors.master.CandidateState
 import com.github.codelionx.distod.actors.master.CandidateState.NewSplitCandidates
 import com.github.codelionx.distod.types.CandidateSet
 import org.scalatest.{Matchers, WordSpec}
 
 
-object StateSpec {
+object HashMapStateSpec {
 
   implicit class ExpectingCandidateSet(val cs: CandidateSet) extends AnyVal {
 
@@ -16,13 +17,13 @@ object StateSpec {
 }
 
 
-class StateSpec extends WordSpec with Matchers {
+class HashMapStateSpec extends WordSpec with Matchers {
 
-  import StateSpec._
+  import HashMapStateSpec._
 
 
-  "A State for CandidateStates" should {
-    var map = State.empty[CandidateState]
+  "A HashMapState for CandidateStates" should {
+    var map = HashMapState.empty[CandidateState]
 
     val csEmpty = CandidateSet.empty
     val cs0 = CandidateSet.from(0)
@@ -123,7 +124,7 @@ class StateSpec extends WordSpec with Matchers {
 //    }
 
     "empty" in {
-      val emptyMap = State.empty[String]
+      val emptyMap = HashMapState.empty[String]
       emptyMap shouldBe empty
       emptyMap.get(cs012) shouldEqual None
       emptyMap.empty shouldEqual emptyMap

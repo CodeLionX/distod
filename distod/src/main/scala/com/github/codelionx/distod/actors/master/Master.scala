@@ -17,7 +17,7 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
-import com.github.codelionx.util.trie.CandidateTrie
+import com.github.codelionx.util.largeMap.{CandidateTrie, HashMapState}
 
 
 object Master {
@@ -116,7 +116,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // TODO: remove
 //         testPartitionMgmt()
 
-        val state = State.fromSpecific(rootCandidateState ++ L1candidateState ++ L2canddiateState)
+        val state = HashMapState.fromSpecific(rootCandidateState ++ L1candidateState ++ L2canddiateState)
 
         val initialQueue = L1candidates.map(key => key -> JobType.Split)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
@@ -161,7 +161,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def behavior(
       attributes: Seq[Int],
-      state: State[CandidateState],
+      state: HashMapState[CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
@@ -274,7 +274,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def updateStateAndNext(
       attributes: Seq[Int],
-      state: State[CandidateState],
+      state: HashMapState[CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int,
       job: (CandidateSet, JobType.JobType),

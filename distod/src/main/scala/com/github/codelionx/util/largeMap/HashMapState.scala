@@ -1,4 +1,4 @@
-package com.github.codelionx.distod.actors.master
+package com.github.codelionx.util.largeMap
 
 import com.github.codelionx.distod.types.CandidateSet
 
@@ -6,23 +6,23 @@ import scala.collection.{mutable, StrictOptimizedIterableOps}
 import scala.collection.immutable.{AbstractMap, Iterable, Map}
 
 
-object State {
+object HashMapState {
 
-  def empty[V]: State[V] = new State(IndexedSeq.empty)
+  def empty[V]: HashMapState[V] = new HashMapState(IndexedSeq.empty)
 
-  def apply[V](elems: (CandidateSet, V)*): State[V] = fromSpecific(elems)
+  def apply[V](elems: (CandidateSet, V)*): HashMapState[V] = fromSpecific(elems)
 
-  def fromSpecific[V](coll: IterableOnce[(CandidateSet, V)]): State[V] = {
+  def fromSpecific[V](coll: IterableOnce[(CandidateSet, V)]): HashMapState[V] = {
     val b = newSpecificBuilder[V]
     b.addAll(coll)
     b.result()
   }
 
-  def newSpecificBuilder[V]: mutable.Builder[(CandidateSet, V), State[V]] = new StateBuilder[V]()
+  def newSpecificBuilder[V]: mutable.Builder[(CandidateSet, V), HashMapState[V]] = new StateBuilder[V]()
 
-  private[State] class StateBuilder[V] private[State](
+  private[HashMapState] class StateBuilder[V] private[HashMapState](
       startState: IndexedSeq[Map[CandidateSet, V]] = IndexedSeq(Map.empty[CandidateSet, V])
-  ) extends mutable.Builder[(CandidateSet, V), State[V]] {
+  ) extends mutable.Builder[(CandidateSet, V), HashMapState[V]] {
 
     private var internalState: IndexedSeq[Map[CandidateSet, V]] = startState
 
@@ -44,35 +44,35 @@ object State {
       internalState = IndexedSeq(Map.empty)
     }
 
-    override def result(): State[V] = new State(internalState)
+    override def result(): HashMapState[V] = new HashMapState(internalState)
   }
 }
 
 
-class State[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
+class HashMapState[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
   extends AbstractMap[CandidateSet, V]
-    with StrictOptimizedIterableOps[(CandidateSet, V), Iterable, State[V]] {
+    with StrictOptimizedIterableOps[(CandidateSet, V), Iterable, HashMapState[V]] {
 
-  private def factory: State.type = State
+  private def factory: HashMapState.type = HashMapState
 
-  override def fromSpecific(coll: IterableOnce[(CandidateSet, V)]): State[V] = factory.fromSpecific(coll)
+  override def fromSpecific(coll: IterableOnce[(CandidateSet, V)]): HashMapState[V] = factory.fromSpecific(coll)
 
-  override def newSpecificBuilder: mutable.Builder[(CandidateSet, V), State[V]] = factory.newSpecificBuilder
+  override def newSpecificBuilder: mutable.Builder[(CandidateSet, V), HashMapState[V]] = factory.newSpecificBuilder
 
-  override def empty: State[V] = factory.empty
+  override def empty: HashMapState[V] = factory.empty
 
-//  @inline override def -(key: CandidateSet): State[V] = removed(key)
+//  @inline override def -(key: CandidateSet): HashMapState[V] = removed(key)
 
-  override def removed(key: CandidateSet): State[V] = {
+  override def removed(key: CandidateSet): HashMapState[V] = {
     val selectedMap = levels(key.size)
     val updatedMap = selectedMap.removed(key)
-    new State(levels.updated(key.size, updatedMap))
+    new HashMapState(levels.updated(key.size, updatedMap))
   }
 
-  @inline override def +[V1 >: V](kv: (CandidateSet, V1)): State[V1] = updated(kv._1, kv._2)
+  @inline override def +[V1 >: V](kv: (CandidateSet, V1)): HashMapState[V1] = updated(kv._1, kv._2)
 
-  override def updated[V1 >: V](key: CandidateSet, value: V1): State[V1] = {
-    val b = new State.StateBuilder[V1](levels)
+  override def updated[V1 >: V](key: CandidateSet, value: V1): HashMapState[V1] = {
+    val b = new HashMapState.StateBuilder[V1](levels)
     b.addOne(key -> value)
     b.result()
   }
@@ -85,18 +85,18 @@ class State[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
 
   override def iterator: Iterator[(CandidateSet, V)] = levels.iterator.flatMap(_.iterator)
 
-//  override def updatedWith[V1 >: V](key: CandidateSet)(remappingFunction: Option[V] => Option[V1]): State[V1] = {
+//  override def updatedWith[V1 >: V](key: CandidateSet)(remappingFunction: Option[V] => Option[V1]): HashMapState[V1] = {
 //    val previousValue = this.get(key)
 //    val nextValue = remappingFunction(previousValue)
 //    (previousValue, nextValue) match {
-//      case (None, None) => this.asInstanceOf[State[V1]]
-//      case (Some(_), None) => this.removed(key).asInstanceOf[State[V1]]
+//      case (None, None) => this.asInstanceOf[HashMapState[V1]]
+//      case (Some(_), None) => this.removed(key).asInstanceOf[HashMapState[V1]]
 //      case (_, Some(v)) => this.updated(key, v)
 //    }
 //  }
 
   // we only call updatedWith with the same value type
-  def updatedWith(key: CandidateSet)(remappingFunction: Option[V] => Option[V]): State[V] = {
+  def updatedWith(key: CandidateSet)(remappingFunction: Option[V] => Option[V]): HashMapState[V] = {
     val previousValue = this.get(key)
     val nextValue = remappingFunction(previousValue)
     (previousValue, nextValue) match {
@@ -107,8 +107,8 @@ class State[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
   }
 
   // overrides that make return types more specific
-  override def concat[V1 >: V](suffix: collection.IterableOnce[(CandidateSet, V1)]): State[V1] = {
-    val b = new State.StateBuilder[V1](levels)
+  override def concat[V1 >: V](suffix: collection.IterableOnce[(CandidateSet, V1)]): HashMapState[V1] = {
+    val b = new HashMapState.StateBuilder[V1](levels)
     b.addAll(suffix)
     b.result()
   }

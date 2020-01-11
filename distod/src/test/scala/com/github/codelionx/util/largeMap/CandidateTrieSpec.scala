@@ -1,4 +1,4 @@
-package com.github.codelionx.util.trie
+package com.github.codelionx.util.largeMap
 
 import com.github.codelionx.distod.types.CandidateSet
 import org.scalatest.{Matchers, WordSpec}

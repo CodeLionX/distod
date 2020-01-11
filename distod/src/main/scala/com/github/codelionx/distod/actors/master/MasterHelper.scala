@@ -6,7 +6,7 @@ import com.github.codelionx.distod.actors.master.Master.NewCandidates
 import com.github.codelionx.distod.actors.master.MasterHelper.Command
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.types.CandidateSet
-import com.github.codelionx.util.trie.CandidateTrie
+import com.github.codelionx.util.largeMap.{CandidateTrie, HashMapState}
 
 
 object MasterHelper {
@@ -14,11 +14,11 @@ object MasterHelper {
   trait Command
   final case class GenerateSplitCandidates(
                                             candidateId: CandidateSet,
-                                            state: State[CandidateState]
+                                            state: HashMapState[CandidateState]
                                           ) extends Command
   final case class GenerateSwapCandidates(
                                            candidateId: CandidateSet,
-                                           state: State[CandidateState]
+                                           state: HashMapState[CandidateState]
                                          ) extends Command
 
   val poolName: String = "master-helper-pool"

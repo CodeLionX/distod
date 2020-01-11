@@ -29,7 +29,7 @@ object FastutilState {
       startState: IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V]] = IndexedSeq.empty
   ) extends mutable.Builder[(CandidateSet, V), FastutilState[V]] {
 
-    private var internalState: IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V]] = startState.map(_.clone())
+    private var internalState: IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V]] = startState
 
     override def addOne(elem: (CandidateSet, V)): this.type = {
       val (key, value) = elem
@@ -83,7 +83,7 @@ class FastutilState[V] private(nAttributes: Int, levels: IndexedSeq[Object2Objec
   @inline override def +[V1 >: V](kv: (CandidateSet, V1)): FastutilState[V1] = updated(kv._1, kv._2)
 
   override def updated[V1 >: V](key: CandidateSet, value: V1): FastutilState[V1] = {
-    val b = new FastutilState.StateBuilder[V1](nAttributes, levels)
+    val b = new FastutilState.StateBuilder[V1](nAttributes, cloneLevels[V1])
     b.addOne(key -> value)
     b.result()
   }
@@ -134,8 +134,11 @@ class FastutilState[V] private(nAttributes: Int, levels: IndexedSeq[Object2Objec
 
   // overrides that make return types more specific
   override def concat[V1 >: V](suffix: collection.IterableOnce[(CandidateSet, V1)]): FastutilState[V1] = {
-    val b = new FastutilState.StateBuilder[V1](nAttributes, levels)
+    val b = new FastutilState.StateBuilder[V1](nAttributes, cloneLevels[V1])
     b.addAll(suffix)
     b.result()
   }
+
+  private def cloneLevels[V1 >: V]: IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V1]] =
+    levels.map(orig => new Object2ObjectOpenHashMap[CandidateSet, V1](orig, .9f))
 }

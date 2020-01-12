@@ -34,13 +34,12 @@ object FastutilState {
     override def addOne(elem: (CandidateSet, V)): this.type = {
       val (key, value) = elem
       // fill seq up with empty maps (prevents IndexOutOfBoundsException)
-      var preparedState = internalState
-      while (preparedState.size <= key.size) {
-        val expectedSize = Math.binomialCoefficient(numberOfAttributes, preparedState.size)
-        preparedState :+= new Object2ObjectOpenHashMap(expectedSize, .9f)
+      while (internalState.size <= key.size) {
+        val expectedSize = Math.binomialCoefficient(numberOfAttributes, internalState.size)
+        internalState :+= new Object2ObjectOpenHashMap(expectedSize, .9f)
       }
       // select correct map and update it with new mapping
-      val map = preparedState(key.size)
+      val map = internalState(key.size)
       map.put(key, value)
       this
     }
@@ -75,25 +74,39 @@ class FastutilState[V] private(nAttributes: Int, levels: IndexedSeq[Object2Objec
 
   override def removed(key: CandidateSet): FastutilState[V] = {
     val selectedMap = levels(key.size)
-    val updatedMap = selectedMap.clone()
-    updatedMap.remove(key)
-    new FastutilState(nAttributes, levels.updated(key.size, updatedMap))
+//    val updatedMap = selectedMap.clone()
+    selectedMap.remove(key)
+//    new FastutilState(nAttributes, levels.updated(key.size, updatedMap))
+    this
   }
 
   @inline override def +[V1 >: V](kv: (CandidateSet, V1)): FastutilState[V1] = updated(kv._1, kv._2)
 
   override def updated[V1 >: V](key: CandidateSet, value: V1): FastutilState[V1] = {
-    val b = new FastutilState.StateBuilder[V1](nAttributes, cloneLevels[V1])
-    b.addOne(key -> value)
-    b.result()
+//    val levelIndex = key.size
+//    val levelClone = levels.zipWithIndex.map{
+//      case (m, `levelIndex`) => new Object2ObjectOpenHashMap[CandidateSet, V1](m, .9f)
+//      case (m, _) => m.asInstanceOf[Object2ObjectOpenHashMap[CandidateSet, V1]]
+//    }
+//    val b = new FastutilState.StateBuilder[V1](nAttributes, cloneLevels[V1])
+//    b.addOne(key -> value)
+//    b.result()
+    var l = levels
+    while (l.size <= key.size) {
+      val expectedSize = Math.binomialCoefficient(nAttributes, l.size)
+      l :+= new Object2ObjectOpenHashMap(expectedSize, .9f)
+    }
+    val l2 = l.asInstanceOf[IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V1]]]
+    l2(key.size).put(key, value)
+    new FastutilState[V1](nAttributes, l2)
   }
 
   override def apply(key: CandidateSet): V =
     if (key.size >= levels.size)
-      throw new RuntimeException()
+      throw new RuntimeException(s"Map for size ${key.size} not initialized")
     else
       levels(key.size).get(key) match {
-        case null => throw new RuntimeException()
+        case null => throw new RuntimeException("Key not found in map")
         case s => s
       }
 
@@ -140,5 +153,6 @@ class FastutilState[V] private(nAttributes: Int, levels: IndexedSeq[Object2Objec
   }
 
   private def cloneLevels[V1 >: V]: IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V1]] =
-    levels.map(orig => new Object2ObjectOpenHashMap[CandidateSet, V1](orig, .9f))
+//    levels.map(orig => new Object2ObjectOpenHashMap[CandidateSet, V1](orig, .9f))
+    levels.map(_.asInstanceOf[Object2ObjectOpenHashMap[CandidateSet, V1]])
 }

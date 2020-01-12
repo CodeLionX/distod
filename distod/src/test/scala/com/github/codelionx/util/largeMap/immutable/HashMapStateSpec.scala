@@ -3,34 +3,14 @@ package com.github.codelionx.util.largeMap.immutable
 import com.github.codelionx.distod.actors.master.CandidateState
 import com.github.codelionx.distod.actors.master.CandidateState.NewSplitCandidates
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.largeMap.StateTestingFixtures._
 import org.scalatest.{Matchers, WordSpec}
-
-
-object HashMapStateSpec {
-
-  implicit class ExpectingCandidateSet(val cs: CandidateSet) extends AnyVal {
-
-    def stateRepr: CandidateState = CandidateState(cs)
-
-    def tuple: (CandidateSet, CandidateState) = cs -> stateRepr
-  }
-}
 
 
 class HashMapStateSpec extends WordSpec with Matchers {
 
-  import HashMapStateSpec._
-
-
   "A HashMapState for CandidateStates" should {
     var map = HashMapState.empty[CandidateState]
-
-    val csEmpty = CandidateSet.empty
-    val cs0 = CandidateSet.from(0)
-    val cs1 = CandidateSet.from(1)
-    val cs01 = cs0 + 1
-    val cs012 = cs01 + 2
-    val cs013 = cs01 + 3
 
     "updated (addition)" in {
       map += csEmpty.tuple
@@ -105,23 +85,6 @@ class HashMapStateSpec extends WordSpec with Matchers {
       val updatedExisting = map.updatedWith(cs012)(_ => Some(cs012.stateRepr))
       updatedExisting.toSeq should contain theSameElementsInOrderAs Seq(csEmpty.tuple, cs01.tuple, cs012.tuple)
     }
-
-//    "updateIfDefinedWith" in {
-//      val m = CandidateTrie(cs01.tuple)
-//      // do not change if value not defined
-//      m.updateIfDefinedWith(cs0)(_ => "test")
-//      m.toSeq should contain theSameElementsInOrderAs Seq(cs01.tuple)
-//      // change value if value defined
-//      m.updateIfDefinedWith(cs01)(_ => "test")
-//      m.toSeq should contain theSameElementsInOrderAs Seq(cs01 -> "test")
-//    }
-//
-//    "clear" in {
-//      noException shouldBe thrownBy {
-//        map.clear()
-//      }
-//      map shouldBe empty
-//    }
 
     "empty" in {
       val emptyMap = HashMapState.empty[String]

@@ -7,10 +7,10 @@ import com.github.codelionx.util.largeMap.StateTestingFixtures._
 import org.scalatest.{Matchers, WordSpec}
 
 
-class CandidateTrieSpec extends WordSpec with Matchers {
+class FastutilStateSpec extends WordSpec with Matchers {
 
-  "A CandidateTrie for CandidateStates" should {
-    val map = CandidateTrie.empty[CandidateState]
+  "A FastutilState for CandidateSets" should {
+    val map = FastutilState.empty[CandidateState]
 
     "addOne" in {
       map.addOne(csEmpty.tuple)
@@ -68,16 +68,18 @@ class CandidateTrieSpec extends WordSpec with Matchers {
     }
 
     "flatMap" in {
-      val inner = CandidateTrie(cs01 -> CandidateState(cs01).updated(
-        NewSplitCandidates(CandidateSet.from(0, 1, 2))
-      ))
+      val inner = FastutilState(5, cs01 ->
+        CandidateState(cs01).updated(
+          NewSplitCandidates(CandidateSet.from(0, 1, 2))
+        )
+      )
       val flatMapped = inner.flatMap { case (_, value) => value.splitCandidates }
       flatMapped.iterator.toSeq should contain theSameElementsInOrderAs Seq(0, 1, 2)
     }
 
     "concat" in {
       val combined = map.concat(Seq(cs012.tuple))
-      combined.toSeq should contain theSameElementsInOrderAs Seq(
+      combined.toSeq should contain theSameElementsAs Seq(
         csEmpty.tuple,
         cs01.tuple,
         cs012.tuple
@@ -107,40 +109,6 @@ class CandidateTrieSpec extends WordSpec with Matchers {
       val emptyTrie = CandidateTrie.empty[String]
       emptyTrie shouldBe empty
       emptyTrie.get(cs012) shouldEqual None
-    }
-  }
-
-  "A CandidateTrie specifically" should {
-
-    "withPrefix" in {
-      val map = CandidateTrie(cs01.tuple)
-
-      val innerTrie = map.withPrefix(cs0)
-      innerTrie.get(csEmpty) shouldEqual None
-      innerTrie.get(cs1) shouldEqual Some(cs01.stateRepr)
-    }
-
-    "update" in {
-      val inner = CandidateTrie.empty[CandidateState]
-
-      noException shouldBe thrownBy {
-        // trie creates missing path (nodes)
-        inner.update(cs012, cs012.stateRepr)
-      }
-      val subTrie = inner.withPrefix(cs01)
-      subTrie(CandidateSet.from(2)) shouldEqual cs012.stateRepr
-      inner.update(cs012, CandidateState(csEmpty))
-      subTrie(CandidateSet.from(2)) shouldEqual CandidateState(csEmpty)
-    }
-
-    "updateIfDefinedWith" in {
-      val m = CandidateTrie(cs01.tuple)
-      // do not change if value not defined
-      m.updateIfDefinedWith(cs0)(_ => CandidateState(csEmpty))
-      m.toSeq should contain theSameElementsInOrderAs Seq(cs01.tuple)
-      // change value if value defined
-      m.updateIfDefinedWith(cs01)(_ => CandidateState(csEmpty))
-      m.toSeq should contain theSameElementsInOrderAs Seq(cs01 -> CandidateState(csEmpty))
     }
   }
 }

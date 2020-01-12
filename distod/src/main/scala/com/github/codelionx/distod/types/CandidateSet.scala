@@ -85,7 +85,14 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
     new CandidateSet(bitset, bitset.size)
   }
 
+  // use cached size: faster
   override def size: Int = _size
+
+  // we can also use the cached size to speed up isEmpty check
+  override def isEmpty: Boolean = size == 0
+
+  // we specify known size to, because we can efficiently compute the size (we have it cached)
+  override def knownSize: Int = size
 
   /**
    * Computes the predecessors of this CandidateSet. E.g. for CandidateSet(0, 1, 2), the predecessors are:

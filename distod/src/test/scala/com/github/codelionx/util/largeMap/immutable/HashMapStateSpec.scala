@@ -1,4 +1,4 @@
-package com.github.codelionx.util.largeMap
+package com.github.codelionx.util.largeMap.immutable
 
 import com.github.codelionx.distod.actors.master.CandidateState
 import com.github.codelionx.distod.actors.master.CandidateState.NewSplitCandidates

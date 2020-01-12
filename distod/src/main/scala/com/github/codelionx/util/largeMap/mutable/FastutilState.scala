@@ -1,4 +1,4 @@
-package com.github.codelionx.util.largeMap
+package com.github.codelionx.util.largeMap.mutable
 
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.util.Math

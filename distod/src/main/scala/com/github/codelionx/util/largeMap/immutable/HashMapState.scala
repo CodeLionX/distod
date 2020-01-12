@@ -1,4 +1,4 @@
-package com.github.codelionx.util.largeMap
+package com.github.codelionx.util.largeMap.immutable
 
 import com.github.codelionx.distod.types.CandidateSet
 

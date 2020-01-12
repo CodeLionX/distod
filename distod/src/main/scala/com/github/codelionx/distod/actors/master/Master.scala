@@ -19,7 +19,7 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.util.largeMap
-import com.github.codelionx.util.largeMap.FastutilState
+import com.github.codelionx.util.largeMap.mutable.FastutilState
 
 
 object Master {

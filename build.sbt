@@ -76,5 +76,4 @@ lazy val benchmarking = (project in file("benchmarking"))
     javaOptions in run ++= Seq("-Xms2G", "-Xmx2G")
   )
   .enablePlugins(JmhPlugin)
-//  .dependsOn(distod)
-
+  .dependsOn(distod)

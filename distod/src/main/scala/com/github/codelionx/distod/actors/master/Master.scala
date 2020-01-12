@@ -207,7 +207,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         case Some(s) => Some(s.updated(stateUpdate))
       }
       context.log.debug("Received new candidates for job {}", job)
-      val newQueue = workQueue.enqueue(job).removePendingGeneration(job)
+      val newQueue = workQueue.enqueue(job)
       stash.unstashAll(
         behavior(attributes, newQueue, testedCandidates)
       )

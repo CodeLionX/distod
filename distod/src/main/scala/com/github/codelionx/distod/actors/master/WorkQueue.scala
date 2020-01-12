@@ -13,14 +13,13 @@ object WorkQueue {
   val empty: WorkQueue = new WorkQueue(
     Queue.empty,
     Set.empty,
-    Set.empty,
     Set.empty
   )
 
   def apply(initialItems: Item*): WorkQueue = from(initialItems)
 
   def from(candidates: IterableOnce[Item]): WorkQueue =
-    new WorkQueue(Queue.from(candidates), Set.from(candidates), Set.empty, Set.empty)
+    new WorkQueue(Queue.from(candidates), Set.from(candidates), Set.empty)
 }
 
 
@@ -28,8 +27,7 @@ object WorkQueue {
 class WorkQueue private(
     workQueue: Queue[WorkQueue.Item],
     work: Set[WorkQueue.Item],
-    pending: Set[WorkQueue.Item],
-    pendingGeneration: Set[WorkQueue.Item]
+    pending: Set[WorkQueue.Item]
 ) {
 
   /**
@@ -37,7 +35,7 @@ class WorkQueue private(
    *
    * @return `true` if the work queue contains no elements, `false` otherwise.
    */
-  def isEmpty: Boolean = work.isEmpty && pending.isEmpty && pendingGeneration.isEmpty
+  def isEmpty: Boolean = work.isEmpty && pending.isEmpty
 
   /**
    * Tests whether the work queue is not empty (this includes pending responses and the actual work queue).
@@ -59,7 +57,7 @@ class WorkQueue private(
   /**
    * Tests whether there are still pending responses.
    */
-  def hasPending: Boolean = pending.nonEmpty || pendingGeneration.nonEmpty
+  def hasPending: Boolean = pending.nonEmpty
 
   /**
    * Tests whether there are no pending responses.
@@ -76,7 +74,7 @@ class WorkQueue private(
     val (item, newQueue) = internalDequeue(workQueue)
     val newWork = work - item
     val newPending = pending + item
-    (item, new WorkQueue(newQueue, newWork, newPending, pendingGeneration))
+    (item, new WorkQueue(newQueue, newWork, newPending))
   }
 
   /**
@@ -84,9 +82,11 @@ class WorkQueue private(
    * This is a performance optimization (compared to actually removing them from the queue)!
    */
   @tailrec
-  private final def internalDequeue(queue: Queue[(CandidateSet, JobType.JobType)]): (WorkQueue.Item, Queue[(CandidateSet, JobType.JobType)]) = {
+  private final def internalDequeue(
+      queue: Queue[(CandidateSet, JobType.JobType)]
+  ): (WorkQueue.Item, Queue[(CandidateSet, JobType.JobType)]) = {
     val (item, newQueue) = queue.dequeue
-    if(work.contains(item)) {
+    if (work.contains(item)) {
       (item, newQueue)
     } else {
       internalDequeue(newQueue)
@@ -101,7 +101,7 @@ class WorkQueue private(
   def enqueue(item: WorkQueue.Item): WorkQueue = {
     val newWorkQueue = workQueue.enqueue(item)
     val newWork = work + item
-    new WorkQueue(newWorkQueue, newWork, pending, pendingGeneration)
+    new WorkQueue(newWorkQueue, newWork, pending)
   }
 
   /**
@@ -113,7 +113,7 @@ class WorkQueue private(
   def enqueueAll(items: Iterable[WorkQueue.Item]): WorkQueue = {
     val newWorkQueue = workQueue.enqueueAll(items)
     val newWork = work ++ items
-    new WorkQueue(newWorkQueue, newWork, pending, pendingGeneration)
+    new WorkQueue(newWorkQueue, newWork, pending)
   }
 
   /**
@@ -129,36 +129,14 @@ class WorkQueue private(
    */
   def removePending(item: WorkQueue.Item): WorkQueue = {
     val newPending = pending - item
-    new WorkQueue(workQueue, work, newPending, pendingGeneration)
-  }
-
-  def addPendingGenerationAll(items: Iterable[WorkQueue.Item]): WorkQueue = {
-    val newPendingGeneration = pendingGeneration ++ items
-    new WorkQueue(workQueue, work, pending, newPendingGeneration)
-  }
-
-  @inline def addPendingGeneration(key: CandidateSet, tpe: JobType.JobType): WorkQueue =
-    addPendingGeneration(key -> tpe)
-
-  def addPendingGeneration(item: WorkQueue.Item): WorkQueue = {
-    val newPendingGeneration = pendingGeneration + item
-    new WorkQueue(workQueue, work, pending, newPendingGeneration)
-  }
-
-  @inline def removePendingGeneration(key: CandidateSet, tpe: JobType.JobType): WorkQueue =
-    removePendingGeneration(key -> tpe)
-
-  def removePendingGeneration(item: WorkQueue.Item): WorkQueue = {
-    val newPendingGeneration = pendingGeneration - item
-    new WorkQueue(workQueue, work, pending, newPendingGeneration)
+    new WorkQueue(workQueue, work, newPending)
   }
 
   /**
-   * Tests whether the `item` is contained either in the work queue or the pending set (includes the pending generation
-   * set).
+   * Tests whether the `item` is contained either in the work queue or the pending set.
    * This is an improved inclusion test that was optimizes for performance using a set (`O(1)`).
    */
-  def contains(item: WorkQueue.Item): Boolean = work.contains(item) || pending.contains(item) || pendingGeneration.contains(item)
+  def contains(item: WorkQueue.Item): Boolean = work.contains(item) || pending.contains(item)
 
   /**
    * Tests whether the `item` is contained in the actual work queue.
@@ -175,19 +153,12 @@ class WorkQueue private(
   def containsPending(item: WorkQueue.Item): Boolean = pending.contains(item)
 
   /**
-   * Tests wether the `item` is contained in the pending generation set.
-   *
-   * @see [[com.github.codelionx.distod.actors.master.WorkQueue#contains]]
-   */
-  def containsPendingGeneration(item: WorkQueue.Item): Boolean = pendingGeneration.contains(item)
-
-  /**
    * Removes all entries from the queue that contain one of the candidates. Does not touch the pending queues.
    */
   def removeAll(candidates: Set[CandidateSet]): WorkQueue = {
     val jobs: Set[(CandidateSet, JobType.JobType)] = candidates.flatMap(c => Seq(c -> JobType.Split, c -> JobType.Swap))
     val newWork = work -- jobs
-    new WorkQueue(workQueue, newWork, pending, pendingGeneration)
+    new WorkQueue(workQueue, newWork, pending)
   }
 
   override def toString: String =
@@ -195,6 +166,5 @@ class WorkQueue private(
       s"queue=${workQueue.size}," +
       s"work=${work.size}," +
       s"pending=${pending.size}," +
-      s"generationPending=${pendingGeneration.size}" +
       ")"
 }

@@ -68,7 +68,7 @@ class FastutilStateSpec extends WordSpec with Matchers {
     }
 
     "flatMap" in {
-      val inner = FastutilState(5, cs01 ->
+      val inner = FastutilState(FastutilState.DEFAULT_NUMBER_OF_ATTRIBUTES, cs01 ->
         CandidateState(cs01).updated(
           NewSplitCandidates(CandidateSet.from(0, 1, 2))
         )

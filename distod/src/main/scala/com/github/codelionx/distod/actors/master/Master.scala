@@ -4,13 +4,14 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.LeaderGuardian
+import com.github.codelionx.distod.{types, Settings}
+import com.github.codelionx.distod.actors.{master, LeaderGuardian}
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateSplitCandidates, GenerateSwapCandidates}
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.PrimaryPartitionManager
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
+import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
@@ -62,7 +63,8 @@ object Master {
 }
 
 
-class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers) {
+class Master(context: ActorContext[Command], stash: StashBuffer[Command], localPeers: LocalPeers)
+  extends CandidateGeneration {
 
   import Master._
   import localPeers._
@@ -73,6 +75,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     MasterHelper.pool(settings.numberOfWorkers, context.self),
     MasterHelper.poolName
   )
+
+  private val state: FastutilState[CandidateState] = FastutilState.empty
 
   def start(): Behavior[Command] = initialize()
 
@@ -118,13 +122,15 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // TODO: remove
 //         testPartitionMgmt()
 
-        val state = FastutilState.fromSpecific(attributes.size, rootCandidateState ++ L1candidateState ++ L2canddiateState)
+        // first reshape and then add elements to prevent copy operation
+        state.reshapeMaps(attributes.size)
+        state.addAll(rootCandidateState ++ L1candidateState ++ L2canddiateState)
 
         val initialQueue = L1candidates.map(key => key -> JobType.Split)
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         context.log.trace("Initial state:\n{}", state.mkString("\n"))
         stash.unstashAll(
-          behavior(attributes, state, WorkQueue.from(initialQueue), 0)
+          behavior(attributes, WorkQueue.from(initialQueue), 0)
         )
     }
   }
@@ -163,7 +169,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def behavior(
       attributes: Seq[Int],
-      state: largeMap.FastutilState[CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int
   ): Behavior[Command] = Behaviors.receiveMessage {
@@ -192,28 +197,28 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           val swapCandidates = taskState.swapCandidates
           replyTo ! CheckSwapCandidates(taskId, swapCandidates)
       }
-      behavior(attributes, state, newWorkQueue, testedCandidates)
+      behavior(attributes, newWorkQueue, testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
       val job = id -> JobType.Split
       val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-      updateStateAndNext(attributes, state, workQueue, testedCandidates, job, stateUpdate)
+      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
       val job = id -> JobType.Swap
       val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-      updateStateAndNext(attributes, state, workQueue, testedCandidates, job, stateUpdate)
+      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
 
     case NewCandidates(id, jobType, stateUpdate) =>
       val job = id -> jobType
-      val updatedState = state.updatedWith(id) {
+      state.updateWith(id) {
         case None => Some(CandidateState.createFromDelta(id, stateUpdate))
         case Some(s) => Some(s.updated(stateUpdate))
       }
       context.log.debug("Received new candidates for job {}", job)
       val newQueue = workQueue.enqueue(job).removePendingGeneration(job)
       stash.unstashAll(
-        behavior(attributes, updatedState, newQueue, testedCandidates)
+        behavior(attributes, newQueue, testedCandidates)
       )
 
     case m =>
@@ -276,7 +281,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private def updateStateAndNext(
       attributes: Seq[Int],
-      state: largeMap.FastutilState[CandidateState],
       workQueue: WorkQueue,
       testedCandidates: Int,
       job: (CandidateSet, JobType.JobType),
@@ -286,64 +290,79 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val (id, jobType) = job
     // update state based on received results
     val newWorkQueue = workQueue.removePending(job)
-    var newState = state.updatedWith(id) {
+    val newTaskState = state.updateWith(id) {
       case None => None
       case Some(s) => Some(s.updated(stateUpdate))
     }
-    val newTaskState = state.get(id)
 
     // update successors and get new generation jobs
     val successors = id.successors(attributes.toSet)
     val nodeIsPruned = newTaskState.exists(_.isPruned)
-    val newGenerationJobs =
-      if (nodeIsPruned) {
-        Seq.empty
-      } else {
-        // update counters of successors and send new generation jobs
-        successors.flatMap { successor =>
-          val oldState = state.getOrElse(successor, CandidateState(successor))
-          val successorState = oldState.incPreconditions(jobType)
-          newState = newState.updated(successor, successorState)
-          // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
-          // the new generation of split candidates)
-          val splitReady =
-          if (jobType == JobType.Split) successorState.isReadyToCheck(JobType.Split)
-          else false
-          val swapReady = successorState.isReadyToCheck(JobType.Swap)
 
-          // isReadyToCheck should only be true once
-          val splitJobs =
-            if (splitReady /*&& !workQueue.containsPending(successorState.id -> JobType.GenerateSplit)*/ ) {
-              helperPool ! GenerateSplitCandidates(successorState.id, newState)
-              Seq(successorState.id -> JobType.Split)
-            } else {
-              Seq.empty
-            }
-          val swapJobs =
-            if (swapReady /*&& !workQueue.containsPending(successorState.id -> JobType.GenerateSwap)*/ ) {
-              helperPool ! GenerateSwapCandidates(successorState.id, newState)
-              Seq(successorState.id -> JobType.Swap)
-            } else {
-              Seq.empty
-            }
-          splitJobs ++ swapJobs
+    if (nodeIsPruned) {
+      context.log.debug("Pruning node {} and all successors", id)
+      // node pruning! --> invalidate all successing nodes
+      successors.foreach(s =>
+        state.remove(s)
+      )
+      // remove all jobs that involve one of the pruned successors
+      val updatedWorkQueue = newWorkQueue.removeAll(successors)
+      behavior(attributes, updatedWorkQueue, testedCandidates + 1)
+    } else {
+      // update counters of successors
+      val successorStates = successors.map { successor =>
+        val oldState = state.getOrElse(successor, CandidateState(successor))
+        val successorState = oldState.incPreconditions(jobType)
+        state.update(successor, successorState)
+        successorState
+      }
+
+      // generate successor's splits candidates
+      val splitReadySuccessors = successorStates.filter( successorState =>
+        // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
+        // the new generation of split candidates)
+        if (jobType == JobType.Split) successorState.isReadyToCheck(JobType.Split)
+        else false
+      )
+      val newSplitJobs = splitReadySuccessors.map(s => s.id -> JobType.Split)
+      val splitStateUpdates = splitReadySuccessors.map(performSplitGeneration)
+
+      // generate successor's swaps candidates
+      val swapReadySuccessors = successorStates.filter(successorState =>
+        successorState.isReadyToCheck(JobType.Swap)
+      )
+      val newSwapJobs = swapReadySuccessors.map(s => s.id -> JobType.Swap)
+      val swapStateUpdates = swapReadySuccessors.map(performSwapGeneration)
+
+      // add new jobs to the queue
+      val updatedWorkQueue = newWorkQueue.enqueueAll(newSplitJobs ++ newSwapJobs)
+
+      // add new candidates to succesor states
+      val stateUpdates = (splitStateUpdates ++ swapStateUpdates)
+        .groupBy{ case (id, _) => id}
+        .map { case (key, value) => key -> value.map(_._2) }
+
+      stateUpdates.foreach { case (id, updates) =>
+        state.updateWith(id){
+          case None => Some(CandidateState.createFromDeltas(id, updates))
+          case Some(s) => Some(s.updatedAll(updates))
         }
       }
-    val newWorkQueue2 =
-      if (nodeIsPruned) {
-        context.log.debug("Pruning node {} and all successors", id)
-        // node pruning! --> invalidate all successing nodes
-        successors.foreach(s =>
-          newState = newState.removed(s)
-        )
-        // remove all jobs that involve one of the pruned successors
-        newWorkQueue.removeAll(successors)
-      } else {
-        context.log.debug("Adding {} new pending generation jobs", newGenerationJobs.size)
-        newWorkQueue.addPendingGenerationAll(newGenerationJobs)
-      }
 
-    behavior(attributes, newState, newWorkQueue2, testedCandidates + 1)
+      behavior(attributes, updatedWorkQueue, testedCandidates + 1)
+    }
+  }
+
+  private def performSplitGeneration(candidateState: CandidateState): (CandidateSet, CandidateState.Delta) = {
+    context.log.trace("Generating split candidates for node {}", candidateState.id)
+    val candidates = generateSplitCandidates(candidateState.id, state.view)
+    candidateState.id -> CandidateState.NewSplitCandidates(candidates)
+  }
+
+  private def performSwapGeneration(candidateState: CandidateState): (CandidateSet, CandidateState.Delta) = {
+    context.log.trace("Generating swap candidates for node {}", candidateState.id)
+    val candidates = generateSwapCandidates(candidateState.id, state.view)
+    candidateState.id -> CandidateState.NewSwapCandidates(candidates)
   }
 
 }

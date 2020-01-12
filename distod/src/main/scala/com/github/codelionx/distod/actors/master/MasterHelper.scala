@@ -1,25 +1,24 @@
 package com.github.codelionx.distod.actors.master
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import com.github.codelionx.distod.actors.master.Master.NewCandidates
 import com.github.codelionx.distod.actors.master.MasterHelper.Command
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.types.CandidateSet
-import com.github.codelionx.util.largeMap.{CandidateTrie, HashMapState}
 
 
 object MasterHelper {
 
   trait Command
   final case class GenerateSplitCandidates(
-                                            candidateId: CandidateSet,
-                                            state: HashMapState[CandidateState]
-                                          ) extends Command
+      candidateId: CandidateSet,
+      state: Map[CandidateSet, CandidateState]
+  ) extends Command
   final case class GenerateSwapCandidates(
-                                           candidateId: CandidateSet,
-                                           state: HashMapState[CandidateState]
-                                         ) extends Command
+      candidateId: CandidateSet,
+      state: Map[CandidateSet, CandidateState]
+  ) extends Command
 
   val poolName: String = "master-helper-pool"
 

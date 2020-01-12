@@ -68,10 +68,10 @@ class FastutilState[V] private(
 
   override def apply(key: CandidateSet): V =
     if (key.size >= levels.size)
-      throw new RuntimeException(s"Map for size ${key.size} not initialized")
+      throw new NoSuchElementException(s"Map for size ${key.size} not initialized")
     else
       levels(key.size).get(key) match {
-        case null => throw new RuntimeException("Key not found in map")
+        case null => throw new NoSuchElementException("Key not found in map")
         case s => s
       }
 
@@ -109,32 +109,4 @@ class FastutilState[V] private(
         .asScala
         .map(entry => entry.getKey -> entry.getValue)
     )
-
-////  override def updatedWith[V1 >: V](key: CandidateSet)(remappingFunction: Option[V] => Option[V1]): FastutilState[V1] = {
-////    val previousValue = this.get(key)
-////    val nextValue = remappingFunction(previousValue)
-////    (previousValue, nextValue) match {
-////      case (None, None) => this.asInstanceOf[FastutilState[V1]]
-////      case (Some(_), None) => this.removed(key).asInstanceOf[FastutilState[V1]]
-////      case (_, Some(v)) => this.updated(key, v)
-////    }
-////  }
-//
-//  // we only call updatedWith with the same value type
-//  def updatedWith(key: CandidateSet)(remappingFunction: Option[V] => Option[V]): FastutilState[V] = {
-//    val previousValue = this.get(key)
-//    val nextValue = remappingFunction(previousValue)
-//    (previousValue, nextValue) match {
-//      case (None, None) => this
-//      case (Some(_), None) => this.removed(key)
-//      case (_, Some(v)) => this.updated(key, v)
-//    }
-//  }
-//
-//  // overrides that make return types more specific
-//  override def concat[V1 >: V](suffix: collection.IterableOnce[(CandidateSet, V1)]): FastutilState[V1] = {
-//    val b = new FastutilState.StateBuilder[V1](nAttributes, cloneLevels[V1])
-//    b.addAll(suffix)
-//    b.result()
-//  }
 }

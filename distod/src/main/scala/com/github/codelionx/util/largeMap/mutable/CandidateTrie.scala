@@ -7,6 +7,43 @@ import scala.collection.{mutable, Factory, StrictOptimizedIterableOps}
 import scala.language.implicitConversions
 
 
+object CandidateTrie {
+
+  /**
+   * Key-Element type
+   */
+  private type A = Int
+  /**
+   * Key type
+   */
+  private type K = CandidateSet
+
+  /**
+   * Factory for keys (using key elements)
+   */
+  private def keyFactory: Factory[A, K] = CandidateSet
+
+  def empty[V]: CandidateTrie[V] = new CandidateTrie[V]
+
+  def apply[V](elems: (K, V)*): CandidateTrie[V] = from(elems)
+
+  def from[V](it: IterableOnce[(K, V)]): CandidateTrie[V] = it match {
+    case alreadyPrefixMap: CandidateTrie[V] => alreadyPrefixMap
+    case _ => (newBuilder[V] ++= it).result()
+  }
+
+  def newBuilder[V]: mutable.Builder[(K, V), CandidateTrie[V]] =
+    new mutable.GrowableBuilder[(K, V), CandidateTrie[V]](empty)
+
+  implicit def toFactory[V](self: this.type): Factory[(K, V), CandidateTrie[V]] =
+    new Factory[(K, V), CandidateTrie[V]] {
+      override def fromSpecific(it: IterableOnce[(K, V)]): CandidateTrie[V] = self.from(it)
+
+      override def newBuilder: mutable.Builder[(K, V), CandidateTrie[V]] = self.newBuilder
+    }
+}
+
+
 class CandidateTrie[V]
   extends mutable.Map[CandidateTrie.K, V]
     with mutable.MapOps[CandidateTrie.K, V, mutable.Map, CandidateTrie[V]]
@@ -105,41 +142,4 @@ class CandidateTrie[V]
     CandidateTrie.newBuilder
 
   override def className = "CandidateTrie"
-}
-
-
-object CandidateTrie {
-
-  /**
-   * Key-Element type
-   */
-  private type A = Int
-  /**
-   * Key type
-   */
-  private type K = CandidateSet
-
-  /**
-   * Factory for keys (using key elements)
-   */
-  private def keyFactory: Factory[A, K] = CandidateSet
-
-  def empty[V]: CandidateTrie[V] = new CandidateTrie[V]
-
-  def apply[V](elems: (K, V)*): CandidateTrie[V] = from(elems)
-
-  def from[V](it: IterableOnce[(K, V)]): CandidateTrie[V] = it match {
-    case alreadyPrefixMap: CandidateTrie[V] => alreadyPrefixMap
-    case _ => (newBuilder[V] ++= it).result()
-  }
-
-  def newBuilder[V]: mutable.Builder[(K, V), CandidateTrie[V]] =
-    new mutable.GrowableBuilder[(K, V), CandidateTrie[V]](empty)
-
-  implicit def toFactory[V](self: this.type): Factory[(K, V), CandidateTrie[V]] =
-    new Factory[(K, V), CandidateTrie[V]] {
-      override def fromSpecific(it: IterableOnce[(K, V)]): CandidateTrie[V] = self.from(it)
-
-      override def newBuilder: mutable.Builder[(K, V), CandidateTrie[V]] = self.newBuilder
-    }
 }

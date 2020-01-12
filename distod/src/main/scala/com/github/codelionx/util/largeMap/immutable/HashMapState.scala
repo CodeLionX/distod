@@ -61,6 +61,7 @@ class HashMapState[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
 
   override def empty: HashMapState[V] = factory.empty
 
+  // not allowed (declared final):
 //  @inline override def -(key: CandidateSet): HashMapState[V] = removed(key)
 
   override def removed(key: CandidateSet): HashMapState[V] = {
@@ -84,16 +85,6 @@ class HashMapState[V] private(levels: IndexedSeq[Map[CandidateSet, V]])
       levels.apply(key.size).get(key)
 
   override def iterator: Iterator[(CandidateSet, V)] = levels.iterator.flatMap(_.iterator)
-
-//  override def updatedWith[V1 >: V](key: CandidateSet)(remappingFunction: Option[V] => Option[V1]): HashMapState[V1] = {
-//    val previousValue = this.get(key)
-//    val nextValue = remappingFunction(previousValue)
-//    (previousValue, nextValue) match {
-//      case (None, None) => this.asInstanceOf[HashMapState[V1]]
-//      case (Some(_), None) => this.removed(key).asInstanceOf[HashMapState[V1]]
-//      case (_, Some(v)) => this.updated(key, v)
-//    }
-//  }
 
   // we only call updatedWith with the same value type
   def updatedWith(key: CandidateSet)(remappingFunction: Option[V] => Option[V]): HashMapState[V] = {

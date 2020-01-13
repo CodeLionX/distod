@@ -95,7 +95,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
     case InsertPartition(key, value: StrippedPartition) =>
       if(value.numberClasses == 0) {
-        context.log.warn(s"Empty partition $key: $value")
+        context.log.warn(s"Empty partition for $key")
       }
       context.log.debug("Inserting partition for key {}", key)
       behavior(attributes, partitions + (key -> value), pendingJobs)

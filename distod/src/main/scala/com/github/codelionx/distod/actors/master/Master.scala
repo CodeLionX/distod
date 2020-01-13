@@ -298,6 +298,9 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       )
       // remove all jobs that involve one of the pruned successors
       val updatedWorkQueue = newWorkQueue.removeAll(successors)
+      if(updatedWorkQueue.sizePending < 5) {
+        context.log.warn("Pending requests after pruning: {}", updatedWorkQueue.pending)
+      }
       behavior(attributes, updatedWorkQueue, testedCandidates + 1)
     } else {
       // update counters of successors
@@ -340,6 +343,9 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         }
       }
 
+      if(updatedWorkQueue.sizePending < 5) {
+        context.log.warn("Pending requests after state updates: {}", updatedWorkQueue.pending)
+      }
       behavior(attributes, updatedWorkQueue, testedCandidates + 1)
     }
   }

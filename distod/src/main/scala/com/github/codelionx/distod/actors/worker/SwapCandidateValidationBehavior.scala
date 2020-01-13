@@ -2,6 +2,7 @@ package com.github.codelionx.distod.actors.worker
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import com.github.codelionx.distod.actors.master.JobType
 import com.github.codelionx.distod.actors.worker.Worker.{Command, WrappedPartitionEvent}
 import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
@@ -80,7 +81,16 @@ class SwapCandidateValidationBehavior(
   def performCheck(
       singletonPartitions: Map[CandidateSet, FullPartition], candidatePartitions: Map[CandidateSet, StrippedPartition]
   ): Behavior[Command] = {
-    val result = checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
+    val result = try {
+      checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
+    } catch {
+      case e: UnsupportedOperationException =>
+        context.log.error(s"Exception in swap validation of ${candidateId -> JobType.Swap}:" +
+          s"singleton: ${singletonPartitions.map(t => t._1 -> t._2.numberClasses)}," +
+          s"full: ${candidatePartitions.map(t => t._1 -> t._2.numberClasses)}"
+        )
+        throw e
+    }
 
     if (result.validOds.nonEmpty) {
       context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))

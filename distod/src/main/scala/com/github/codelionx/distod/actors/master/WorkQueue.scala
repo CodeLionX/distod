@@ -26,8 +26,8 @@ object WorkQueue {
 // TODO: refactor as case class (more efficient and easier copy)
 class WorkQueue private(
     workQueue: Queue[WorkQueue.Item],
-    work: Set[WorkQueue.Item],
-    pending: Set[WorkQueue.Item]
+    val work: Set[WorkQueue.Item],
+    val pending: Set[WorkQueue.Item]
 ) {
 
   /**

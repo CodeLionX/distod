@@ -94,6 +94,9 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       Behaviors.same
 
     case InsertPartition(key, value: StrippedPartition) =>
+      if(value.numberClasses == 0) {
+        context.log.warn(s"Empty partition $key: $value")
+      }
       context.log.debug("Inserting partition for key {}", key)
       behavior(attributes, partitions + (key -> value), pendingJobs)
 
@@ -175,6 +178,9 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       }
 
     case ProductComputed(key, partition) =>
+      if(partition.numberClasses == 0) {
+        context.log.warn(s"Empty partition $key: $partition")
+      }
       context.log.trace("Received computed partition for key {}", key)
       val updatedPartitions = partitions + (key -> partition)
       pendingJobs.get(key) match {

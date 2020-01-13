@@ -140,12 +140,19 @@ trait CandidateValidation {
       val leftPartition = singletonPartitions(CandidateSet.from(left))
       val rightPartition = singletonPartitions(CandidateSet.from(right))
 
-      val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
-      val rightTupleValueMapping = rightPartition.toTupleValueMap
+      val contextPartition = candidatePartitions(context)
+      val (swap, reverseSwap) =
+        if(contextPartition.numberClasses != 0) {
+          val sortedContextClasses = contextPartition.sortEquivClassesBy(leftPartition)
+          val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val swapFinder = findSwapFast(rightTupleValueMapping) _
-      val results = sortedContextClasses.map(swapFinder)
-      val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
+          val swapFinder = findSwapFast(rightTupleValueMapping) _
+          val results = sortedContextClasses.map(swapFinder)
+          results.reduceLeft[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
+        } else {
+          println(s"Swap check hit an empty partition for $context: $contextPartition. Assuming no swap and no reverse swap")
+          (false, false)
+        }
 
       val normal = if (!swap)
         Seq(EquivalencyOrderDependency(context, left, right))

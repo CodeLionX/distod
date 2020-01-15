@@ -1,7 +1,6 @@
 package com.github.codelionx.util.largeMap.immutable
 
-import com.github.codelionx.distod.actors.master.CandidateState
-import com.github.codelionx.distod.actors.master.CandidateState.NewSplitCandidates
+import com.github.codelionx.distod.actors.master.{CandidateState, SplitReadyCandidateState}
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.util.largeMap.StateTestingFixtures._
 import org.scalatest.{Matchers, WordSpec}
@@ -58,8 +57,10 @@ class HashMapStateSpec extends WordSpec with Matchers {
     "flatMap" in {
       val updatedMap = map.updated(
         cs01,
-        CandidateState(cs01).updated(
-          NewSplitCandidates(CandidateSet.from(0, 1, 2))
+        SplitReadyCandidateState(
+          id = cs01,
+          splitCandidates = CandidateSet.from(0, 1, 2),
+          swapPreconditions = 0
         )
       )
       val flatMapped = updatedMap.flatMap { case (_, value) => value.splitCandidates }

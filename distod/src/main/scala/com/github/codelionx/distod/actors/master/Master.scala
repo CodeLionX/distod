@@ -279,22 +279,26 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   ): Behavior[Command] = {
     context.log.debug("Received results for {}", job)
     val (id, jobType) = job
+
     // update state based on received results
     val newWorkQueue = workQueue.removePending(job)
     val newTaskState = state.updateWith(id) {
       case None => None
-      case Some(s) => Some(s.updated(stateUpdate))
+      case Some(s) => Some(s.updated(stateUpdate).pruneIfConditionsAreMet)
     }
 
     // update successors and get new generation jobs
     val successors = id.successors(attributes.toSet)
-    val nodeIsPruned = newTaskState.exists(_.isPruned)
+    val nodeIsPruned = newTaskState.forall(_.isPruned)
 
     if (nodeIsPruned) {
       context.log.debug("Pruning node {} and all successors", id)
       // node pruning! --> invalidate all successing nodes
       successors.foreach(s =>
-        state.remove(s)
+        state.updateWith(s) {
+          case Some(value) => Some(value.prune)
+          case None => Some(CandidateState.pruned(s))
+        }
       )
       // remove all jobs that involve one of the pruned successors
       val updatedWorkQueue = newWorkQueue.removeAll(successors)
@@ -331,14 +335,17 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       // add new jobs to the queue
       val updatedWorkQueue = newWorkQueue.enqueueAll(newSplitJobs ++ newSwapJobs)
 
-      // add new candidates to succesor states
+      // add new candidates to successor states
       val stateUpdates = (splitStateUpdates ++ swapStateUpdates)
         .groupBy { case (id, _) => id }
         .map { case (key, value) => key -> value.map(_._2) }
 
       stateUpdates.foreach { case (id, updates) =>
         state.updateWith(id) {
-          case None => Some(CandidateState.createFromDeltas(id, updates))
+          case None =>
+            // Some(CandidateState.createFromDeltas(id, updates))
+            // should not happen
+            throw new IllegalArgumentException(s"Tried to update non-existent state for $id")
           case Some(s) => Some(s.updatedAll(updates))
         }
       }

@@ -2,6 +2,8 @@ package com.github.codelionx.distod.types
 
 import org.scalatest.{Matchers, WordSpec}
 
+import scala.collection.immutable.BitSet
+
 
 class CandidateSetSpec extends WordSpec with Matchers {
 
@@ -23,6 +25,32 @@ class CandidateSetSpec extends WordSpec with Matchers {
       val succs = parent.successors(attributes)
       succs should contain theSameElementsAs expected
     }
+
+    "have a correct equals implementation" in {
+      val a = CandidateSet.from(0, 2, 3)
+      val equalA = CandidateSet.from(0, 2, 3)
+      val equalA2 = CandidateSet.fromBitMask(a.toBitMask)
+      val b = CandidateSet(BitSet(0))
+
+      a shouldEqual a
+      a shouldEqual equalA
+      a shouldEqual equalA2
+
+      a should not equal b
+    }
+
+    "have a correct hashCode implementation" in {
+      val a = CandidateSet.from(0, 2, 3)
+      val equalA = CandidateSet.from(0, 2, 3)
+      val equalA2 = CandidateSet.fromBitMask(a.toBitMask)
+      val b = CandidateSet(BitSet(0))
+
+      a.hashCode() shouldEqual a.hashCode()
+      a.hashCode() shouldEqual equalA.hashCode()
+      a.hashCode() shouldEqual equalA2.hashCode()
+
+      a.hashCode() should not equal b.hashCode()
+    }
   }
 
   "An empty candidate set" should {
@@ -37,6 +65,28 @@ class CandidateSetSpec extends WordSpec with Matchers {
       val parent = CandidateSet.empty
       val succs = parent.successors(attributes)
       succs shouldEqual attributes.map(CandidateSet.from(_))
+    }
+
+    "have a correct equals implementation" in {
+      val empty = CandidateSet.empty
+      val empty2 = CandidateSet.empty
+      val empty3 = CandidateSet.fromBitMask(Array.emptyLongArray)
+      val nonEmpty = CandidateSet.from(0)
+
+      empty shouldEqual empty2
+      empty shouldEqual empty3
+      empty should not equal nonEmpty
+    }
+
+    "have a correct hashCode implementation" in {
+      val empty = CandidateSet.empty
+      val empty2 = CandidateSet.empty
+      val empty3 = CandidateSet.fromBitMask(Array.emptyLongArray)
+      val nonEmpty = CandidateSet.from(0)
+
+      empty.hashCode() shouldEqual empty2.hashCode()
+      empty.hashCode() shouldEqual empty3.hashCode()
+      empty.hashCode() should not equal nonEmpty.hashCode()
     }
   }
 }

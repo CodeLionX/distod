@@ -150,7 +150,8 @@ trait CandidateValidation {
           val results = sortedContextClasses.map(swapFinder)
           results.reduceLeft[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
         } else {
-          println(s"Swap check hit an empty partition for $context: $contextPartition. Assuming no swap and no reverse swap")
+          println(s"Swap check in $candidateId for $context: ($left, $right) hit an empty context partition:" +
+            s"$contextPartition. Assuming no swap and no reverse swap")
           (false, false)
         }
 

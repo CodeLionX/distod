@@ -81,16 +81,7 @@ class SwapCandidateValidationBehavior(
   def performCheck(
       singletonPartitions: Map[CandidateSet, FullPartition], candidatePartitions: Map[CandidateSet, StrippedPartition]
   ): Behavior[Command] = {
-    val result = try {
-      checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
-    } catch {
-      case e: UnsupportedOperationException =>
-        context.log.error(s"Exception in swap validation of ${candidateId -> JobType.Swap}:" +
-          s"singleton: ${singletonPartitions.map(t => t._1 -> t._2.numberClasses)}," +
-          s"full: ${candidatePartitions.map(t => t._1 -> t._2.numberClasses)}"
-        )
-        throw e
-    }
+    val result = checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
 
     if (result.validOds.nonEmpty) {
       context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))

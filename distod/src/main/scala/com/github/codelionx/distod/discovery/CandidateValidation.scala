@@ -156,13 +156,13 @@ trait CandidateValidation {
         }
 
       val normal = if (!swap)
-        Seq(EquivalencyOrderDependency(context, left, right))
-      else
-        Seq.empty
+          Seq(EquivalencyOrderDependency(context, left, right))
+        else
+          Seq.empty
       val reverse = if (!reverseSwap)
-        Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
-      else
-        Seq.empty
+          Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
+        else
+          Seq.empty
       normal ++ reverse
     }
 
@@ -173,7 +173,7 @@ trait CandidateValidation {
 
     SwapCandidateValidationResult(
       validOds = validCandidates,
-      removedCandidates = swapCandidates.filterNot(candidate => !isValid(candidate))
+      removedCandidates = swapCandidates.filter(isValid)
     )
   }
 

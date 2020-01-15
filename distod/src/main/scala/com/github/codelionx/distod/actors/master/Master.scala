@@ -27,11 +27,6 @@ object Master {
     extends Command with CborSerializable
   final case class SwapCandidatesChecked(id: CandidateSet, removedSwapCandidates: Seq[(Int, Int)])
     extends Command with CborSerializable
-  final case class NewCandidates(
-      id: CandidateSet,
-      jobType: JobType.JobType,
-      stateUpdate: CandidateState.Delta
-  ) extends Command with CborSerializable
   final case class GetPrimaryPartitionManager(replyTo: ActorRef[PrimaryPartitionManager])
     extends Command with CborSerializable
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
@@ -199,18 +194,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       val job = id -> JobType.Swap
       val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
       updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
-
-    case NewCandidates(id, jobType, stateUpdate) =>
-      val job = id -> jobType
-      state.updateWith(id) {
-        case None => Some(CandidateState.createFromDelta(id, stateUpdate))
-        case Some(s) => Some(s.updated(stateUpdate))
-      }
-      context.log.debug("Received new candidates for job {}", job)
-      val newQueue = workQueue.enqueue(job)
-      stash.unstashAll(
-        behavior(attributes, newQueue, testedCandidates)
-      )
 
     case m =>
       context.log.warn("Received unexpected message: {}", m)

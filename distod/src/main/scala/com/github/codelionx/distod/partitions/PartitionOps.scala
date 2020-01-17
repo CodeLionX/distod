@@ -37,6 +37,7 @@ trait PartitionOps { this: Partition =>
       throw new IllegalArgumentException("Can not build product of full and stripped partitions")
 
     case (p1: FullPartition, p2: FullPartition) =>
+//      throw new IllegalArgumentException("Should not build product of full partitions")
       // only intersect sets with > 1 elements
       val (p1Classes, singletonP1Classes) = p1.equivClasses.partition(_.size > 1)
       val (p2Classes, singletonP2Classes) = p2.equivClasses.partition(_.size > 1)

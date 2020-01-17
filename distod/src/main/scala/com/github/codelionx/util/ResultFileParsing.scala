@@ -24,7 +24,9 @@ object ResultFileParsing {
 
     def toOrderDependency(attributeMapping: Map[String, Int]): OrderDependency
   }
+
   final case class ConstantODResult(context: Set[String], constantAttribute: String) extends ODResult {
+
     override def toString: String = s"ConstantOD: {${context.toSeq.sorted}}: ${constantAttribute}"
 
     override def toOrderDependency(attributeMapping: Map[String, Int]): OrderDependency = {
@@ -33,12 +35,14 @@ object ResultFileParsing {
       ConstantOrderDependency(contextCandidateSet, attributeMapping(constantAttribute))
     }
   }
+
   final case class EquivalencyODResult(
       context: Set[String],
       attribute1: String,
       attribute2: String,
       reverse: Boolean = false
   ) extends ODResult {
+
     override def toString: String =
       s"EquivalencyOD: {${context.toSeq.sorted}}: $attribute1 ~ $attribute2, reverse:${reverse}"
 

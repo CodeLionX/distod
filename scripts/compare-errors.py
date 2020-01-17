@@ -51,4 +51,3 @@ def compare_empty_partitions():
 
 if __name__ == "__main__":
     compare_candidates()
-    

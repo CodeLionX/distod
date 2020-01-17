@@ -46,6 +46,7 @@ object TestCandidates {
   }
 
   case class PartitionValidation(tpe: String, elems: Int, classes: Int) {
+
     def satisfies(p: Partition): Boolean = p match {
       case _: FullPartition if tpe == "StrippedPartition" => false
       case _: StrippedPartition if tpe == "FullPartition" => false
@@ -57,11 +58,11 @@ object TestCandidates {
     val file = new File("data/partitions.csv")
     val source = Source.fromFile(file)
     val lines = source.getLines()
-    val entries = lines.map{ line =>
+    val entries = lines.map { line =>
       val candidate :: tpe :: elems :: classes :: Nil = line.split(";").toList
       val strings = candidate.split(",")
       val key =
-        if(strings.size == 1 && strings(0).trim == "") {
+        if (strings.size == 1 && strings(0).trim == "") {
           CandidateSet.empty
         } else {
           val ids = strings.map(s => s.trim.toInt)
@@ -79,7 +80,7 @@ object TestCandidates {
   private def loadPruned(file: File): Set[CandidateSet] = {
     val source = Source.fromFile(file, "UTF-8")
     val lines = source.getLines()
-    lines.map{ line =>
+    lines.map { line =>
       val ids = line.split(",").map(s => s.trim.toInt)
       CandidateSet.fromSpecific(ids)
     }.toSet

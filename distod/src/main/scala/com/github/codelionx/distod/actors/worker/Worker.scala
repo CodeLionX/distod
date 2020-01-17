@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
@@ -64,7 +64,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
       def handleResults(removedSplitCandidates: CandidateSet = CandidateSet.empty): Behavior[Command] = {
         // notify master of result
-        context.log.debug("Sending results of ({}, Split) to master at {}", candidateId, master)
+        context.log.trace("Sending results of ({}, Split) to master at {}", candidateId, master)
         master ! SplitCandidatesChecked(candidateId, removedSplitCandidates)
 
         // ready to work on next node:
@@ -85,7 +85,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
       def handleResults(removedSwapCandidates: Seq[(Int, Int)] = Seq.empty): Behavior[Command] = {
         // notify master of result
-        context.log.debug("Sending results of ({}, Swap) to master at {}", candidateId, master)
+        context.log.trace("Sending results of ({}, Swap) to master at {}", candidateId, master)
         master ! SwapCandidatesChecked(candidateId, removedSwapCandidates)
 
         // ready to work on next node:
@@ -102,7 +102,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
       }
 
     case WrappedPartitionEvent(event) =>
-      context.log.info("Ignored {}", event)
+      context.log.debug("Ignored {}", event)
       Behaviors.same
   }
 }

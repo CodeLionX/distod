@@ -3,6 +3,7 @@ package com.github.codelionx.distod.discovery
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
@@ -99,6 +100,8 @@ trait CandidateValidation {
   import CandidateValidation._
 
 
+  private val logger: Logger = LoggerFactory.getLogger(classOf[CandidateValidation])
+
   def checkSplitCandidates(
       candidateId: CandidateSet,
       splitCandidates: CandidateSet,
@@ -142,7 +145,7 @@ trait CandidateValidation {
 
       val contextPartition = candidatePartitions(context)
       val (swap, reverseSwap) =
-        if(contextPartition.numberClasses != 0) {
+        if (contextPartition.numberClasses != 0) {
           val sortedContextClasses = contextPartition.sortEquivClassesBy(leftPartition)
           val rightTupleValueMapping = rightPartition.toTupleValueMap
 
@@ -150,19 +153,17 @@ trait CandidateValidation {
           val results = sortedContextClasses.map(swapFinder)
           results.reduceLeft[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
         } else {
-          println(s"Swap check in $candidateId for $context: ($left, $right) hit an empty context partition:" +
-            s"$contextPartition. Assuming no swap and no reverse swap")
+          logger.error(s"Swap check in {} for '{}: {} ~ {}' hit an empty context partition: {} " +
+            "Assuming no swap and no reverse swap", candidateId, context, left, right, contextPartition)
           (false, false)
         }
 
-      val normal = if (!swap)
-          Seq(EquivalencyOrderDependency(context, left, right))
-        else
-          Seq.empty
-      val reverse = if (!reverseSwap)
-          Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
-        else
-          Seq.empty
+      val normal =
+        if (!swap) Seq(EquivalencyOrderDependency(context, left, right))
+        else Seq.empty
+      val reverse =
+        if (!reverseSwap) Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
+        else Seq.empty
       normal ++ reverse
     }
 

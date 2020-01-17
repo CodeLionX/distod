@@ -18,8 +18,10 @@ object CandidateState {
     )
 
   def forL1(id: CandidateSet, splitCandidate: CandidateSet): CandidateState = L1CandidateState(id, splitCandidate)
+
   // we do not need to check for swaps in level 1 (single attribute nodes)
-  case class L1CandidateState private (id: CandidateSet, splitCandidates: CandidateSet) extends CandidateState {
+  case class L1CandidateState private(id: CandidateSet, splitCandidates: CandidateSet) extends CandidateState {
+
     override val isPruned: Boolean = false
     override val splitChecked: Boolean = false
     override val swapChecked: Boolean = true
@@ -31,6 +33,7 @@ object CandidateState {
     }
 
     override protected def incSplitPreconditions: CandidateState = this
+
     override protected def incSwapPreconditions: CandidateState = this
 
     override def updated(delta: Delta): CandidateState = delta match {
@@ -44,14 +47,16 @@ object CandidateState {
   }
 
   def initForL2(id: CandidateSet): CandidateState = L2CandidateState(id)
+
   // predecessors (L1) do not perform swap checks, so the preconditions for the L2 swap checks are already met
   case class L2CandidateState private(
-                                       id: CandidateSet,
-                                       splitCandidates: CandidateSet = CandidateSet.empty,
-                                       swapCandidates: Seq[(Int, Int)] = Seq.empty,
-                                       private val splitPreconditions: Int = 0,
-                                       private val receivedUpdates: Int = 0
-                                     ) extends CandidateState {
+      id: CandidateSet,
+      splitCandidates: CandidateSet = CandidateSet.empty,
+      swapCandidates: Seq[(Int, Int)] = Seq.empty,
+      private val splitPreconditions: Int = 0,
+      private val receivedUpdates: Int = 0
+  ) extends CandidateState {
+
     override val isPruned: Boolean = false
     override val splitChecked: Boolean = false
     override val swapChecked: Boolean = false
@@ -100,16 +105,6 @@ object CandidateState {
     }
   }
 
-//  def createFromDelta(id: CandidateSet, delta: Delta): CandidateState = delta match {
-//    case NewSplitCandidates(newSplitCandidates) => CandidateState(id, splitCandidates = newSplitCandidates)
-//    case NewSwapCandidates(newSwapCandidates) => CandidateState(id, swapCandidates = newSwapCandidates)
-//    case s@(SplitChecked(_) | SwapChecked(_)) =>
-//      throw new IllegalArgumentException(s"Cannot create CandidateState from delta: $s")
-//  }
-//
-//  def createFromDeltas(id: CandidateSet, deltas: Iterable[Delta]): CandidateState =
-//    CandidateState(id).updatedAll(deltas)
-
   def pruned(id: CandidateSet): CandidateState = PrunedCandidateState(id)
 
   @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
@@ -120,6 +115,7 @@ object CandidateState {
     new JsonSubTypes.Type(value = classOf[SwapChecked]),
   ))
   sealed trait Delta extends Ordered[Delta] {
+
     protected def orderingId: Int
 
     override def compare(that: Delta): Int = this.orderingId - that.orderingId
@@ -127,21 +123,25 @@ object CandidateState {
 
   @JsonTypeName("NewSplitCandidates")
   final case class NewSplitCandidates(splitCandidates: CandidateSet) extends Delta {
+
     override protected def orderingId: Int = 0
   }
 
   @JsonTypeName("NewSwapCandidates")
   final case class NewSwapCandidates(swapCandidates: Seq[(Int, Int)]) extends Delta {
+
     override protected def orderingId: Int = 1
   }
 
   @JsonTypeName("SplitChecked")
   final case class SplitChecked(removedCandidates: CandidateSet) extends Delta {
+
     override protected def orderingId: Int = 2
   }
 
   @JsonTypeName("SwapChecked")
   final case class SwapChecked(removedCandidates: Seq[(Int, Int)]) extends Delta {
+
     override protected def orderingId: Int = 3
   }
 
@@ -149,6 +149,7 @@ object CandidateState {
 
 
 sealed trait CandidateState {
+
   // state
   def id: CandidateSet
 
@@ -183,7 +184,7 @@ sealed trait CandidateState {
   def prune: CandidateState = CandidateState.pruned(id)
 
   def pruneIfConditionsAreMet: CandidateState =
-    if(!isPruned && shouldBePruned) prune
+    if (!isPruned && shouldBePruned) prune
     else this
 
   protected def shouldBePruned: Boolean = isFullyChecked && splitCandidates.isEmpty && swapCandidates.isEmpty
@@ -222,6 +223,7 @@ case class PrunedCandidateState(id: CandidateSet) extends CandidateState {
     this
 
   override protected def incSplitPreconditions: CandidateState = this
+
   override protected def incSwapPreconditions: CandidateState = this
 }
 
@@ -229,7 +231,7 @@ case class InitialCandidateState(
     id: CandidateSet,
     private val splitPreconditions: Int = 0,
     private val swapPreconditions: Int = 0
-  ) extends CandidateState {
+) extends CandidateState {
 
   override val splitCandidates: CandidateSet = CandidateSet.empty
   override val swapCandidates: Seq[(Int, Int)] = Seq.empty
@@ -256,7 +258,7 @@ case class InitialCandidateState(
       splitCandidates = splitCandidates,
       swapPreconditions = swapPreconditions
     )
-    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) =>
+    case NewSwapCandidates(_) if isReadyToCheck(JobType.Swap) =>
       throw new UnsupportedOperationException("Can only generate swap candidates when split candidates have been generated")
 //      SwapReadyCandidateState(
 //        id = id,
@@ -268,11 +270,11 @@ case class InitialCandidateState(
 }
 
 case class SplitReadyCandidateState(
-                                     id: CandidateSet,
-                                     splitCandidates: CandidateSet,
-                                     swapPreconditions: Int,
-                                     splitChecked: Boolean = false
-                                   ) extends CandidateState {
+    id: CandidateSet,
+    splitCandidates: CandidateSet,
+    swapPreconditions: Int,
+    splitChecked: Boolean = false
+) extends CandidateState {
 
   override val swapChecked: Boolean = false
   override val swapCandidates: Seq[(Int, Int)] = Seq.empty
@@ -307,11 +309,12 @@ case class SplitReadyCandidateState(
 }
 
 case class SwapReadyCandidateState(
-                                    id: CandidateSet,
-                                    splitCandidates: CandidateSet,
-                                    swapCandidates: Seq[(Int, Int)],
-                                    splitChecked: Boolean
-                                  ) extends CandidateState {
+    id: CandidateSet,
+    splitCandidates: CandidateSet,
+    swapCandidates: Seq[(Int, Int)],
+    splitChecked: Boolean
+) extends CandidateState {
+
   override val swapChecked: Boolean = false
   override val isPruned: Boolean = false
 
@@ -342,10 +345,10 @@ case class SwapReadyCandidateState(
 }
 
 case class SplitCheckedCandidateState(
-                                       id: CandidateSet,
-                                       splitCandidates: CandidateSet,
-                                       swapCandidates: Seq[(Int, Int)]
-                                     ) extends CandidateState {
+    id: CandidateSet,
+    splitCandidates: CandidateSet,
+    swapCandidates: Seq[(Int, Int)]
+) extends CandidateState {
 
   override val splitChecked: Boolean = true
   override val swapChecked: Boolean = false
@@ -371,10 +374,10 @@ case class SplitCheckedCandidateState(
 }
 
 case class SwapCheckedCandidateState(
-                                      id: CandidateSet,
-                                      splitCandidates: CandidateSet,
-                                      swapCandidates: Seq[(Int, Int)]
-                                    ) extends CandidateState {
+    id: CandidateSet,
+    splitCandidates: CandidateSet,
+    swapCandidates: Seq[(Int, Int)]
+) extends CandidateState {
 
   override val splitChecked: Boolean = false
   override val swapChecked: Boolean = true
@@ -415,82 +418,3 @@ case class FullyCheckedCandidateState(id: CandidateSet, splitCandidates: Candida
   override def updated(delta: CandidateState.Delta): CandidateState =
     throw new UnsupportedOperationException(s"FullyCheckedCandidateState can not be updated")
 }
-
-/*
-case class ACandidateState(
-    id: CandidateSet,
-    splitCandidates: CandidateSet = CandidateSet.empty,
-    swapCandidates: Seq[(Int, Int)] = Seq.empty,
-    splitChecked: Boolean = false,
-    swapChecked: Boolean = false,
-    splitPreconditions: Int = 0,
-    swapPreconditions: Int = 0,
-    isPruned: Boolean = false
-  ) {
-
-  def prune(): CandidateState = CandidateState.pruned(this.id)
-
-  def pruneIfConditionsAreMet(): CandidateState =
-    if(!isPruned && shouldBePruned) prune()
-    else this
-
-  private def shouldBePruned: Boolean = isFullyChecked && splitCandidates.isEmpty && swapCandidates.isEmpty
-
-  def nonPruned: Boolean = !isPruned
-
-  def isFullyChecked: Boolean = splitChecked && swapChecked
-
-  def isReadyToCheck(jobType: JobType.JobType): Boolean = nonPruned && (
-      jobType match {
-        case JobType.Split => id.size == splitPreconditions
-        case JobType.Swap => id.size == splitPreconditions && id.size == swapPreconditions
-      }
-    )
-
-  def notReadyToCheck(jobType: JobType.JobType): Boolean = !isReadyToCheck(jobType)
-
-  def incAndTestReadyToCheck(jobType: JobType.JobType): (CandidateState, Boolean) = {
-    val newState = incPreconditions(jobType)
-    (newState, newState.isReadyToCheck(jobType))
-  }
-
-  def incPreconditions(jobType: JobType.JobType): CandidateState = jobType match {
-    case JobType.Split => this.incSplitPreconditions
-    case JobType.Swap => this.incSwapPreconditions
-  }
-
-  def incSplitPreconditions: CandidateState = this.copy(
-    splitPreconditions = this.splitPreconditions + 1
-  )
-
-  def incSwapPreconditions: CandidateState = this.copy(
-    swapPreconditions = this.swapPreconditions + 1
-  )
-
-  def updatedAll(deltas: Iterable[CandidateState.Delta]): CandidateState =
-    deltas.foldLeft(this) { case (state, delta) =>
-      state.updated(delta)
-    }
-
-  def updated(delta: CandidateState.Delta): CandidateState = delta match {
-    // ignore all updates if pruned
-    case _ if this.isPruned => this
-    // only consider updates if we did not yet check the candidates (otherwise the update is obsolete)
-    case NewSplitCandidates(newSplitCandidates) if !this.splitChecked => this.copy(
-      splitCandidates = newSplitCandidates
-    )
-    case NewSwapCandidates(newSwapCandidates) if !this.swapChecked => this.copy(
-      swapCandidates = newSwapCandidates
-    )
-    case NewSplitCandidates(_) | NewSwapCandidates(_) => this
-    case SplitChecked(removedCandidates) => this.copy(
-      splitCandidates = this.splitCandidates -- removedCandidates,
-      splitChecked = true
-    )
-    case SwapChecked(removedCandidates) => this.copy(
-      swapCandidates = this.swapCandidates.filterNot(removedCandidates.contains),
-      swapChecked = true
-    )
-  }
-}
-*/

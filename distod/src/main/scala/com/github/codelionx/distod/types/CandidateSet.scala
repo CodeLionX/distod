@@ -85,7 +85,14 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
     new CandidateSet(bitset, bitset.size)
   }
 
+  // use cached size: faster
   override def size: Int = _size
+
+  // we can also use the cached size to speed up isEmpty check
+  override def isEmpty: Boolean = size == 0
+
+  // we specify known size to, because we can efficiently compute the size (we have it cached)
+  override def knownSize: Int = size
 
   /**
    * Computes the predecessors of this CandidateSet. E.g. for CandidateSet(0, 1, 2), the predecessors are:
@@ -133,6 +140,28 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
 
   def toBitMask: Array[Long] = _underlying.toBitMask
 
-
   override def toString(): String = s"CandidateSet(${_underlying.mkString(", ")})"
+
+  // cached hash code
+  private lazy val _hashCode: Int = super.hashCode()
+
+  override def hashCode(): Int = _hashCode
+
+  // optimized equals
+  @inline override def equals(that: Any): Boolean = equals_xor(that)
+
+  @inline def equals_super(other: Any): Boolean = super.equals(other)
+
+  def equals_xor(other: Any): Boolean = other match {
+    case s: CandidateSet =>
+      (this eq s) || (s.size == this.size) && this._underlying.xor(s._underlying).isEmpty
+    case _ => false
+  }
+
+  @deprecated(message = "produces wrong results")
+  def equals_hash(other: Any): Boolean = other match {
+    case s: CandidateSet =>
+      this.hashCode() == s.hashCode()
+    case _ => false
+  }
 }

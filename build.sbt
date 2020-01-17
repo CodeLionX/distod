@@ -28,6 +28,9 @@ lazy val distod = (project in file("distod"))
       //  "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
       //  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
 
+      // fastutil
+      "it.unimi.dsi" % "fastutil" % "8.3.0",
+
       // csv parsing
       "com.univocity" % "univocity-parsers" % univocityVersion,
 
@@ -73,5 +76,4 @@ lazy val benchmarking = (project in file("benchmarking"))
     javaOptions in run ++= Seq("-Xms2G", "-Xmx2G")
   )
   .enablePlugins(JmhPlugin)
-//  .dependsOn(distod)
-
+  .dependsOn(distod)

@@ -2,6 +2,7 @@ package com.github.codelionx.distod
 
 import akka.actor.testkit.typed.scaladsl.{ActorTestKit, LogCapturing}
 import com.github.codelionx.distod.actors.LeaderGuardian
+import com.github.codelionx.util.ResultFileParsing
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{Matchers, WordSpec}
 

@@ -1,7 +1,9 @@
-package com.github.codelionx.distod
+package com.github.codelionx.util
 
 import java.io.{BufferedReader, FileReader}
 
+import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
+import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
 import com.github.codelionx.util.TryWithResource._
 
 import scala.collection.immutable.Set
@@ -19,9 +21,17 @@ object ResultFileParsing {
   sealed trait ODResult {
 
     def context: Set[String]
+
+    def toOrderDependency(attributeMapping: Map[String, Int]): OrderDependency
   }
   final case class ConstantODResult(context: Set[String], constantAttribute: String) extends ODResult {
     override def toString: String = s"ConstantOD: {${context.toSeq.sorted}}: ${constantAttribute}"
+
+    override def toOrderDependency(attributeMapping: Map[String, Int]): OrderDependency = {
+      val ids = context.map(attributeMapping)
+      val contextCandidateSet = CandidateSet.fromSpecific(ids)
+      ConstantOrderDependency(contextCandidateSet, attributeMapping(constantAttribute))
+    }
   }
   final case class EquivalencyODResult(
       context: Set[String],
@@ -31,6 +41,12 @@ object ResultFileParsing {
   ) extends ODResult {
     override def toString: String =
       s"EquivalencyOD: {${context.toSeq.sorted}}: $attribute1 ~ $attribute2, reverse:${reverse}"
+
+    override def toOrderDependency(attributeMapping: Map[String, Int]): OrderDependency = {
+      val ids = context.map(attributeMapping)
+      val contextCandidateSet = CandidateSet.fromSpecific(ids)
+      EquivalencyOrderDependency(contextCandidateSet, attributeMapping(attribute1), attributeMapping(attribute2))
+    }
   }
 
   def readAndParseDistodResults(path: String): Seq[ODResult] =

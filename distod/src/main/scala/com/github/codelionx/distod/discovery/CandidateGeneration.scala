@@ -1,6 +1,8 @@
 package com.github.codelionx.distod.discovery
 
 import com.github.codelionx.distod.actors.master.{CandidateState, JobType, NodeStateFilter, WorkQueue}
+import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol.InsertPartition
 import com.github.codelionx.distod.types.CandidateSet
 
 import scala.collection.MapView
@@ -89,4 +91,33 @@ trait CandidateGeneration {
       val newSwapCandidates = generateSwapCandidates(id, state.view)
       id -> CandidateState.NewSwapCandidates(newSwapCandidates)
     }
+
+
+  def generateLevel0(attributes: Seq[Int], nTuples: Int): Map[CandidateSet, CandidateState] =
+    Map(
+      CandidateSet.empty -> CandidateState.forL0(CandidateSet.empty, CandidateSet.fromSpecific(attributes))
+    )
+
+  def generateLevel1(
+      attributes: Seq[Int],
+      partitions: Array[FullPartition]
+  ): (Seq[CandidateSet], Map[CandidateSet, CandidateState]) = {
+    val L1candidates = attributes.map(columnId => CandidateSet.from(columnId))
+    val L1candidateState = L1candidates.map { candidate =>
+      candidate -> CandidateState.forL1(candidate, CandidateSet.fromSpecific(attributes))
+    }
+    L1candidates -> L1candidateState.toMap
+  }
+
+  def generateLevel2(
+      attributes: Seq[Int],
+      L1candidates: Iterable[CandidateSet]
+  ): Map[CandidateSet, CandidateState] = {
+    val states = for {
+      l1Node <- L1candidates
+      successors = l1Node.successors(attributes.toSet)
+      successorId <- successors
+    } yield successorId -> CandidateState.initForL2(successorId)
+    states.toMap
+  }
 }

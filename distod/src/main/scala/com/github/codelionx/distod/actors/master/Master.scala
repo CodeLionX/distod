@@ -10,7 +10,7 @@ import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.Prim
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
 import com.github.codelionx.distod.discovery.CandidateGeneration
-import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
+import com.github.codelionx.distod.partitions.StrippedPartition
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
@@ -100,19 +100,27 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
           // L0: root candidate node
           val rootCandidateState = generateLevel0(attributes, table.nTuples)
+          partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
+            nTuples = table.nTuples,
+            numberElements = table.nTuples,
+            numberClasses = 1,
+            equivClasses = IndexedSeq((0 until table.nTuples).toSet)
+          ))
 
           // L1: single attribute candidate nodes
-          val L1candidateState = generateLevel1(attributes, partitions)
-          val L1candidates = L1candidateState.keys
+          val (l1candidates, l1candidateState) = generateLevel1(attributes, partitions)
+          l1candidates.zipWithIndex.foreach { case (candidate, index) =>
+            partitionManager ! InsertPartition(candidate, partitions(index))
+          }
 
           // L2: two attribute candidate nodes (initialized states)
-          val L2candidateState = generateLevel2(attributes, L1candidates)
+          val L2candidateState = generateLevel2(attributes, l1candidates)
 
           // first reshape and then add elements to prevent copy operation
           state.reshapeMaps(attributes.size)
-          state.addAll(rootCandidateState ++ L1candidateState ++ L2candidateState)
+          state.addAll(rootCandidateState ++ l1candidateState ++ L2candidateState)
 
-          val initialQueue = L1candidates.map(key => key -> JobType.Split)
+          val initialQueue = l1candidates.map(key => key -> JobType.Split)
           context.log.info("Master ready, initial work queue: {}", initialQueue)
           context.log.trace("Initial state:\n{}", state.mkString("\n"))
           stash.unstashAll(
@@ -186,46 +194,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         context.log.warn("Ignoring message because we are in shutdown: {}", m)
         Behaviors.same
     }
-  }
-
-  private def generateLevel0(attributes: Seq[Int], nTuples: Int): Map[CandidateSet, CandidateState] = {
-    val L0CandidateState = Map(
-      CandidateSet.empty -> CandidateState.forL0(CandidateSet.empty, CandidateSet.fromSpecific(attributes))
-    )
-    partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
-      nTuples = nTuples,
-      numberElements = nTuples,
-      numberClasses = 1,
-      equivClasses = IndexedSeq((0 until nTuples).toSet)
-    ))
-
-    L0CandidateState
-  }
-
-  private def generateLevel1(
-      attributes: Seq[Int],
-      partitions: Array[FullPartition]
-  ): Map[CandidateSet, CandidateState] = {
-    val L1candidates = attributes.map(columnId => CandidateSet.from(columnId))
-    val L1candidateState = L1candidates.map { candidate =>
-      candidate -> CandidateState.forL1(candidate, CandidateSet.fromSpecific(attributes))
-    }
-    L1candidates.zipWithIndex.foreach { case (candidate, index) =>
-      partitionManager ! InsertPartition(candidate, partitions(index))
-    }
-    L1candidateState.toMap
-  }
-
-  private def generateLevel2(
-      attributes: Seq[Int],
-      L1candidates: Iterable[CandidateSet]
-  ): Map[CandidateSet, CandidateState] = {
-    val states = for {
-      l1Node <- L1candidates
-      successors = l1Node.successors(attributes.toSet)
-      successorId <- successors
-    } yield successorId -> CandidateState.initForL2(successorId)
-    states.toMap
   }
 
   private def updateStateAndNext(

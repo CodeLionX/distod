@@ -15,7 +15,7 @@ def compare_candidates():
             thor_lines.add(line)
             if line not in lines:
                 unmatched.append(line)
-    
+
     print(str(len(unmatched)) + " tested candidates by thor01 that are too much:")
     for line in unmatched:
         print(line.strip())

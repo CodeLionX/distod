@@ -109,6 +109,8 @@ results.txt
 
 # data folder
 data/*
+deployment/data
+deployment-single/data
 
 # intellij (openjdk) pid files
 .attach_pid*

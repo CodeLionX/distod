@@ -1,12 +1,13 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
+import com.github.codelionx.util.timing.Timing
 
 
 object PartitionManager {
@@ -42,6 +43,8 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
     // FIXME: only creates the head actor with the props (instead of the pool workers)
     props = settings.cpuBoundTaskDispatcher
   )
+
+  private val timings = Timing(context.system)
 
   private def initialize(
       attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
@@ -195,15 +198,17 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       pendingJobs: PendingJobMap[CandidateSet, PendingResponse],
       pendingResponse: PendingResponse
   ): PendingJobMap[CandidateSet, PendingResponse] = {
-    val jobs = calcJobChain(key, partitions)
-    generatorPool ! ComputePartitions(jobs, context.self)
-    val x = jobs.map { job =>
-      if (job.key == key)
-        job.key -> Seq(pendingResponse)
-      else
-        job.key -> Seq.empty
+    timings.time("Partition job chain calc") {
+      val jobs = calcJobChain(key, partitions)
+      generatorPool ! ComputePartitions(jobs, context.self)
+      val x = jobs.map { job =>
+        if (job.key == key)
+          job.key -> Seq(pendingResponse)
+        else
+          job.key -> Seq.empty
+      }
+      pendingJobs ++ x
     }
-    pendingJobs ++ x
   }
 
   private def calcJobChain(

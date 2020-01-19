@@ -8,6 +8,7 @@ import com.github.codelionx.distod.io.CSVParser
 import com.github.codelionx.distod.partitions.{FullPartition, Partition}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol.{DataLoadingCommand, LoadPartitions, PartitionsLoaded, Stop}
 import com.github.codelionx.distod.types.PartitionedTable
+import com.github.codelionx.util.timing.Timing
 
 
 object DataReader {
@@ -40,6 +41,7 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
 
   private val settings = Settings(context.system)
   private val parser = CSVParser(settings)
+  private val timingSpans = Timing(context.system).startSpan("Data loading")
 
   context.log.debug("DataReader started, parsing data from {}", settings.inputParsingSettings.filePath)
   private val table = parser.parse()
@@ -74,6 +76,7 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
           context.log.debug("Data ready")
           val orderedPartitions = newPartitions.toSeq.sortBy { case (id, _) => id }
           val partitionsArray = orderedPartitions.map { case (_, partition) => partition }.toArray
+          timingSpans.end("Data loading")
           buffer.unstashAll(dataReady(partitionsArray))
         } else {
           collectPartitions(newPartitions, expected)

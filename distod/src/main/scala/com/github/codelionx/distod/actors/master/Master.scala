@@ -108,9 +108,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           // L2: two attribute candidate nodes (initialized states)
           val L2candidateState = generateLevel2(attributes, L1candidates)
 
-          // TODO: remove
-//        testPartitionMgmt()
-
           // first reshape and then add elements to prevent copy operation
           state.reshapeMaps(attributes.size)
           state.addAll(rootCandidateState ++ L1candidateState ++ L2candidateState)
@@ -122,37 +119,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
             behavior(attributes, WorkQueue.from(initialQueue), 0)
           )
         }
-    }
-  }
-
-  private def testPartitionMgmt(): Behavior[Command] = {
-    val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
-
-    // ask for advanced partitions as a test
-    partitionManager ! LookupError(CandidateSet.from(0, 1), partitionEventMapper)
-    partitionManager ! LookupStrippedPartition(CandidateSet.from(0, 1, 2), partitionEventMapper)
-
-    def onPartitionEvent(event: PartitionEvent): Behavior[Command] = event match {
-      case ErrorFound(key, error) =>
-        println("Partition error", key, error)
-        Behaviors.same
-      case PartitionFound(key, value) =>
-        println("Received partition", key, value)
-        Behaviors.same
-      case StrippedPartitionFound(key, value) =>
-        println("Received stripped partition", key, value)
-        Behaviors.same
-
-      // FINISHED for now
-//        finished()
-    }
-
-    Behaviors.receiveMessagePartial {
-      case m: DispatchWork =>
-        stash.stash(m)
-        Behaviors.same
-      case WrappedPartitionEvent(event) =>
-        onPartitionEvent(event)
     }
   }
 

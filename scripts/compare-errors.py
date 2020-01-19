@@ -19,18 +19,15 @@ def compare_candidates():
     print(str(len(unmatched)) + " tested candidates by thor01 that are too much:")
     for line in unmatched:
         print(line.strip())
-    
-    """
+
     unmatched = []
     for line in lines:
         if line not in thor_lines:
             unmatched.append(line)
-    
+
     print(str(len(unmatched)) + " not tested candidates by thor01: ")
     for line in unmatched:
         print(line.strip())
-    """
-
 
 def compare_empty_partitions():
     lines = {}
@@ -46,7 +43,7 @@ def compare_empty_partitions():
                 stripped = line.split("|")[1]
                 if stripped not in lines:
                     unmatched.append(stripped)
-        
+
         print(str(len(unmatched)) + " unmatched candidates for " + node + ": " + str(unmatched))
 
 if __name__ == "__main__":

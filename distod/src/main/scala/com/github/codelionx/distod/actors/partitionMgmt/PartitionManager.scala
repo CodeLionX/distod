@@ -41,7 +41,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
     PartitionGenerator.createPool(settings.numberOfWorkers),
     name = PartitionGenerator.poolName,
     // FIXME: only creates the head actor with the props (instead of the pool workers)
-    props = settings.cpuBoundTaskDispatcher
+//    props = settings.cpuBoundTaskDispatcher
   )
 
   private val timings = Timing(context.system)

@@ -3,6 +3,7 @@ package com.github.codelionx.distod.discovery
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
@@ -99,6 +100,8 @@ trait CandidateValidation {
   import CandidateValidation._
 
 
+  private val logger: Logger = LoggerFactory.getLogger(classOf[CandidateValidation])
+
   def checkSplitCandidates(
       candidateId: CandidateSet,
       splitCandidates: CandidateSet,
@@ -140,21 +143,27 @@ trait CandidateValidation {
       val leftPartition = singletonPartitions(CandidateSet.from(left))
       val rightPartition = singletonPartitions(CandidateSet.from(right))
 
-      val sortedContextClasses = candidatePartitions(context).sortEquivClassesBy(leftPartition)
-      val rightTupleValueMapping = rightPartition.toTupleValueMap
+      val contextPartition = candidatePartitions(context)
+      val (swap, reverseSwap) =
+        if (contextPartition.numberClasses != 0) {
+          val sortedContextClasses = contextPartition.sortEquivClassesBy(leftPartition)
+          val rightTupleValueMapping = rightPartition.toTupleValueMap
 
-      val swapFinder = findSwapFast(rightTupleValueMapping) _
-      val results = sortedContextClasses.map(swapFinder)
-      val (swap, reverseSwap) = results.reduce[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
+          val swapFinder = findSwapFast(rightTupleValueMapping) _
+          val results = sortedContextClasses.map(swapFinder)
+          results.reduceLeft[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
+        } else {
+          logger.error(s"Swap check in {} for '{}: {} ~ {}' hit an empty context partition: {} " +
+            "Assuming no swap and no reverse swap", candidateId, context, left, right, contextPartition)
+          (false, false)
+        }
 
-      val normal = if (!swap)
-        Seq(EquivalencyOrderDependency(context, left, right))
-      else
-        Seq.empty
-      val reverse = if (!reverseSwap)
-        Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
-      else
-        Seq.empty
+      val normal =
+        if (!swap) Seq(EquivalencyOrderDependency(context, left, right))
+        else Seq.empty
+      val reverse =
+        if (!reverseSwap) Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
+        else Seq.empty
       normal ++ reverse
     }
 
@@ -165,7 +174,7 @@ trait CandidateValidation {
 
     SwapCandidateValidationResult(
       validOds = validCandidates,
-      removedCandidates = swapCandidates.filterNot(candidate => !isValid(candidate))
+      removedCandidates = swapCandidates.filter(isValid)
     )
   }
 

@@ -1,6 +1,6 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior, Props}
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
@@ -221,8 +221,9 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           val nextPred1 :: nextPred2 :: _ = missingKeys
           loop(nextPred1) ++ loop(nextPred2) :+ ComputePartitionProductJob(subkey, Left(nextPred1), Left(nextPred2))
 
-        case nextPred :: Nil =>
-          loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundKeys.head)), Left(nextPred))
+        case foundPred :: Nil =>
+          val nextPred :: _ = missingKeys
+          loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundPred)), Left(nextPred))
 
         case _ =>
           val p1 :: p2 :: _ = foundKeys.map(partitions.apply).take(2)

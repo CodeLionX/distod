@@ -7,54 +7,59 @@ import org.scalatest.{Matchers, WordSpec}
 
 class CandidateStateSpec extends WordSpec with Matchers {
 
-  "An empty candidate state" should {
-    val emptyState = CandidateState(CandidateSet.from(0))
+  "The initial candidate state" should {
+    val initialState = CandidateState(CandidateSet.from(0))
 
     "have no split candidates" in {
-      emptyState.splitCandidates shouldBe empty
+      initialState.splitCandidates shouldBe empty
     }
 
     "have no swap candidates" in {
-      emptyState.swapCandidates shouldBe empty
+      initialState.swapCandidates shouldBe empty
     }
 
     "not have splits checked" in {
-      emptyState.splitChecked shouldBe false
+      initialState.splitChecked shouldBe false
     }
 
     "not have swap checked" in {
-      emptyState.swapChecked shouldBe false
+      initialState.swapChecked shouldBe false
     }
 
     "not be ready" in {
-      emptyState.isReadyToCheck(JobType.Split) shouldBe false
-      emptyState.isReadyToCheck(JobType.Swap) shouldBe false
+      initialState.isReadyToCheck(JobType.Split) shouldBe false
+      initialState.isReadyToCheck(JobType.Swap) shouldBe false
     }
 
-    "accept new split candidates" in {
-      val newSplitCandidates = CandidateSet.from(0, 1, 2, 3)
-      val state = emptyState.updated(NewSplitCandidates(newSplitCandidates))
-      state.splitCandidates shouldEqual newSplitCandidates
+    "be ready after preconditions are met" in {
+      val swapNotReady = initialState.incPreconditions(JobType.Swap)
+      swapNotReady.isReadyToCheck(JobType.Swap) shouldBe false
+
+      val splitReady = initialState.incPreconditions(JobType.Split)
+      splitReady.isReadyToCheck(JobType.Split) shouldBe true
+      splitReady.isReadyToCheck(JobType.Swap) shouldBe false
+
+      val splitAndSwapReady = splitReady.incPreconditions(JobType.Swap)
+      splitAndSwapReady.isReadyToCheck(JobType.Split) shouldBe true
+      splitAndSwapReady.isReadyToCheck(JobType.Swap) shouldBe true
     }
 
-    "accept new swap candidates" in {
-      val newSwapCandidates = Seq(0 -> 1)
-      val state = CandidateState(CandidateSet.from(0, 1))
-      val newState = state.updated(NewSwapCandidates(newSwapCandidates))
-      newState.swapCandidates shouldEqual newSwapCandidates
+    "reject state updates" in {
+      a[UnsupportedOperationException] shouldBe thrownBy{
+        initialState.updated(CandidateState.NewSplitCandidates(CandidateSet.empty))
+      }
     }
-
   }
 
   "A candidate state" should {
-    val startCandidate = CandidateState(CandidateSet.from(0, 1))
+    val candidateState = CandidateState(CandidateSet.from(0, 1))
 
     "be ready if inc was called as often as we have attributes in its candidate id" in {
-      val splitReadyCandidate = startCandidate.incSplitPreconditions.incSplitPreconditions
-      val swapReadyCandidate = splitReadyCandidate.incSwapPreconditions.incSwapPreconditions
+      val splitReadyCandidate = candidateState.incPreconditions(JobType.Split).incPreconditions(JobType.Split)
+      val swapReadyCandidate = splitReadyCandidate.incPreconditions(JobType.Swap).incPreconditions(JobType.Swap)
 
-      startCandidate.isReadyToCheck(JobType.Split) shouldBe false
-      startCandidate.isReadyToCheck(JobType.Swap) shouldBe false
+      candidateState.isReadyToCheck(JobType.Split) shouldBe false
+      candidateState.isReadyToCheck(JobType.Swap) shouldBe false
 
       splitReadyCandidate.isReadyToCheck(JobType.Split) shouldBe true
       splitReadyCandidate.isReadyToCheck(JobType.Swap) shouldBe false
@@ -62,13 +67,33 @@ class CandidateStateSpec extends WordSpec with Matchers {
       swapReadyCandidate.isReadyToCheck(JobType.Swap) shouldBe true
     }
 
-    "be pruned if both split and swaps candidate sets are empty and have been checked" in {
-      val prunedCandidate = startCandidate.updatedAll(Seq(
-        CandidateState.SplitChecked(CandidateSet.empty),
-        CandidateState.SwapChecked(Seq.empty)
-      ))
+    "transition to ready state when candidates are added" in {
+      val splitReady = candidateState
+        .incPreconditions(JobType.Split)
+        .incPreconditions(JobType.Split)
+        .updated(CandidateState.NewSplitCandidates(CandidateSet.empty))
 
-      startCandidate.isPruned shouldBe false
+      splitReady shouldBe a[SplitReadyCandidateState]
+
+      val swapReady = splitReady
+        .incPreconditions(JobType.Swap)
+        .incPreconditions(JobType.Swap)
+        .updated(CandidateState.NewSwapCandidates(Seq.empty))
+
+      swapReady shouldBe a[SwapReadyCandidateState]
+    }
+
+    "be pruned if both split and swaps candidate sets are empty and have been checked" in {
+      val toBePrunedCandidate = FullyCheckedCandidateState(
+        id = CandidateSet.empty,
+        splitCandidates = CandidateSet.empty,
+        swapCandidates = Seq.empty
+      )
+      val prunedCandidate = toBePrunedCandidate.pruneIfConditionsAreMet
+
+      toBePrunedCandidate.isFullyChecked shouldBe true
+      toBePrunedCandidate.isPruned shouldBe false
+
       prunedCandidate.isFullyChecked shouldBe true
       prunedCandidate.isPruned shouldBe true
     }

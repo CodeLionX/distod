@@ -65,7 +65,7 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
       writer.flush()
     } catch {
       case e: java.io.IOException =>
-        context.log.error("Writing results failed, because {}! Recreating file writer ...", e.getMessage)
+        context.log.error("Writing results failed, because {}!", e.getMessage)
         // escalate!
         throw new RuntimeException("Could not write results to disk!", e)
     }

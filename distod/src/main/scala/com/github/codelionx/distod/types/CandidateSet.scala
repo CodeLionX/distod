@@ -143,6 +143,7 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
   override def toString(): String = s"CandidateSet(${_underlying.mkString(", ")})"
 
   // cached hash code
+  @transient
   private lazy val _hashCode: Int = super.hashCode()
 
   override def hashCode(): Int = _hashCode

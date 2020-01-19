@@ -30,6 +30,12 @@ class WorkQueue private(
     pending: Set[WorkQueue.Item]
 ) {
 
+  def size: Int = sizeWork + sizePending
+
+  def sizeWork: Int = work.size
+
+  def sizePending: Int = pending.size
+
   /**
    * Tests whether the work queue is empty (this includes pending responses and the actual work queue).
    *
@@ -165,6 +171,6 @@ class WorkQueue private(
     "WorkQueue(" +
       s"queue=${workQueue.size}," +
       s"work=${work.size}," +
-      s"pending=${pending.size}," +
+      s"pending=${pending.size}" +
       ")"
 }

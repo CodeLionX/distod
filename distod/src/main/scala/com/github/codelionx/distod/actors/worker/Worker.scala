@@ -2,10 +2,9 @@ package com.github.codelionx.distod.actors.worker
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import com.fasterxml.jackson.databind.annotation.{JsonDeserialize, JsonSerialize}
-import com.github.codelionx.distod.Serialization.{CandidateSetKeyDeserializer, CandidateSetKeySerializer, CborSerializable}
-import com.github.codelionx.distod.actors.master.{CandidateState, Master, WorkQueue}
-import com.github.codelionx.distod.actors.master.Master.{DispatchWork, NewCandidates, SplitCandidatesChecked, SwapCandidatesChecked}
+import com.github.codelionx.distod.Serialization.CborSerializable
+import com.github.codelionx.distod.actors.master.Master
+import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
@@ -42,8 +41,8 @@ object Worker {
 
 class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
-  import workerContext._
   import Worker._
+  import workerContext._
 
 
   def start(): Behavior[Command] = initialize()
@@ -65,6 +64,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
       def handleResults(removedSplitCandidates: CandidateSet = CandidateSet.empty): Behavior[Command] = {
         // notify master of result
+        context.log.trace("Sending results of ({}, Split) to master at {}", candidateId, master)
         master ! SplitCandidatesChecked(candidateId, removedSplitCandidates)
 
         // ready to work on next node:
@@ -85,6 +85,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
       def handleResults(removedSwapCandidates: Seq[(Int, Int)] = Seq.empty): Behavior[Command] = {
         // notify master of result
+        context.log.trace("Sending results of ({}, Swap) to master at {}", candidateId, master)
         master ! SwapCandidatesChecked(candidateId, removedSwapCandidates)
 
         // ready to work on next node:
@@ -101,7 +102,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
       }
 
     case WrappedPartitionEvent(event) =>
-      context.log.info("Ignored {}", event)
+      context.log.debug("Ignored {}", event)
       Behaviors.same
   }
 }

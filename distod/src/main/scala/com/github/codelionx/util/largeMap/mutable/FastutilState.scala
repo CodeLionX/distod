@@ -42,7 +42,7 @@ class FastutilState[V] private(
    * This method rebuilds all internal data structures (full copy) and therefore has a considerably performance hit.
    * Use it sparsely.
    *
-   * @param size number of attributes which form the cnadidate space
+   * @param size number of attributes which form the candidate space
    */
   def reshapeMaps(size: Int): FastutilState.this.type = {
     nAttributes = size

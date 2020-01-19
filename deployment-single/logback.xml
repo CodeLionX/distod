@@ -5,7 +5,7 @@
     <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.err</target>
         <encoder>
-            <pattern>[%d{HH:mm:ss.SSS} %-5level] %30.30{akkaSource:-local}| %msg%n</pattern>
+            <pattern>[%d{HH:mm:ss.SSS} %-5level] %30.30X{akkaSource:-local}| %msg%n</pattern>
         </encoder>
     </appender>
 

@@ -24,8 +24,8 @@ else
   mapfile -t column5 < <(grep "State update:" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
   mapfile -t column7 < <(grep "job" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
   mapfile -t column8 < <(grep "Partition generation" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
-  mapfile -t column10 < <(grep "Swap" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
-  mapfile -t column11 < <(grep "Split" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
+  mapfile -t column10 < <(grep "Split" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
+  mapfile -t column11 < <(grep "Swap" "$file" | cut -d ':' -f2 | cut -d ' ' -f2)
 
   for ((i = 0; i <= 5; ++i)); do
     echo "${column1[$i]},${column2[$i]},${column3[$i]},${column4[$i]},${column5[$i]},,${column7[$i]},${column8[$i]},,${column10[$i]},${column11[$i]}" >>"$target"

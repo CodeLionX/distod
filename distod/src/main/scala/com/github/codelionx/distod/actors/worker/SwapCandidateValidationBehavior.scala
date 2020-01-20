@@ -8,6 +8,7 @@ import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDependencies
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.timing.Timing
 
 
 object SwapCandidateValidationBehavior {
@@ -32,6 +33,8 @@ class SwapCandidateValidationBehavior(
 
   import workerContext._
 
+
+  private val timing = Timing(context.system)
 
   def start(): Behavior[Command] = {
     context.log.trace("Loading partitions for all swap checks")
@@ -80,15 +83,17 @@ class SwapCandidateValidationBehavior(
   def performCheck(
       singletonPartitions: Map[CandidateSet, FullPartition], candidatePartitions: Map[CandidateSet, StrippedPartition]
   ): Behavior[Command] = {
-    val result = checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
+    timing.unsafeTime("Swap check") {
+      val result = checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
 
-    if (result.validOds.nonEmpty) {
-      context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
-      rsProxy ! FoundDependencies(result.validOds)
-    } else {
-      context.log.trace("No valid equivalency candidates found")
+      if (result.validOds.nonEmpty) {
+        context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
+        rsProxy ! FoundDependencies(result.validOds)
+      } else {
+        context.log.trace("No valid equivalency candidates found")
+      }
+
+      next(result.removedCandidates)
     }
-
-    next(result.removedCandidates)
   }
 }

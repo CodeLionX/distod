@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
@@ -9,7 +9,6 @@ import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.types.CandidateSet
-import com.github.codelionx.util.timing.Timing
 
 
 object Worker {
@@ -45,8 +44,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
   import Worker._
   import workerContext._
 
-  private val timing = Timing(context.system).spans
-
   def start(): Behavior[Command] = initialize()
 
   def initialize(): Behavior[Command] = {
@@ -62,7 +59,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
   def behavior(attributes: Seq[Int]): Behavior[Command] = Behaviors.receiveMessage {
     case CheckSplitCandidates(candidateId, splitCandidates) =>
-      timing.start("Split checks")
       context.log.debug("Checking split candidates of node {}", candidateId)
 
       def handleResults(removedSplitCandidates: CandidateSet = CandidateSet.empty): Behavior[Command] = {
@@ -72,7 +68,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
         // ready to work on next node:
         master ! DispatchWork(context.self)
-        timing.end("Split checks")
         behavior(attributes)
       }
 
@@ -85,7 +80,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
       }
 
     case CheckSwapCandidates(candidateId, swapCandidates) =>
-      timing.start("Swap checks")
       context.log.debug("Checking swap candidates of node {}", candidateId)
 
       def handleResults(removedSwapCandidates: Seq[(Int, Int)] = Seq.empty): Behavior[Command] = {
@@ -95,7 +89,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
         // ready to work on next node:
         master ! DispatchWork(context.self)
-        timing.end("Swap checks")
         behavior(attributes)
       }
 

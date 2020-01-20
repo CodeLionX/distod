@@ -10,21 +10,20 @@ object WorkQueue {
 
   type Item = (CandidateSet, JobType.JobType)
 
-  val empty: WorkQueue = new WorkQueue(
+  val empty: WorkQueue = WorkQueue(
     Queue.empty,
     Set.empty,
     Set.empty
   )
 
-  def apply(initialItems: Item*): WorkQueue = from(initialItems)
+  def from(initialItems: Item*): WorkQueue = from(initialItems)
 
   def from(candidates: IterableOnce[Item]): WorkQueue =
-    new WorkQueue(Queue.from(candidates), Set.from(candidates), Set.empty)
+    WorkQueue(Queue.from(candidates), Set.from(candidates), Set.empty)
 }
 
 
-// TODO: refactor as case class (more efficient and easier copy)
-class WorkQueue private(
+case class WorkQueue private(
     workQueue: Queue[WorkQueue.Item],
     work: Set[WorkQueue.Item],
     pending: Set[WorkQueue.Item]
@@ -78,9 +77,12 @@ class WorkQueue private(
    */
   def dequeue(): (WorkQueue.Item, WorkQueue) = {
     val (item, newQueue) = internalDequeue(workQueue)
-    val newWork = work - item
-    val newPending = pending + item
-    (item, new WorkQueue(newQueue, newWork, newPending))
+    val newObj = copy(
+      workQueue = newQueue,
+      work = work - item,
+      pending = pending + item
+    )
+    (item, newObj)
   }
 
   /**
@@ -104,11 +106,11 @@ class WorkQueue private(
    *
    * @param  item the element to insert
    */
-  def enqueue(item: WorkQueue.Item): WorkQueue = {
-    val newWorkQueue = workQueue.enqueue(item)
-    val newWork = work + item
-    new WorkQueue(newWorkQueue, newWork, pending)
-  }
+  def enqueue(item: WorkQueue.Item): WorkQueue =
+    copy(
+      workQueue = workQueue.enqueue(item),
+      work = work + item
+    )
 
   /**
    * Creates a new queue with all elements provided by an `Iterable` object added at the end of the old queue. The
@@ -116,11 +118,11 @@ class WorkQueue private(
    *
    * @param  items an iterable object
    */
-  def enqueueAll(items: Iterable[WorkQueue.Item]): WorkQueue = {
-    val newWorkQueue = workQueue.enqueueAll(items)
-    val newWork = work ++ items
-    new WorkQueue(newWorkQueue, newWork, pending)
-  }
+  def enqueueAll(items: Iterable[WorkQueue.Item]): WorkQueue =
+    copy(
+      workQueue = workQueue.enqueueAll(items),
+      work = work ++ items
+    )
 
   /**
    * Alias to `removePending(item: WorkQueue.Item)`
@@ -133,10 +135,10 @@ class WorkQueue private(
    * @param item the element to be removed
    * @return a new queue that contains all elements of the current pending set but that does not contain `elem`.
    */
-  def removePending(item: WorkQueue.Item): WorkQueue = {
-    val newPending = pending - item
-    new WorkQueue(workQueue, work, newPending)
-  }
+  def removePending(item: WorkQueue.Item): WorkQueue =
+    copy(
+      pending = pending - item
+    )
 
   /**
    * Tests whether the `item` is contained either in the work queue or the pending set.
@@ -163,8 +165,9 @@ class WorkQueue private(
    */
   def removeAll(candidates: Set[CandidateSet]): WorkQueue = {
     val jobs: Set[(CandidateSet, JobType.JobType)] = candidates.flatMap(c => Seq(c -> JobType.Split, c -> JobType.Swap))
-    val newWork = work -- jobs
-    new WorkQueue(workQueue, newWork, pending)
+    copy(
+      work = work -- jobs
+    )
   }
 
   override def toString: String =

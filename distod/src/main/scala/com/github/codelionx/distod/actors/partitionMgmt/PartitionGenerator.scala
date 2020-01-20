@@ -5,6 +5,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionManager.ProductComputed
 import com.github.codelionx.distod.partitions.StrippedPartition
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.timing.Timing
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -37,13 +38,16 @@ class PartitionGenerator(context: ActorContext[PartitionGenerator.ComputePartiti
 
   import PartitionGenerator._
 
+  private val timing: Timing = Timing(context.system)
 
   def start(): Behavior[ComputePartitions] = Behaviors.receiveMessage {
     case ComputePartitions(jobs, replyTo) =>
-      computePartition { case (key, newPartition) =>
-        replyTo ! ProductComputed(key, newPartition)
-      }(Map.empty, jobs)
-      Behaviors.same
+      timing.unsafeTime("Partition generation") {
+        computePartition { case (key, newPartition) =>
+          replyTo ! ProductComputed(key, newPartition)
+        }(Map.empty, jobs)
+        Behaviors.same
+      }
   }
 
   private def computePartition(

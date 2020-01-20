@@ -7,6 +7,7 @@ import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 import com.github.codelionx.distod.protocols.ShutdownProtocol
+import com.github.codelionx.util.timing.Timing
 
 
 object LeaderGuardian {
@@ -27,7 +28,7 @@ object LeaderGuardian {
     val shutdownCoordinator = context.spawn(ShutdownCoordinator(context.self), ShutdownCoordinator.name)
     context.watch(shutdownCoordinator)
 
-    val timeBeforeStart = System.nanoTime()
+    val timingSpan = Timing(context.system).startSpan("Overall runtime")
 
     // spawn leader actors
     startLeaderActors(context, partitionManager)
@@ -37,7 +38,7 @@ object LeaderGuardian {
     Behaviors
       .receiveMessage[Command] {
         case AlgorithmFinished =>
-          println(s"Runtime (ms): ${((System.nanoTime() - timeBeforeStart) / 1e6).toInt}")
+          timingSpan.end("Overall runtime")
           shutdownCoordinator ! ShutdownProtocol.AlgorithmFinished
           Behaviors.same
 

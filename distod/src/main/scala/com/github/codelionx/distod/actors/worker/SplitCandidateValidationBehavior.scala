@@ -7,6 +7,7 @@ import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.{ErrorFound, LookupError}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDependencies
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.timing.Timing
 
 
 object SplitCandidateValidationBehavior {
@@ -34,6 +35,8 @@ class SplitCandidateValidationBehavior(
   import workerContext._
 
 
+  private val timing = Timing(context.system)
+
   def start(): Behavior[Command] = {
     context.log.trace("Loading partition errors for all split checks")
     partitionManager ! LookupError(candidateId, partitionEventMapper)
@@ -59,15 +62,17 @@ class SplitCandidateValidationBehavior(
     }
 
   def performCheck(errors: Map[CandidateSet, Double]): Behavior[Command] = {
-    val result = checkSplitCandidates(candidateId, splitCandidates, attributes, errors)
+    timing.unsafeTime("Split check") {
+      val result = checkSplitCandidates(candidateId, splitCandidates, attributes, errors)
 
-    if (result.validOds.nonEmpty) {
-      context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
-      rsProxy ! FoundDependencies(result.validOds)
-    } else {
-      context.log.trace("No valid constant candidates found")
+      if (result.validOds.nonEmpty) {
+        context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
+        rsProxy ! FoundDependencies(result.validOds)
+      } else {
+        context.log.trace("No valid constant candidates found")
+      }
+
+      next(result.removedCandidates)
     }
-
-    next(result.removedCandidates)
   }
 }

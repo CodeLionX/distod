@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
@@ -43,7 +43,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
   import Worker._
   import workerContext._
-
 
   def start(): Behavior[Command] = initialize()
 

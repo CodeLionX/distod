@@ -35,7 +35,7 @@ object WorkerManager {
               .withLimit(3, 5 seconds)
           ),
         Worker.name(id),
-        settings.cpuBoundTaskDispatcher
+//        settings.cpuBoundTaskDispatcher
       )
       context.watch(ref)
     }

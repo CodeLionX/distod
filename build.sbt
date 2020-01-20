@@ -73,7 +73,15 @@ lazy val distod = (project in file("distod"))
 // documentation at https://github.com/ktoso/sbt-jmh
 lazy val benchmarking = (project in file("benchmarking"))
   .settings(
-    javaOptions in run ++= Seq("-Xms2G", "-Xmx2G")
+    javaOptions in run ++= Seq("-Xms2G", "-Xmx2G"),
+
+    assemblyMergeStrategy in assembly := {
+      // discard JDK11 module infos from libs (not required for assembly and JDK8)
+      case "module-info.class" => MergeStrategy.discard
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
   )
   .enablePlugins(JmhPlugin)
   .dependsOn(distod)

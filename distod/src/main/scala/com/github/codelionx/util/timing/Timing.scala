@@ -69,10 +69,11 @@ class Timing(system: ActorSystem[_]) extends Extension {
         case Print =>
           timings.print()
           Behaviors.stopped
-      }.receiveSignal {
-      case (_, PostStop) =>
-        timings.print()
-        Behaviors.same
-    }
+      }
+      .receiveSignal {
+        case (_, PostStop) =>
+          timings.print()
+          Behaviors.same
+      }
   }
 }

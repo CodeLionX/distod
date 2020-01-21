@@ -1,6 +1,6 @@
 package com.github.codelionx.distod.actors
 
-import akka.actor.typed.{ActorRef, Behavior, Terminated}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
@@ -73,7 +73,7 @@ object LeaderGuardian {
     context.watch(rs)
 
     // master
-    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name)
+    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name, DispatcherSelector.fromConfig("distod.master-pinned-dispatcher"))
     context.watch(master)
   }
 

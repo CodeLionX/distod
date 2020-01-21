@@ -16,6 +16,7 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
 import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
+import com.github.codelionx.util.Math
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
 
@@ -65,6 +66,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private val state: FastutilState[CandidateState] = FastutilState.empty
   private val timing: Timing = Timing(context.system)
+  private val timingSpans = timing.spans
+  private var level: Int = 0
 
   def start(): Behavior[Command] = initialize()
 
@@ -93,40 +96,38 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // stop data reader to free up resources
         dataReader ! Stop
 
-        timing.unsafeTime("State initialization") {
-          val attributes = 0 until table.nAttributes
-          partitionManager ! PartitionManagementProtocol.SetAttributes(attributes)
-          resultCollector ! ResultCollectionProtocol.SetAttributeNames(headers.toIndexedSeq)
+        val attributes = 0 until table.nAttributes
+        partitionManager ! PartitionManagementProtocol.SetAttributes(attributes)
+        resultCollector ! ResultCollectionProtocol.SetAttributeNames(headers.toIndexedSeq)
 
-          // L0: root candidate node
-          val rootCandidateState = generateLevel0(attributes, table.nTuples)
-          partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
-            nTuples = table.nTuples,
-            numberElements = table.nTuples,
-            numberClasses = 1,
-            equivClasses = IndexedSeq((0 until table.nTuples).toSet)
-          ))
+        // L0: root candidate node
+        val rootCandidateState = generateLevel0(attributes, table.nTuples)
+        partitionManager ! InsertPartition(CandidateSet.empty, StrippedPartition(
+          nTuples = table.nTuples,
+          numberElements = table.nTuples,
+          numberClasses = 1,
+          equivClasses = IndexedSeq((0 until table.nTuples).toSet)
+        ))
 
-          // L1: single attribute candidate nodes
-          val (l1candidates, l1candidateState) = generateLevel1(attributes, partitions)
-          l1candidates.zipWithIndex.foreach { case (candidate, index) =>
-            partitionManager ! InsertPartition(candidate, partitions(index))
-          }
-
-          // L2: two attribute candidate nodes (initialized states)
-          val L2candidateState = generateLevel2(attributes, l1candidates)
-
-          // first reshape and then add elements to prevent copy operation
-          state.reshapeMaps(attributes.size)
-          state.addAll(rootCandidateState ++ l1candidateState ++ L2candidateState)
-
-          val initialQueue = l1candidates.map(key => key -> JobType.Split)
-          context.log.info("Master ready, initial work queue: {}", initialQueue)
-          context.log.trace("Initial state:\n{}", state.mkString("\n"))
-          stash.unstashAll(
-            behavior(attributes, WorkQueue.from(initialQueue), 0)
-          )
+        // L1: single attribute candidate nodes
+        val (l1candidates, l1candidateState) = generateLevel1(attributes, partitions)
+        l1candidates.zipWithIndex.foreach { case (candidate, index) =>
+          partitionManager ! InsertPartition(candidate, partitions(index))
         }
+
+        // L2: two attribute candidate nodes (initialized states)
+        val L2candidateState = generateLevel2(attributes, l1candidates)
+
+        // first reshape and then add elements to prevent copy operation
+        state.reshapeMaps(attributes.size)
+        state.addAll(rootCandidateState ++ l1candidateState ++ L2candidateState)
+
+        val initialQueue = l1candidates.map(key => key -> JobType.Split)
+        context.log.info("Master ready, initial work queue: {}", initialQueue)
+        context.log.trace("Initial state:\n{}", state.mkString("\n"))
+        stash.unstashAll(
+          behavior(attributes, WorkQueue.from(initialQueue), 0)
+        )
     }
   }
 
@@ -149,9 +150,17 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       Behaviors.same
 
     case DispatchWork(replyTo) if workQueue.hasWork =>
-      timing.unsafeTime("Dequeueing") {
+      val newWorkQueue = timing.unsafeTime("Dequeueing") {
         val ((taskId, jobType), newWorkQueue) = workQueue.dequeue()
         val taskState = state(taskId)
+        if(context.log.isInfoEnabled && taskId.size > level) {
+          context.log.info(
+            "Entering next level {}, size = {}",
+            taskId.size,
+            Math.binomialCoefficient(attributes.size, taskId.size)
+          )
+          level = taskId.size
+        }
         context.log.debug("Dispatching task {} to {}", taskId -> jobType, replyTo)
         jobType match {
           case JobType.Split =>
@@ -161,22 +170,19 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
             val swapCandidates = taskState.swapCandidates
             replyTo ! CheckSwapCandidates(taskId, swapCandidates)
         }
-        behavior(attributes, newWorkQueue, testedCandidates)
+        newWorkQueue
       }
+      behavior(attributes, newWorkQueue, testedCandidates)
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
-      timing.unsafeTime("State update") {
-        val job = id -> JobType.Split
-        val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-        updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
-      }
+      val job = id -> JobType.Split
+      val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
+      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
-      timing.unsafeTime("State update") {
-        val job = id -> JobType.Swap
-        val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-        updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
-      }
+      val job = id -> JobType.Swap
+      val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
+      updateStateAndNext(attributes, workQueue, testedCandidates, job, stateUpdate)
 
     case m =>
       context.log.warn("Received unexpected message: {}", m)
@@ -206,6 +212,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     context.log.debug("Received results for {}", job)
     val (id, jobType) = job
 
+    timingSpans.start("Common state update")
     // update state based on received results
     val newWorkQueue = workQueue.removePending(job)
     val newTaskState = state.updateWith(id) {
@@ -216,22 +223,24 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     // update successors and get new generation jobs
     val successors = id.successors(attributes.toSet)
     val nodeIsPruned = newTaskState.forall(_.isPruned)
+    timingSpans.end("Common state update")
 
     if (nodeIsPruned) {
-      timing.unsafeTime("State update - pruning") {
-        context.log.debug("Pruning node {} and all successors", id)
-        // node pruning! --> invalidate all successing nodes
-        successors.foreach(s =>
-          state.updateWith(s) {
-            case Some(value) => Some(value.prune)
-            case None => Some(CandidateState.pruned(s))
-          }
-        )
-        // remove all jobs that involve one of the pruned successors
-        val updatedWorkQueue = newWorkQueue.removeAll(successors)
-        behavior(attributes, updatedWorkQueue, testedCandidates + 1)
-      }
+      timingSpans.start("State pruning")
+      context.log.debug("Pruning node {} and all successors", id)
+      // node pruning! --> invalidate all successing nodes
+      successors.foreach(s =>
+        state.updateWith(s) {
+          case Some(value) => Some(value.prune)
+          case None => Some(CandidateState.pruned(s))
+        }
+      )
+      // remove all jobs that involve one of the pruned successors
+      val updatedWorkQueue = newWorkQueue.removeAll(successors)
+      timingSpans.end("State pruning")
+      behavior(attributes, updatedWorkQueue, testedCandidates + 1)
     } else {
+      timingSpans.start("Common state update")
       // update counters of successors
       val successorStates = successors.map { successor =>
         val oldState = state.getOrElse(successor, CandidateState(successor))
@@ -239,44 +248,47 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         state.update(successor, successorState)
         successorState
       }
+      timingSpans.end("Common state update")
 
-      val updatedWorkQueue = timing.unsafeTime("State update - candidate generation") {
-        // generate successor's splits candidates
-        val splitReadySuccessors = successorStates.filter(successorState =>
-          // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
-          // the new generation of split candidates)
-          if (jobType == JobType.Split) successorState.isReadyToCheck(JobType.Split)
-          else false
-        )
-        val newSplitJobs = splitReadySuccessors.map(s => s.id -> JobType.Split)
-        val splitStateUpdates = splitReadySuccessors.map(performSplitGeneration)
+      timingSpans.start("Candidate generation")
+      // generate successor's splits candidates
+      val splitReadySuccessors = successorStates.filter(successorState =>
+        // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
+        // the new generation of split candidates)
+        if (jobType == JobType.Split) successorState.isReadyToCheck(JobType.Split)
+        else false
+      )
+      val newSplitJobs = splitReadySuccessors.map(s => s.id -> JobType.Split)
+      val splitStateUpdates = splitReadySuccessors.map(performSplitGeneration)
 
-        // generate successor's swaps candidates
-        val swapReadySuccessors = successorStates.filter(successorState =>
-          successorState.isReadyToCheck(JobType.Swap)
-        )
-        val newSwapJobs = swapReadySuccessors.map(s => s.id -> JobType.Swap)
-        val swapStateUpdates = swapReadySuccessors.map(performSwapGeneration)
+      // generate successor's swaps candidates
+      val swapReadySuccessors = successorStates.filter(successorState =>
+        successorState.isReadyToCheck(JobType.Swap)
+      )
+      val newSwapJobs = swapReadySuccessors.map(s => s.id -> JobType.Swap)
+      val swapStateUpdates = swapReadySuccessors.map(performSwapGeneration)
 
-        // add new jobs to the queue
-        val updatedWorkQueue = newWorkQueue.enqueueAll(newSplitJobs ++ newSwapJobs)
+      // group state updates
+      val stateUpdates = (splitStateUpdates ++ swapStateUpdates)
+        .groupBy { case (id, _) => id }
+        .map { case (key, value) => key -> value.map(_._2) }
+      timingSpans.end("Candidate generation")
 
-        // add new candidates to successor states
-        val stateUpdates = (splitStateUpdates ++ swapStateUpdates)
-          .groupBy { case (id, _) => id }
-          .map { case (key, value) => key -> value.map(_._2) }
+      timingSpans.start("Common state update")
+      // add new jobs to the queue
+      val updatedWorkQueue = newWorkQueue.enqueueAll(newSplitJobs ++ newSwapJobs)
 
-        stateUpdates.foreach { case (id, updates) =>
-          state.updateWith(id) {
-            case None =>
-              // Some(CandidateState.createFromDeltas(id, updates))
-              // should not happen
-              throw new IllegalArgumentException(s"Tried to update non-existent state for $id")
-            case Some(s) => Some(s.updatedAll(updates))
-          }
+      // add new candidates to successor states
+      stateUpdates.foreach { case (id, updates) =>
+        state.updateWith(id) {
+          case None =>
+            // Some(CandidateState.createFromDeltas(id, updates))
+            // should not happen
+            throw new IllegalArgumentException(s"Tried to update non-existent state for $id")
+          case Some(s) => Some(s.updatedAll(updates))
         }
-        updatedWorkQueue
       }
+      timingSpans.end("Common state update")
       behavior(attributes, updatedWorkQueue, testedCandidates + 1)
     }
   }

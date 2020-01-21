@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 
-jar=distod-trie.jar
+jar=distod.jar
 config=bench.conf
-workers=1
 
-filename="bench-results-iris-${jar}-${workers}w.txt"
-echo "Benchmarking ${jar}" >"${filename}"
+filename="bench-results-workers.txt"
+echo "Benchmarking DISTOD" >"${filename}"
 {
   printf "==================================\nConfig:\n"
   cat "${config}"
   printf "\n\n"
 } >>"${filename}"
 
-for i in {0..10}; do
+for i in {1..20}; do
     echo "Test ${i}:"
     result=$(
-      java -Xmx8g -Xms8g \
+      java -Xmx10g -Xms10g \
         -Dconfig.file="${config}" \
         -Dlogback.configurationFile=logback.xml \
-        -Ddistod.max-workers="${workers}" \
+        -Ddistod.max-workers="${i}" \
         -jar "${jar}"
     )
 
-    printf "Test %d:\n%s\n" "${i}" "${result}" >>"${filename}"
+    printf "Test %d workers:\n%s\n" "${i}" "${result}" >>"${filename}"
 done

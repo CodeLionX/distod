@@ -80,7 +80,7 @@ class CandidateStateSpec extends WordSpec with Matchers {
         .incPreconditions(JobType.Swap)
         .updated(CandidateState.NewSwapCandidates(Seq.empty))
 
-      swapReady shouldBe a[SwapReadyCandidateState]
+      swapReady shouldBe a[ReadyCandidateState]
     }
 
     "be pruned if both split and swaps candidate sets are empty and have been checked" in {

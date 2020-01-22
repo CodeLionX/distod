@@ -81,11 +81,10 @@ object CandidateState {
           receivedUpdates = this.receivedUpdates + 1
         )
       case NewSplitCandidates(splitCandidates) if isReadyToCheck(JobType.Split) && alreadyOneUpdateReceived =>
-        SwapReadyCandidateState(
+        ReadyCandidateState(
           id = id,
           splitCandidates = splitCandidates,
-          swapCandidates = this.swapCandidates,
-          splitChecked = false
+          swapCandidates = this.swapCandidates
         )
       case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && !alreadyOneUpdateReceived =>
         this.copy(
@@ -93,11 +92,10 @@ object CandidateState {
           receivedUpdates = this.receivedUpdates + 1
         )
       case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && alreadyOneUpdateReceived =>
-        SwapReadyCandidateState(
+        ReadyCandidateState(
           id = id,
           splitCandidates = this.splitCandidates,
-          swapCandidates = swapCandidates,
-          splitChecked = false
+          swapCandidates = swapCandidates
         )
       case SwapChecked(_) =>
         throw new UnsupportedOperationException("L2CandidateState can not update the swap candidates")
@@ -259,12 +257,10 @@ case class InitialCandidateState(
       swapPreconditions = swapPreconditions
     )
     case NewSwapCandidates(_) if isReadyToCheck(JobType.Swap) =>
-      throw new UnsupportedOperationException("Can only generate swap candidates when split candidates have been generated")
-//      SwapReadyCandidateState(
-//        id = id,
-//        splitCandidates = CandidateSet.empty,
-//        swapCandidates = swapCandidates
-//      )
+      SwapReadyCandidateState(
+        id = id,
+        swapCandidates = swapCandidates
+      )
     case m => throw new UnsupportedOperationException(s"InitialCandidateState can not be updated by $m")
   }
 }
@@ -292,12 +288,18 @@ case class SplitReadyCandidateState(
   )
 
   override def updated(delta: CandidateState.Delta): CandidateState = delta match {
-    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) => SwapReadyCandidateState(
-      id = id,
-      splitCandidates = this.splitCandidates,
-      swapCandidates = swapCandidates,
-      splitChecked = this.splitChecked
-    )
+    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && this.splitChecked =>
+      SplitCheckedCandidateState(
+        id = id,
+        splitCandidates = this.splitCandidates,
+        swapCandidates = swapCandidates
+      )
+    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && !this.splitChecked =>
+      ReadyCandidateState(
+        id = id,
+        splitCandidates = this.splitCandidates,
+        swapCandidates = swapCandidates
+      )
     case SplitChecked(removedCandidates) => this.copy(
       splitCandidates = this.splitCandidates -- removedCandidates,
       splitChecked = true
@@ -310,11 +312,53 @@ case class SplitReadyCandidateState(
 
 case class SwapReadyCandidateState(
     id: CandidateSet,
-    splitCandidates: CandidateSet,
     swapCandidates: Seq[(Int, Int)],
-    splitChecked: Boolean
+    swapChecked: Boolean = false
 ) extends CandidateState {
 
+  override val splitChecked: Boolean = false
+  override val splitCandidates: CandidateSet = CandidateSet.empty
+  override val isPruned: Boolean = false
+
+  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+    case JobType.Split => true
+    case JobType.Swap => !swapChecked
+  }
+
+  override protected def incSplitPreconditions: CandidateState = this
+
+  override protected def incSwapPreconditions: CandidateState = this
+
+  override def updated(delta: CandidateState.Delta): CandidateState = delta match {
+    case NewSplitCandidates(splitCandidates) if this.swapChecked =>
+      SwapCheckedCandidateState(
+        id = id,
+        splitCandidates = splitCandidates,
+        swapCandidates = this.swapCandidates
+      )
+    case NewSplitCandidates(splitCandidates) if !this.swapChecked =>
+      ReadyCandidateState(
+        id = id,
+        splitCandidates = splitCandidates,
+        swapCandidates = this.swapCandidates
+      )
+    case SwapChecked(removedCandidates) => this.copy(
+      swapCandidates = this.swapCandidates.filterNot(removedCandidates.contains),
+      swapChecked = true
+    )
+    case SplitChecked(_) =>
+      throw new UnsupportedOperationException("SwapReadyCandidateState can not update the split candidates")
+    case m => throw new UnsupportedOperationException(s"SwapReadyCandidateState can not be updated by $m")
+  }
+}
+
+case class ReadyCandidateState(
+    id: CandidateSet,
+    splitCandidates: CandidateSet,
+    swapCandidates: Seq[(Int, Int)]
+) extends CandidateState {
+
+  override val splitChecked: Boolean = false
   override val swapChecked: Boolean = false
   override val isPruned: Boolean = false
 
@@ -328,9 +372,7 @@ case class SwapReadyCandidateState(
   override protected def incSwapPreconditions: CandidateState = this
 
   override def updated(delta: CandidateState.Delta): CandidateState = delta match {
-    case SplitChecked(_) if splitChecked =>
-      throw new UnsupportedOperationException("Split was already checked!")
-    case SplitChecked(removedCandidates) if !splitChecked => SplitCheckedCandidateState(
+    case SplitChecked(removedCandidates) => SplitCheckedCandidateState(
       id = id,
       splitCandidates = this.splitCandidates -- removedCandidates,
       swapCandidates = this.swapCandidates

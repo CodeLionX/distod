@@ -8,6 +8,7 @@ import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, C
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.util.largeMap.mutable.FastutilState
+import com.github.codelionx.util.timing.Timing
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -46,9 +47,11 @@ class MasterHelper(
 
   import MasterHelper._
 
+  private val timingSpans = Timing(context.system).spans
 
   def start(): Behavior[Command] = Behaviors.receiveMessage{
     case DispatchWorkTo(id, jobType, worker) =>
+      timingSpans.start("Helper dispatch work")
       val taskState = state(id)
       context.log.debug("Dispatching task {} to {}", id -> jobType, worker)
       jobType match {
@@ -59,9 +62,11 @@ class MasterHelper(
           val swapCandidates = taskState.swapCandidates
           worker ! CheckSwapCandidates(id, swapCandidates)
       }
+      timingSpans.end("Helper dispatch work")
       Behaviors.same
 
     case GenerateCandidates(id, jobType, successorStates) =>
+      timingSpans.start("Candidate generation")
       context.log.debug("Generating successor candidates for job {}: {}", id -> jobType, successorStates.map(_.id))
       val splitReadySuccessors = successorStates.filter(successorState =>
         // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
@@ -86,6 +91,7 @@ class MasterHelper(
 
       val newJobs: Set[(CandidateSet, JobType.JobType)] = newSplitJobs ++ newSwapJobs
       master ! NewCandidatesGenerated(id, jobType, newJobs, stateUpdates)
+      timingSpans.end("Candidate generation")
       Behaviors.same
   }
 

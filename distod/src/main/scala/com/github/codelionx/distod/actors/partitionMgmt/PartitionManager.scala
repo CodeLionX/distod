@@ -198,7 +198,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       pendingJobs: PendingJobMap[CandidateSet, PendingResponse],
       pendingResponse: PendingResponse
   ): PendingJobMap[CandidateSet, PendingResponse] = {
-    timings.time("Partition job chain calc") {
+    timings.time("Partition generation") {
       val jobs = calcJobChain(key, partitions)
       generatorPool ! ComputePartitions(jobs, context.self)
       val x = jobs.map { job =>

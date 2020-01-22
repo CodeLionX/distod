@@ -160,8 +160,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       finished(testedCandidates)
 
     case DispatchWork(replyTo) if workQueue.hasWork =>
+      timingSpans.start("Master dispatch work")
       val ((taskId, jobType), newWorkQueue) = workQueue.dequeue()
       pool ! DispatchWorkTo(taskId, jobType, replyTo)
+      timingSpans.end("Master dispatch work")
       if(context.log.isInfoEnabled && taskId.size > level) {
         context.log.info(
           "Entering next level {}, size = {}",
@@ -188,6 +190,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       updateStateAndNext(attributes, workQueue, pendingGenerationJobs, testedCandidates, job, stateUpdate)
 
     case NewCandidatesGenerated(id, jobType, newJobs, stateUpdates) =>
+      timingSpans.start("New candidate state integration")
       // add new jobs to the queue
       val updatedWorkQueue = workQueue.enqueueAll(newJobs)
 
@@ -201,6 +204,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           case Some(s) => Some(s.updatedAll(updates))
         }
       }
+      timingSpans.end("New candidate state integration")
       stash.unstashAll(
         behavior(attributes, updatedWorkQueue, pendingGenerationJobs - (id -> jobType), testedCandidates)
       )
@@ -234,7 +238,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     context.log.debug("Received results for {}", job)
     val (id, jobType) = job
 
-    timingSpans.start("Common state update")
+    timingSpans.start("Result state update")
     // update state based on received results
     val newWorkQueue = workQueue.removePending(job)
     val newTaskState = state.updateWith(id) {
@@ -245,10 +249,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     // update successors and get new generation jobs
     val successors = id.successors(attributes.toSet)
     val nodeIsPruned = newTaskState.forall(_.isPruned)
-    timingSpans.end("Common state update")
 
     if (nodeIsPruned) {
-      timingSpans.start("State pruning")
       context.log.debug("Pruning node {} and all successors", id)
       // node pruning! --> invalidate all successing nodes
       successors.foreach(s =>
@@ -259,10 +261,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       )
       // remove all jobs that involve one of the pruned successors
       val updatedWorkQueue = newWorkQueue.removeAll(successors)
-      timingSpans.end("State pruning")
+
+      timingSpans.end("Result state update")
       behavior(attributes, updatedWorkQueue, pendingGenerationJobs, testedCandidates + 1)
     } else {
-      timingSpans.start("Common state update")
       // update counters of successors
       val successorStates = successors.map { successor =>
         val oldState = state.getOrElse(successor, CandidateState(successor))
@@ -270,11 +272,11 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         state.update(successor, successorState)
         successorState
       }
-      timingSpans.end("Common state update")
 
       // generate successor's candidates async in helper
       pool ! GenerateCandidates(id, jobType, successorStates)
 
+      timingSpans.end("Result state update")
       behavior(attributes, newWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
     }
   }

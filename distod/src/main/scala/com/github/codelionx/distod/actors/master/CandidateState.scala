@@ -20,7 +20,7 @@ object CandidateState {
   def forL1(id: CandidateSet, splitCandidate: CandidateSet): CandidateState = L1CandidateState(id, splitCandidate)
 
   // we do not need to check for swaps in level 1 (single attribute nodes)
-  case class L1CandidateState private(id: CandidateSet, splitCandidates: CandidateSet) extends CandidateState {
+  case class L1CandidateState private(id: CandidateSet, override val splitCandidates: CandidateSet) extends CandidateState {
 
     override val isPruned: Boolean = false
     override val splitChecked: Boolean = false
@@ -51,8 +51,8 @@ object CandidateState {
   // predecessors (L1) do not perform swap checks, so the preconditions for the L2 swap checks are already met
   case class L2CandidateState private(
       id: CandidateSet,
-      splitCandidates: CandidateSet = CandidateSet.empty,
-      swapCandidates: Seq[(Int, Int)] = Seq.empty,
+      _splitCandidates: CandidateSet = CandidateSet.empty,
+      _swapCandidates: Seq[(Int, Int)] = Seq.empty,
       private val splitPreconditions: Int = 0,
       private val receivedUpdates: Int = 0
   ) extends CandidateState {
@@ -77,24 +77,24 @@ object CandidateState {
     override def updated(delta: Delta): CandidateState = delta match {
       case NewSplitCandidates(splitCandidates) if isReadyToCheck(JobType.Split) && !alreadyOneUpdateReceived =>
         this.copy(
-          splitCandidates = splitCandidates,
+          _splitCandidates = splitCandidates,
           receivedUpdates = this.receivedUpdates + 1
         )
       case NewSplitCandidates(splitCandidates) if isReadyToCheck(JobType.Split) && alreadyOneUpdateReceived =>
         ReadyCandidateState(
           id = id,
           splitCandidates = splitCandidates,
-          swapCandidates = this.swapCandidates
+          swapCandidates = this._swapCandidates
         )
       case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && !alreadyOneUpdateReceived =>
         this.copy(
-          swapCandidates = swapCandidates,
+          _swapCandidates = swapCandidates,
           receivedUpdates = this.receivedUpdates + 1
         )
       case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && alreadyOneUpdateReceived =>
         ReadyCandidateState(
           id = id,
-          splitCandidates = this.splitCandidates,
+          splitCandidates = this._splitCandidates,
           swapCandidates = swapCandidates
         )
       case SwapChecked(_) =>
@@ -151,9 +151,9 @@ sealed trait CandidateState {
   // state
   def id: CandidateSet
 
-  def splitCandidates: CandidateSet
+  def splitCandidates: CandidateSet = throw new IllegalAccessException("Split candidates are not yet ready!")
 
-  def swapCandidates: Seq[(Int, Int)]
+  def swapCandidates: Seq[(Int, Int)] = throw new IllegalAccessException("Swap candidates are not yet ready!")
 
   def splitChecked: Boolean
 
@@ -231,8 +231,6 @@ case class InitialCandidateState(
     private val swapPreconditions: Int = 0
 ) extends CandidateState {
 
-  override val splitCandidates: CandidateSet = CandidateSet.empty
-  override val swapCandidates: Seq[(Int, Int)] = Seq.empty
   override val splitChecked: Boolean = false
   override val swapChecked: Boolean = false
   override val isPruned: Boolean = false
@@ -256,7 +254,7 @@ case class InitialCandidateState(
       splitCandidates = splitCandidates,
       swapPreconditions = swapPreconditions
     )
-    case NewSwapCandidates(_) if isReadyToCheck(JobType.Swap) =>
+    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) =>
       SwapReadyCandidateState(
         id = id,
         swapCandidates = swapCandidates
@@ -267,13 +265,12 @@ case class InitialCandidateState(
 
 case class SplitReadyCandidateState(
     id: CandidateSet,
-    splitCandidates: CandidateSet,
+    override val splitCandidates: CandidateSet,
     swapPreconditions: Int,
     splitChecked: Boolean = false
 ) extends CandidateState {
 
   override val swapChecked: Boolean = false
-  override val swapCandidates: Seq[(Int, Int)] = Seq.empty
   override val isPruned: Boolean = false
 
   override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
@@ -312,12 +309,11 @@ case class SplitReadyCandidateState(
 
 case class SwapReadyCandidateState(
     id: CandidateSet,
-    swapCandidates: Seq[(Int, Int)],
+    override val swapCandidates: Seq[(Int, Int)],
     swapChecked: Boolean = false
 ) extends CandidateState {
 
   override val splitChecked: Boolean = false
-  override val splitCandidates: CandidateSet = CandidateSet.empty
   override val isPruned: Boolean = false
 
   override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
@@ -354,8 +350,8 @@ case class SwapReadyCandidateState(
 
 case class ReadyCandidateState(
     id: CandidateSet,
-    splitCandidates: CandidateSet,
-    swapCandidates: Seq[(Int, Int)]
+    override val splitCandidates: CandidateSet,
+    override val swapCandidates: Seq[(Int, Int)]
 ) extends CandidateState {
 
   override val splitChecked: Boolean = false
@@ -388,8 +384,8 @@ case class ReadyCandidateState(
 
 case class SplitCheckedCandidateState(
     id: CandidateSet,
-    splitCandidates: CandidateSet,
-    swapCandidates: Seq[(Int, Int)]
+    override val splitCandidates: CandidateSet,
+    override val swapCandidates: Seq[(Int, Int)]
 ) extends CandidateState {
 
   override val splitChecked: Boolean = true
@@ -417,8 +413,8 @@ case class SplitCheckedCandidateState(
 
 case class SwapCheckedCandidateState(
     id: CandidateSet,
-    splitCandidates: CandidateSet,
-    swapCandidates: Seq[(Int, Int)]
+    override val splitCandidates: CandidateSet,
+    override val swapCandidates: Seq[(Int, Int)]
 ) extends CandidateState {
 
   override val splitChecked: Boolean = false
@@ -444,8 +440,11 @@ case class SwapCheckedCandidateState(
   }
 }
 
-case class FullyCheckedCandidateState(id: CandidateSet, splitCandidates: CandidateSet, swapCandidates: Seq[(Int, Int)])
-  extends CandidateState {
+case class FullyCheckedCandidateState(
+      id: CandidateSet,
+      override val splitCandidates: CandidateSet,
+      override val swapCandidates: Seq[(Int, Int)]
+  ) extends CandidateState {
 
   override val splitChecked: Boolean = true
   override val swapChecked: Boolean = true

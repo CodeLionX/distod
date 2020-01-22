@@ -39,10 +39,10 @@ object MasterHelper {
 }
 
 class MasterHelper(
-                    context: ActorContext[MasterHelper.Command],
-                    state: FastutilState[CandidateState],
-                    master: ActorRef[Master.Command]
-                  ) extends CandidateGeneration {
+    context: ActorContext[MasterHelper.Command],
+    state: FastutilState[CandidateState],
+    master: ActorRef[Master.Command]
+) extends CandidateGeneration {
 
   import MasterHelper._
 

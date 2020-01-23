@@ -55,7 +55,7 @@ class HashMapStateSpec extends WordSpec with Matchers {
     }
 
     "flatMap" in {
-      val updatedMap = map.updated(
+      val updatedMap = HashMapState.empty[CandidateState].updated(
         cs01,
         SplitReadyCandidateState(
           id = cs01,

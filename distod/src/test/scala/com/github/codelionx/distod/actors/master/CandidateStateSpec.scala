@@ -11,11 +11,11 @@ class CandidateStateSpec extends WordSpec with Matchers {
     val initialState = CandidateState(CandidateSet.from(0))
 
     "have no split candidates" in {
-      initialState.splitCandidates shouldBe empty
+      a[IllegalAccessException] shouldBe thrownBy(initialState.splitCandidates)
     }
 
     "have no swap candidates" in {
-      initialState.swapCandidates shouldBe empty
+      a[IllegalAccessException] shouldBe thrownBy(initialState.swapCandidates)
     }
 
     "not have splits checked" in {
@@ -79,8 +79,8 @@ class CandidateStateSpec extends WordSpec with Matchers {
 
       val swapReady = splitReady
         .updatedAll(Seq(
-          IncPrecondition(JobType.Split),
-          IncPrecondition(JobType.Split),
+          IncPrecondition(JobType.Swap),
+          IncPrecondition(JobType.Swap),
           CandidateState.NewSwapCandidates(Seq.empty)
         ))
 

@@ -187,7 +187,7 @@ class MasterHelper(
     // group state updates
     val stateUpdates = (splitStateUpdates ++ swapStateUpdates)
       .groupBy { case (id, _) => id }
-      .map { case (key, value) => key -> value.map(_._2) }
+      .map { case (key, value) => key -> value.map{ case (_, delta) => delta } }
 
     val newJobs: Set[(CandidateSet, JobType.JobType)] = newSplitJobs ++ newSwapJobs
     newJobs -> stateUpdates

@@ -150,9 +150,9 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     case DequeueNextJob(replyTo) if workQueue.hasWork =>
       timingSpans.start("Master dispatch work")
       val (job, newWorkQueue) = workQueue.dequeue()
+      val (id, _) = job
       pool !  NextJob(job, replyTo)
-      if(context.log.isInfoEnabled && job._1.size > level) {
-        val (id, _) = job
+      if(context.log.isInfoEnabled && id.size > level) {
         context.log.info(
           "Entering next level {}, size = {}",
           id.size,
@@ -171,6 +171,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     case UpdateState(job, stateUpdates, prunedCandidates) =>
       context.log.debug("Updating state for job {}: pruned candidates: {}", job, prunedCandidates.size)
       timingSpans.start("State integration")
+      val (id, jobType) = job
       val updatedWorkQueue = workQueue
         .removePending(job)
         .removeAll(prunedCandidates)
@@ -183,10 +184,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         }
       }
       // get successor states
-      val successorStates = job._1.successors(attributes).map { successor =>
+      val successorStates = id.successors(attributes).map { successor =>
         state.getOrElse(successor, CandidateState(successor))
       }
-      pool ! GenerateCandidates(job._1, job._2, successorStates)
+      pool ! GenerateCandidates(id, jobType, successorStates)
       timingSpans.end("State integration")
       behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
 

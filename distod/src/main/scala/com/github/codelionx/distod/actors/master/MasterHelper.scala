@@ -2,11 +2,14 @@ package com.github.codelionx.distod.actors.master
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.CandidateState.{IncPrecondition, Prune}
-import com.github.codelionx.distod.actors.master.Master.{NewCandidatesGenerated, UpdateState}
+import com.github.codelionx.distod.actors.master.Master.{DequeueNextJob, NewCandidatesGenerated, UpdateState}
+import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.PrimaryPartitionManager
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
 import com.github.codelionx.distod.discovery.CandidateGeneration
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
@@ -18,36 +21,51 @@ import scala.language.postfixOps
 object MasterHelper {
 
   sealed trait Command
-  final case class DispatchWorkTo(id: CandidateSet, jobType: JobType.JobType, worker: ActorRef[Worker.Command])
-    extends Command
-  final case class GenerateCandidates(id: CandidateSet, jobType: JobType.JobType, successorStates: Set[CandidateState])
-    extends Command
-  final case class SplitCandidatesChecked(id: CandidateSet, attributes: Set[Int], removedSplitCandidates: CandidateSet)
-    extends Command
-  final case class SwapCandidatesChecked(id: CandidateSet, attributes: Set[Int], removedSwapCandidates: Seq[(Int, Int)])
+  final case class DispatchWork(replyTo: ActorRef[Worker.Command]) extends Command with CborSerializable
+  final case class SplitCandidatesChecked(id: CandidateSet, removedSplitCandidates: CandidateSet)
+    extends Command with CborSerializable
+  final case class SwapCandidatesChecked(id: CandidateSet, removedSwapCandidates: Seq[(Int, Int)])
+    extends Command with CborSerializable
+  final case class GetPrimaryPartitionManager(replyTo: ActorRef[PrimaryPartitionManager])
+    extends Command with CborSerializable
+
+  private[master] final case class NextJob(job: (CandidateSet, JobType.JobType), replyTo: ActorRef[Worker.Command]) extends Command
+  private[master] final case class GenerateCandidates(id: CandidateSet, jobType: JobType.JobType, successorStates: Set[CandidateState])
     extends Command
 
   val poolName = "master-helper-pool"
 
   def name(n: Int): String = s"master-helper-$n"
 
-  def createPool(n: Int)(state: FastutilState[CandidateState], master: ActorRef[Master.Command]): PoolRouter[Command] = Routers.pool(n)(
-    Behaviors.supervise(apply(state, master)).onFailure[Exception](
+  def createPool(n: Int)(
+      state: FastutilState[CandidateState],
+      master: ActorRef[Master.Command],
+      partitionManager: ActorRef[PartitionCommand],
+      attributes: Set[Int]
+  ): PoolRouter[Command] = Routers.pool(n)(
+    Behaviors.supervise(apply(state, master, partitionManager, attributes)).onFailure[Exception](
       SupervisorStrategy.restart
         .withLoggingEnabled(true)
         .withLimit(3, 10 seconds)
     )
   ).withRoundRobinRouting()
 
-  private def apply(state: FastutilState[CandidateState], master: ActorRef[Master.Command]): Behavior[Command] = Behaviors.setup(context =>
-    new MasterHelper(context, state, master).start()
+  private def apply(
+      state: FastutilState[CandidateState],
+      master: ActorRef[Master.Command],
+      partitionManager: ActorRef[PartitionCommand],
+      attributes: Set[Int]
+  ): Behavior[Command] = Behaviors.setup(context =>
+    new MasterHelper(context, state, master, partitionManager, attributes).start()
   )
 }
 
 class MasterHelper(
     context: ActorContext[MasterHelper.Command],
     state: FastutilState[CandidateState],
-    master: ActorRef[Master.Command]
+    master: ActorRef[Master.Command],
+    partitionManager: ActorRef[PartitionCommand],
+    attributes: Set[Int]
 ) extends CandidateGeneration {
 
   import MasterHelper._
@@ -55,30 +73,39 @@ class MasterHelper(
   private val timingSpans = Timing(context.system).spans
 
   def start(): Behavior[Command] = Behaviors.receiveMessage{
-    case DispatchWorkTo(id, jobType, worker) =>
+    case GetPrimaryPartitionManager(replyTo) =>
+      replyTo ! PrimaryPartitionManager(partitionManager)
+      Behaviors.same
+
+    case DispatchWork(replyTo) =>
+      master ! DequeueNextJob(replyTo)
+      Behaviors.same
+
+    case NextJob(job, replyTo) =>
       timingSpans.start("Helper dispatch work")
+      val (id, jobType) = job
       val taskState = state(id)
-      context.log.debug("Dispatching task {} to {}", id -> jobType, worker)
+      context.log.debug("Dispatching task {} to {}", job, replyTo)
       jobType match {
         case JobType.Split =>
           val splitCandidates = id & taskState.splitCandidates
-          worker ! CheckSplitCandidates(id, splitCandidates)
+          replyTo ! CheckSplitCandidates(id, splitCandidates)
         case JobType.Swap =>
           val swapCandidates = taskState.swapCandidates
-          worker ! CheckSwapCandidates(id, swapCandidates)
+          replyTo ! CheckSwapCandidates(id, swapCandidates)
       }
       timingSpans.end("Helper dispatch work")
       Behaviors.same
 
-    case SplitCandidatesChecked(id, attributes, removedSplitCandidates) =>
+    case SplitCandidatesChecked(id, removedSplitCandidates) =>
       val job = id -> JobType.Split
       val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-      updateState(attributes, job, stateUpdate)
+      updateState(job, stateUpdate)
 
-    case SwapCandidatesChecked(id, attributes, removedSwapCandidates) =>
+    case SwapCandidatesChecked(id, removedSwapCandidates) =>
       val job = id -> JobType.Swap
       val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-      updateState(attributes, job, stateUpdate)
+      updateState(job, stateUpdate)
 
     case GenerateCandidates(id, jobType, successorStates) =>
       context.log.debug("Generating successor candidates for job {}", id -> jobType)
@@ -89,11 +116,7 @@ class MasterHelper(
       Behaviors.same
   }
 
-  private def updateState(
-      attributes: Set[Int],
-      job: (CandidateSet, JobType.JobType),
-      stateUpdate: CandidateState.Delta
-  ): Behavior[Command] = {
+  private def updateState(job: (CandidateSet, JobType.JobType), stateUpdate: CandidateState.Delta): Behavior[Command] = {
     context.log.debug("Received results for {}", job)
     timingSpans.begin("Result state update")
     val (id, jobType) = job

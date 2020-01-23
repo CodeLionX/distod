@@ -3,8 +3,8 @@ package com.github.codelionx.distod.actors.worker
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.master.Master
-import com.github.codelionx.distod.actors.master.Master.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
+import com.github.codelionx.distod.actors.master.{Master, MasterHelper}
+import com.github.codelionx.distod.actors.master.MasterHelper.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
@@ -29,7 +29,7 @@ object Worker {
   def apply(
       partitionManager: ActorRef[PartitionCommand],
       rsProxy: ActorRef[ResultProxyCommand],
-      master: ActorRef[Master.Command]
+      master: ActorRef[MasterHelper.Command]
   ): Behavior[Command] =
     Behaviors.setup[Command] { context =>
       val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))

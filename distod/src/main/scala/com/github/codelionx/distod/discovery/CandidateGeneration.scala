@@ -93,15 +93,15 @@ trait CandidateGeneration {
     }
 
 
-  def generateLevel0(attributes: Seq[Int], nTuples: Int): Map[CandidateSet, CandidateState] =
+  def generateLevel0(attributes: Set[Int], nTuples: Int): Map[CandidateSet, CandidateState] =
     Map(
       CandidateSet.empty -> CandidateState.forL0(CandidateSet.empty, CandidateSet.fromSpecific(attributes))
     )
 
   def generateLevel1(
-      attributes: Seq[Int],
+      attributes: Set[Int],
       partitions: Array[FullPartition]
-  ): (Seq[CandidateSet], Map[CandidateSet, CandidateState]) = {
+  ): (Set[CandidateSet], Map[CandidateSet, CandidateState]) = {
     val L1candidates = attributes.map(columnId => CandidateSet.from(columnId))
     val L1candidateState = L1candidates.map { candidate =>
       candidate -> CandidateState.forL1(candidate, CandidateSet.fromSpecific(attributes))
@@ -110,12 +110,12 @@ trait CandidateGeneration {
   }
 
   def generateLevel2(
-      attributes: Seq[Int],
+      attributes: Set[Int],
       L1candidates: Iterable[CandidateSet]
   ): Map[CandidateSet, CandidateState] = {
     val states = for {
       l1Node <- L1candidates
-      successors = l1Node.successors(attributes.toSet)
+      successors = l1Node.successors(attributes)
       successorId <- successors
     } yield successorId -> CandidateState.initForL2(successorId)
     states.toMap

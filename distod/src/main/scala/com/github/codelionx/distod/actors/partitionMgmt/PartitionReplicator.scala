@@ -1,12 +1,12 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import com.github.codelionx.distod.actors.master.Master
-import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.master.Master.GetPrimaryPartitionManager
+import com.github.codelionx.distod.actors.master.Master
+import com.github.codelionx.distod.actors.master.MasterHelper.GetPrimaryPartitionManager
+import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.CandidateSet
 
 

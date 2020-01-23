@@ -5,7 +5,7 @@ import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProxyCommand
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.master.Master
+import com.github.codelionx.distod.actors.master.{Master, MasterHelper}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 
 import scala.concurrent.duration._
@@ -24,7 +24,7 @@ object WorkerManager {
     val settings = Settings(context.system)
     val numberOfWorkers = settings.numberOfWorkers
 
-    def spawnAndWatchWorker(master: ActorRef[Master.Command], id: Int): Unit = {
+    def spawnAndWatchWorker(master: ActorRef[MasterHelper.Command], id: Int): Unit = {
       val ref = context.spawn(
         Behaviors
           .supervise(Worker(partitionManager, rsProxy, master))
@@ -40,7 +40,7 @@ object WorkerManager {
       context.watch(ref)
     }
 
-    def supervising(masterRef: ActorRef[Master.Command]): Behavior[Receptionist.Listing] =
+    def supervising(masterRef: ActorRef[MasterHelper.Command]): Behavior[Receptionist.Listing] =
       Behaviors
         .receiveMessage[Receptionist.Listing] { case Master.MasterServiceKey.Listing(_) =>
           context.log.error("Master service listing changed despite that the workers are already running!")

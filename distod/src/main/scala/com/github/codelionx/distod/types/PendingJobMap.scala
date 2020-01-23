@@ -114,8 +114,10 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
   /**
    * Alias to `merge()` that also works for other collections ([[scala.collection.IterableOnce]]).
    */
-  @inline def ++[V1 >: V](xs: IterableOnce[(K, Seq[V1])]): PendingJobMap[K, V1] =
-    merge(new PendingJobMap[K, V1](Map.from(xs)))
+  @inline def ++[V1 >: V](xs: IterableOnce[(K, IterableOnce[V1])]): PendingJobMap[K, V1] =
+    merge(new PendingJobMap[K, V1](Map.from(xs).map{
+      case (k, value) => k -> value.iterator.toSeq
+    }))
 
   /**
    * Alias to `merge()`

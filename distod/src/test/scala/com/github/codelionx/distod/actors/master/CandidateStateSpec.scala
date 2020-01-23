@@ -1,6 +1,6 @@
 package com.github.codelionx.distod.actors.master
 
-import com.github.codelionx.distod.actors.master.CandidateState.{NewSplitCandidates, NewSwapCandidates}
+import com.github.codelionx.distod.actors.master.CandidateState.{IncPrecondition, NewSplitCandidates, NewSwapCandidates, Prune}
 import com.github.codelionx.distod.types.CandidateSet
 import org.scalatest.{Matchers, WordSpec}
 
@@ -32,14 +32,14 @@ class CandidateStateSpec extends WordSpec with Matchers {
     }
 
     "be ready after preconditions are met" in {
-      val swapNotReady = initialState.incPreconditions(JobType.Swap)
+      val swapNotReady = initialState.updated(IncPrecondition(JobType.Swap))
       swapNotReady.isReadyToCheck(JobType.Swap) shouldBe false
 
-      val splitReady = initialState.incPreconditions(JobType.Split)
+      val splitReady = initialState.updated(IncPrecondition(JobType.Split))
       splitReady.isReadyToCheck(JobType.Split) shouldBe true
       splitReady.isReadyToCheck(JobType.Swap) shouldBe false
 
-      val splitAndSwapReady = splitReady.incPreconditions(JobType.Swap)
+      val splitAndSwapReady = splitReady.updated(IncPrecondition(JobType.Swap))
       splitAndSwapReady.isReadyToCheck(JobType.Split) shouldBe true
       splitAndSwapReady.isReadyToCheck(JobType.Swap) shouldBe true
     }
@@ -55,8 +55,8 @@ class CandidateStateSpec extends WordSpec with Matchers {
     val candidateState = CandidateState(CandidateSet.from(0, 1))
 
     "be ready if inc was called as often as we have attributes in its candidate id" in {
-      val splitReadyCandidate = candidateState.incPreconditions(JobType.Split).incPreconditions(JobType.Split)
-      val swapReadyCandidate = splitReadyCandidate.incPreconditions(JobType.Swap).incPreconditions(JobType.Swap)
+      val splitReadyCandidate = candidateState.updatedAll(Seq(IncPrecondition(JobType.Split), IncPrecondition(JobType.Split)))
+      val swapReadyCandidate = splitReadyCandidate.updatedAll(Seq(IncPrecondition(JobType.Swap), IncPrecondition(JobType.Swap)))
 
       candidateState.isReadyToCheck(JobType.Split) shouldBe false
       candidateState.isReadyToCheck(JobType.Swap) shouldBe false
@@ -69,16 +69,20 @@ class CandidateStateSpec extends WordSpec with Matchers {
 
     "transition to ready state when candidates are added" in {
       val splitReady = candidateState
-        .incPreconditions(JobType.Split)
-        .incPreconditions(JobType.Split)
-        .updated(CandidateState.NewSplitCandidates(CandidateSet.empty))
+        .updatedAll(Seq(
+          IncPrecondition(JobType.Split),
+          IncPrecondition(JobType.Split),
+          CandidateState.NewSplitCandidates(CandidateSet.empty)
+        ))
 
       splitReady shouldBe a[SplitReadyCandidateState]
 
       val swapReady = splitReady
-        .incPreconditions(JobType.Swap)
-        .incPreconditions(JobType.Swap)
-        .updated(CandidateState.NewSwapCandidates(Seq.empty))
+        .updatedAll(Seq(
+          IncPrecondition(JobType.Split),
+          IncPrecondition(JobType.Split),
+          CandidateState.NewSwapCandidates(Seq.empty)
+        ))
 
       swapReady shouldBe a[ReadyCandidateState]
     }
@@ -89,7 +93,11 @@ class CandidateStateSpec extends WordSpec with Matchers {
         splitCandidates = CandidateSet.empty,
         swapCandidates = Seq.empty
       )
-      val prunedCandidate = toBePrunedCandidate.pruneIfConditionsAreMet
+      val prunedCandidate =
+        if(toBePrunedCandidate.shouldBePruned)
+          toBePrunedCandidate.updated(Prune())
+        else
+          toBePrunedCandidate
 
       toBePrunedCandidate.isFullyChecked shouldBe true
       toBePrunedCandidate.isPruned shouldBe false

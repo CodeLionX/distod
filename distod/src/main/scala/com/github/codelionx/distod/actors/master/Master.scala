@@ -33,6 +33,11 @@ object Master {
     extends Command with CborSerializable
   final case class GetPrimaryPartitionManager(replyTo: ActorRef[PrimaryPartitionManager])
     extends Command with CborSerializable
+  final case class UpdateState(
+      job: (CandidateSet, JobType.JobType),
+      stateUpdates: Map[CandidateSet, Set[CandidateState.Delta]],
+      prunedCandidates: Set[CandidateSet]
+  ) extends Command
   final case class NewCandidatesGenerated(
       id: CandidateSet,
       jobType: JobType.JobType,
@@ -156,21 +161,20 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       Behaviors.same
 
     case DispatchWork(_) if workQueue.isEmpty && pendingGenerationJobs.isEmpty =>
-      context.log.trace("Request for work, but no more work available and no pending requests: algo finished!")
+      context.log.debug("Request for work, but no more work available and no pending requests: algo finished!")
       finished(testedCandidates)
 
-    case DispatchWork(replyTo) if workQueue.hasWork =>
+    case DispatchWork(worker) if workQueue.hasWork =>
       timingSpans.start("Master dispatch work")
-      val ((taskId, jobType), newWorkQueue) = workQueue.dequeue()
-      pool ! DispatchWorkTo(taskId, jobType, replyTo)
-      timingSpans.end("Master dispatch work")
-      if(context.log.isInfoEnabled && taskId.size > level) {
+      val ((id, jobType), newWorkQueue) = workQueue.dequeue()
+      pool ! DispatchWorkTo(id, jobType, worker)
+      if(context.log.isInfoEnabled && id.size > level) {
         context.log.info(
           "Entering next level {}, size = {}",
-          taskId.size,
-          Math.binomialCoefficient(attributes.size, taskId.size)
+          id.size,
+          Math.binomialCoefficient(attributes.size, id.size)
         )
-        level = taskId.size
+        level = id.size
       }
       behavior(attributes, newWorkQueue, pendingGenerationJobs, testedCandidates)
 
@@ -180,17 +184,38 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       Behaviors.same
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>
-      val job = id -> JobType.Split
-      val stateUpdate = CandidateState.SplitChecked(removedSplitCandidates)
-      updateStateAndNext(attributes, workQueue, pendingGenerationJobs, testedCandidates, job, stateUpdate)
+      pool ! MasterHelper.SplitCandidatesChecked(id, attributes.toSet, removedSplitCandidates)
+      behavior(attributes, workQueue, pendingGenerationJobs, testedCandidates)
 
     case SwapCandidatesChecked(id, removedSwapCandidates) =>
-      val job = id -> JobType.Swap
-      val stateUpdate = CandidateState.SwapChecked(removedSwapCandidates)
-      updateStateAndNext(attributes, workQueue, pendingGenerationJobs, testedCandidates, job, stateUpdate)
+      pool ! MasterHelper.SwapCandidatesChecked(id, attributes.toSet, removedSwapCandidates)
+      behavior(attributes, workQueue, pendingGenerationJobs, testedCandidates)
+
+    case UpdateState(job, stateUpdates, prunedCandidates) =>
+      context.log.debug("Updating state for job {}: pruned candidates: {}", job, prunedCandidates.size)
+      timingSpans.start("State integration")
+      val updatedWorkQueue = workQueue
+        .removePending(job)
+        .removeAll(prunedCandidates)
+
+      // update states
+      stateUpdates.foreach { case (id, updates) =>
+        state.updateWith(id) {
+          case None => Some(CandidateState(id).updatedAll(updates))
+          case Some(s) => Some(s.updatedAll(updates))
+        }
+      }
+      timingSpans.end("State integration")
+      // get successor states
+      val successorStates = job._1.successors(attributes.toSet).map { successor =>
+        state.getOrElse(successor, CandidateState(successor))
+      }
+      pool ! GenerateCandidates(job._1, job._2, successorStates)
+      behavior(attributes, updatedWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
 
     case NewCandidatesGenerated(id, jobType, newJobs, stateUpdates) =>
-      timingSpans.start("New candidate state integration")
+      timingSpans.start("State integration")
+      val job = id -> jobType
       // add new jobs to the queue
       val updatedWorkQueue = workQueue.enqueueAll(newJobs)
 
@@ -198,15 +223,14 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       stateUpdates.foreach { case (id, updates) =>
         state.updateWith(id) {
           case None =>
-            // Some(CandidateState.createFromDeltas(id, updates))
             // should not happen
             throw new IllegalArgumentException(s"Tried to update non-existent state for $id")
           case Some(s) => Some(s.updatedAll(updates))
         }
       }
-      timingSpans.end("New candidate state integration")
+      timingSpans.end("State integration")
       stash.unstashAll(
-        behavior(attributes, updatedWorkQueue, pendingGenerationJobs - (id -> jobType), testedCandidates)
+        behavior(attributes, updatedWorkQueue, pendingGenerationJobs - job, testedCandidates)
       )
 
     case m =>
@@ -224,60 +248,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       case m =>
         context.log.warn("Ignoring message because we are in shutdown: {}", m)
         Behaviors.same
-    }
-  }
-
-  private def updateStateAndNext(
-      attributes: Seq[Int],
-      workQueue: WorkQueue,
-      pendingGenerationJobs: Set[(CandidateSet, JobType.JobType)],
-      testedCandidates: Int,
-      job: (CandidateSet, JobType.JobType),
-      stateUpdate: CandidateState.Delta
-  ): Behavior[Command] = {
-    context.log.debug("Received results for {}", job)
-    val (id, jobType) = job
-
-    timingSpans.start("Result state update")
-    // update state based on received results
-    val newWorkQueue = workQueue.removePending(job)
-    val newTaskState = state.updateWith(id) {
-      case None => None
-      case Some(s) => Some(s.updated(stateUpdate).pruneIfConditionsAreMet)
-    }
-
-    // update successors and get new generation jobs
-    val successors = id.successors(attributes.toSet)
-    val nodeIsPruned = newTaskState.forall(_.isPruned)
-
-    if (nodeIsPruned) {
-      context.log.debug("Pruning node {} and all successors", id)
-      // node pruning! --> invalidate all successing nodes
-      successors.foreach(s =>
-        state.updateWith(s) {
-          case Some(value) => Some(value.prune)
-          case None => Some(CandidateState.pruned(s))
-        }
-      )
-      // remove all jobs that involve one of the pruned successors
-      val updatedWorkQueue = newWorkQueue.removeAll(successors)
-
-      timingSpans.end("Result state update")
-      behavior(attributes, updatedWorkQueue, pendingGenerationJobs, testedCandidates + 1)
-    } else {
-      // update counters of successors
-      val successorStates = successors.map { successor =>
-        val oldState = state.getOrElse(successor, CandidateState(successor))
-        val successorState = oldState.incPreconditions(jobType)
-        state.update(successor, successorState)
-        successorState
-      }
-
-      // generate successor's candidates async in helper
-      pool ! GenerateCandidates(id, jobType, successorStates)
-
-      timingSpans.end("Result state update")
-      behavior(attributes, newWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
     }
   }
 

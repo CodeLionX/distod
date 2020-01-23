@@ -99,9 +99,9 @@ trait CandidateGeneration {
     )
 
   def generateLevel1(
-      attributes: Set[Int],
+      attributes: Seq[Int],
       partitions: Array[FullPartition]
-  ): (Set[CandidateSet], Map[CandidateSet, CandidateState]) = {
+  ): (Seq[CandidateSet], Map[CandidateSet, CandidateState]) = {
     val L1candidates = attributes.map(columnId => CandidateSet.from(columnId))
     val L1candidateState = L1candidates.map { candidate =>
       candidate -> CandidateState.forL1(candidate, CandidateSet.fromSpecific(attributes))

@@ -115,7 +115,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         ))
 
         // L1: single attribute candidate nodes
-        val (l1candidates, l1candidateState) = generateLevel1(attributeSet, partitions)
+        val (l1candidates, l1candidateState) = generateLevel1(attributes, partitions)
         l1candidates.zipWithIndex.foreach { case (candidate, index) =>
           partitionManager ! InsertPartition(candidate, partitions(index))
         }

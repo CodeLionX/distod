@@ -1,9 +1,13 @@
 package com.github.codelionx.distod
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.typed.{ActorSystem, DispatcherSelector, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
 import com.github.codelionx.distod.Settings.InputParsingSettings
 import com.typesafe.config.{Config, ConfigException}
+
+import scala.concurrent.duration.FiniteDuration
 
 
 /**
@@ -76,6 +80,12 @@ class Settings private(config: Config) extends Extension {
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 
+  // cuts off nanosecond part of durations (we dont care about this, because duration should be in
+  // seconds or greater anyway
+  val partitionManagerCleanupInterval: FiniteDuration = FiniteDuration.apply(
+    config.getDuration(s"$namespace.partition-manager.cleanup-interval").getSeconds,
+    TimeUnit.SECONDS
+  )
 
   val inputParsingSettings: InputParsingSettings = new InputParsingSettings {
 

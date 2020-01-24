@@ -38,12 +38,6 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   import PartitionManager._
 
-
-  def start(): Behavior[PartitionCommand] = {
-    timers.startTimerWithFixedDelay("cleanup", Cleanup, 5 seconds)
-    initialize(Seq.empty, Map.empty)
-  }
-
   private val settings = Settings(context.system)
 
   private val generatorPool = context.spawn(
@@ -54,6 +48,11 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   )
 
   private val timings = Timing(context.system)
+
+  def start(): Behavior[PartitionCommand] = {
+    timers.startTimerWithFixedDelay("cleanup", Cleanup, settings.partitionManagerCleanupInterval)
+    initialize(Seq.empty, Map.empty)
+  }
 
   private def initialize(
       attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]

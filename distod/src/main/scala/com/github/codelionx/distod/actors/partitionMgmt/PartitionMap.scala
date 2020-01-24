@@ -17,6 +17,8 @@ class PartitionMap private(
     partitions: Map[CandidateSet, StrippedPartition], // keys of size != 1
 ) {
 
+  def size: Int = partitions.size + singletonPartitions.size
+
   /**
    * Alias for `updated`
    *
@@ -96,5 +98,18 @@ class PartitionMap private(
    * @return `true` if there is a binding for `key` in this partition map, `false` otherwise.
    */
   def contains(key: CandidateSet): Boolean = get(key).isDefined
+
+  /**
+   * Frees up the space of a complete level by discarding all partitions corresponding to this level.
+   *
+   * @param level id of the level (key size) != 1
+   */
+  def removeLevel(level: Int): PartitionMap = {
+    if(level == 1) {
+      throw new IllegalArgumentException("Can not discard all singleton partitions!")
+    }
+    val updatedPartitions = partitions.view.filterKeys(_.size != level).toMap
+    new PartitionMap(singletonPartitions, updatedPartitions)
+  }
 
 }

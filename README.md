@@ -66,3 +66,13 @@ This command only works on linux:
 taskset --cpu-list 1,2 <cmd>
 ```
 
+Running the distributed version of FASTOD with Spark:
+
+- Admin must start spark on all nodes
+- Copy over dependencies (`lib`-folder), application (`jar`-file) on head node of cluster (`odi01`)
+- Copy dataset to all nodes
+- Use `spark-submit` on head node to start algorithm
+
+```bash
+spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar --class FastODMain --master spark://odin01:7077 --executor-memory 2G --num-executors 4 distributed-fastod.jar "file:${DATASET}" "${BATCHSIZE}"
+```

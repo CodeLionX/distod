@@ -70,9 +70,13 @@ Running the distributed version of FASTOD with Spark:
 
 - Admin must start spark on all nodes
 - Copy over dependencies (`lib`-folder), application (`jar`-file) on head node of cluster (`odi01`)
+- Convert dataset to json and make sure that only numerical values are used.
+  You can substitute the hash of the original values with the `scripts/to-json.py -s` script.
 - Copy dataset to all nodes
 - Use `spark-submit` on head node to start algorithm
 
 ```bash
-spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar --class FastODMain --master spark://odin01:7077 --executor-memory 2G --num-executors 4 distributed-fastod.jar "file:${DATASET}" "${BATCHSIZE}"
+spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar --class FastODMain --master spark://odin01:7077 --executor-memory 10G --num-executors 2 --executor-cores 10 --total-executor-cores 20 distributed-fastod.jar file:${DATASET}" "${BATCHSIZE}"
 ```
+
+The `total-executor-cores` values is calculated based on the number of executors (nodes) and the number of processors (cores) that should be used by the executor.

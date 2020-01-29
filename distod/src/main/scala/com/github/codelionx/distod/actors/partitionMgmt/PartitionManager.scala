@@ -87,7 +87,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         singletonPartitions.size
       )
       stash.unstashAll(
-        behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty, Int.MaxValue, 2)
+        behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty, Int.MaxValue, 0)
       )
     } else {
       initialize(attributes, singletonPartitions)
@@ -221,10 +221,12 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         }
         next(_partitions = updatedPartitions, _pendingJobs = pendingJobs.keyRemoved(key))
 
-      case Cleanup if minLevel >= currentLevel =>
-        val updatedPartitions = (currentLevel until minLevel).foldLeft(partitions){ case (parts, level) =>
-          parts.removeLevel(level)
-        }
+      case Cleanup if minLevel >= currentLevel && minLevel != Int.MaxValue =>
+        val updatedPartitions = (currentLevel until minLevel)
+          .filterNot(_ == 1)
+          .foldLeft(partitions){ case (parts, level) =>
+            parts.removeLevel(level)
+          }
         if(context.log.isInfoEnabled) {
           val removed = partitions.size - updatedPartitions.size
           if(removed > 0) {

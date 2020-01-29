@@ -7,17 +7,26 @@ import com.github.codelionx.distod.types.CandidateSet
 object PartitionMap {
 
   def from(singletonPartitions: Map[CandidateSet, FullPartition]): PartitionMap =
-    new PartitionMap(singletonPartitions, Map.empty)
+    new PartitionMap(singletonPartitions, IndexedSeq.empty)
 
 }
 
 
 class PartitionMap private(
     singletonPartitions: Map[CandidateSet, FullPartition], // keys of size == 1
-    partitions: Map[CandidateSet, StrippedPartition], // keys of size != 1
+    levels: IndexedSeq[Map[CandidateSet, StrippedPartition]], // keys of size != 1
 ) {
 
-  def size: Int = partitions.size + singletonPartitions.size
+  private def growLevels(size: Int): IndexedSeq[Map[CandidateSet, StrippedPartition]] = {
+    val missing = size - (levels.size - 1)
+    if(missing > 0) {
+      levels ++ IndexedSeq.fill(missing){Map.empty[CandidateSet, StrippedPartition]}
+    } else {
+      levels
+    }
+  }
+
+  def size: Int = levels.map(_.size).sum + singletonPartitions.size
 
   /**
    * Alias for `updated`
@@ -34,8 +43,12 @@ class PartitionMap private(
    * @param    value the partition
    * @return A new partition map with the new key/value mapping added to this map.
    */
-  def updated(key: CandidateSet, value: StrippedPartition): PartitionMap =
-    new PartitionMap(singletonPartitions, partitions.updated(key, value))
+  def updated(key: CandidateSet, value: StrippedPartition): PartitionMap = {
+    val newLevels = growLevels(key.size)
+    val newMap = newLevels(key.size).updated(key, value)
+    val updatedLevels = newLevels.updated(key.size, newMap)
+    new PartitionMap(singletonPartitions, updatedLevels)
+  }
 
   /**
    * Optionally returns the singleton partition (full partition) associated with a key.
@@ -58,10 +71,11 @@ class PartitionMap private(
    *         or `None` if none exists.
    */
   def get(key: CandidateSet): Option[StrippedPartition] =
-    if (key.size == 1)
-      singletonPartitions.get(key).map(_.stripped)
-    else
-      partitions.get(key)
+    key.size match {
+      case 1 => singletonPartitions.get(key).map(_.stripped)
+      case i if i < levels.size => levels(key.size).get(key)
+      case _ => None
+    }
 
   /**
    * Returns the value associated with a key, or a default value if the key is not contained in the partition map.
@@ -108,8 +122,8 @@ class PartitionMap private(
     if(level == 1) {
       throw new IllegalArgumentException("Can not discard all singleton partitions!")
     }
-    val updatedPartitions = partitions.view.filterKeys(_.size != level).toMap
-    new PartitionMap(singletonPartitions, updatedPartitions)
+    val updatedLevels = levels.updated(level, Map.empty)
+    new PartitionMap(singletonPartitions, updatedLevels)
   }
 
 }

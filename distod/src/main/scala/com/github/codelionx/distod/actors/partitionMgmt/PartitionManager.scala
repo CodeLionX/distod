@@ -49,6 +49,8 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   private val timings = Timing(context.system)
 
+  private var partitions: LRUPartitionMap = _
+
   def start(): Behavior[PartitionCommand] = {
     timers.startTimerWithFixedDelay("cleanup", Cleanup, settings.partitionManagerCleanupInterval)
     initialize(Seq.empty, Map.empty)
@@ -86,8 +88,9 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         attributes.size,
         singletonPartitions.size
       )
+      partitions = LRUPartitionMap.from(singletonPartitions)
       stash.unstashAll(
-        behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty, Int.MaxValue, 2)
+        behavior(attributes, PendingJobMap.empty)
       )
     } else {
       initialize(attributes, singletonPartitions)
@@ -95,19 +98,13 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   private def behavior(
       attributes: Seq[Int],
-      partitions: PartitionMap,
-      pendingJobs: PendingJobMap[CandidateSet, PendingResponse],
-      minLevel: Int,
-      currentLevel: Int
+      pendingJobs: PendingJobMap[CandidateSet, PendingResponse]
   ): Behavior[PartitionCommand] = {
     def next(
               _attributes: Seq[Int] = attributes,
-              _partitions: PartitionMap = partitions,
               _pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = pendingJobs,
-              _minLevel: Int = minLevel,
-              _currentLevel: Int = currentLevel
             ): Behavior[PartitionCommand] =
-      behavior(_attributes, _partitions, _pendingJobs, _minLevel, _currentLevel)
+      behavior(_attributes, _pendingJobs)
 
     Behaviors.receiveMessage {
 
@@ -122,7 +119,8 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
       case InsertPartition(key, value: StrippedPartition) =>
         context.log.debug("Inserting partition for key {}", key)
-        next(_partitions = partitions + (key -> value))
+        partitions + (key -> value)
+        Behaviors.same
 
       // request attributes
       case LookupAttributes(replyTo) =>
@@ -159,25 +157,21 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
       // rest
       case LookupError(key, replyTo) if key.size != 1 =>
-        if(key.size > 2 && key.size < currentLevel) {
-          context.log.warn("Accessing partition that was previously removed: {} (current level: {})", key, currentLevel)
-        }
         partitions.get(key) match {
           case Some(p: StrippedPartition) =>
             replyTo ! ErrorFound(key, p.error)
-            next(_minLevel = math.min(minLevel, key.size))
+            Behaviors.same
           case None if pendingJobs.contains(key) =>
             context.log.trace("Error is being computed, queuing request for key {}", key)
-            next(_pendingJobs = pendingJobs + (key -> PendingError(replyTo)), _minLevel = math.min(minLevel, key.size))
+            next(_pendingJobs = pendingJobs + (key -> PendingError(replyTo)))
           case None =>
             context.log.debug("Partition to compute error not found. Starting background job to compute {}", key)
             val newJobs = generateStrippedPartitionJobs(
               key,
-              partitions,
               pendingJobs,
               PendingError(replyTo)
             )
-            next(_pendingJobs = newJobs, _minLevel = math.min(minLevel, key.size))
+            next(_pendingJobs = newJobs)
         }
 
       case LookupPartition(key, _) if key.size != 1 =>
@@ -186,30 +180,26 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         )
 
       case LookupStrippedPartition(key, replyTo) if key.size != 1 =>
-        if(key.size > 2 && key.size < currentLevel) {
-          context.log.warn("Accessing partition that was previously removed: {} (current level: {})", key, currentLevel)
-        }
         partitions.get(key) match {
           case Some(p: StrippedPartition) =>
             replyTo ! StrippedPartitionFound(key, p)
-            next(_minLevel = math.min(minLevel, key.size))
+            Behaviors.same
           case None if pendingJobs.contains(key) =>
             context.log.trace("Partition is being computed, queuing request for key {}", key)
-            next(_pendingJobs = pendingJobs + (key -> PendingStrippedPartition(replyTo)), _minLevel = math.min(minLevel, key.size))
+            next(_pendingJobs = pendingJobs + (key -> PendingStrippedPartition(replyTo)))
           case None =>
             context.log.debug("Partition not found. Starting background job to compute {}", key)
             val newJobs = generateStrippedPartitionJobs(
               key,
-              partitions,
               pendingJobs,
               PendingStrippedPartition(replyTo)
             )
-            next(_pendingJobs = newJobs, _minLevel = math.min(minLevel, key.size))
+            next(_pendingJobs = newJobs)
         }
 
       case ProductComputed(key, partition) =>
         context.log.trace("Received computed partition for key {}", key)
-        val updatedPartitions = partitions + (key -> partition)
+        partitions + (key -> partition)
         pendingJobs.get(key) match {
           case Some(pendingResponses) => pendingResponses.foreach {
             case PendingStrippedPartition(ref) =>
@@ -219,37 +209,22 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
           }
           case None => // do nothing
         }
-        next(_partitions = updatedPartitions, _pendingJobs = pendingJobs.keyRemoved(key))
+        next(_pendingJobs = pendingJobs.keyRemoved(key))
 
-      case Cleanup if minLevel >= currentLevel && minLevel != Int.MaxValue =>
-        val updatedPartitions = (currentLevel until minLevel)
-          .filterNot(_ == 1)
-          .foldLeft(partitions){ case (parts, level) =>
-            parts.removeLevel(level)
-          }
-        if(context.log.isInfoEnabled) {
-          val removed = partitions.size - updatedPartitions.size
-          if(removed > 0) {
-            context.log.info("Cleaning up {} partitions (< {})", removed, minLevel)
-          }
-          context.log.debug("Cleaning up until level {}: removed {} partitions", minLevel, removed)
-        }
-        next(_partitions = updatedPartitions, _minLevel = Int.MaxValue, _currentLevel = minLevel)
-
-      case Cleanup => // skip
-        context.log.debug("Skipping cleanup, current level: {}, min level: {}", currentLevel, minLevel)
-        next(_minLevel = Int.MaxValue)
+      case Cleanup =>
+        context.log.info("Triggering time-based compaction")
+        partitions.compact()
+        Behaviors.same
     }
   }
 
   private def generateStrippedPartitionJobs(
       key: CandidateSet,
-      partitions: PartitionMap,
       pendingJobs: PendingJobMap[CandidateSet, PendingResponse],
       pendingResponse: PendingResponse
   ): PendingJobMap[CandidateSet, PendingResponse] = {
     timings.time("Partition generation") {
-      val jobs = calcJobChain(key, partitions)
+      val jobs = calcJobChain(key)
       generatorPool ! ComputePartitions(jobs, context.self)
       val x = jobs.map { job =>
         if (job.key == key)
@@ -263,7 +238,6 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   private def calcJobChain(
       key: CandidateSet,
-      partitions: PartitionMap
   ): Seq[ComputePartitionProductJob] = {
 
     def loop(subkey: CandidateSet): Seq[ComputePartitionProductJob] = {

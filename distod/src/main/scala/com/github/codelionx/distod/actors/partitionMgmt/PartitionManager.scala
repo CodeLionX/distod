@@ -87,7 +87,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         singletonPartitions.size
       )
       stash.unstashAll(
-        behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty, Int.MaxValue, 0)
+        behavior(attributes, PartitionMap.from(singletonPartitions), PendingJobMap.empty, Int.MaxValue, 2)
       )
     } else {
       initialize(attributes, singletonPartitions)

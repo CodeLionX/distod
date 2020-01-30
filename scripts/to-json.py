@@ -38,7 +38,6 @@ def read_source(filename, delimiter, has_header):
             first_row = {}
             for name, value in zip(header, elems):
                 first_row[name] = value
-            first_row["index"] = 0
             yield 0, first_row
 
             # use reader from now on
@@ -54,16 +53,23 @@ def perform_substitution(reader):
         yield i, {k: hash(v) for k, v in row.items()}
 
 
-def main(filename, delimiter, has_header, target, substitution_enabled):
-    with open(target, 'w', encoding='utf-8') as out:
-        reader = read_source(filename, delimiter, has_header)
-        if substitution_enabled:
-            reader = perform_substitution(reader)
+def main(filename, delimiter, has_header, target, substitution_enabled, duplicate):
+    with open(target + ".csv", 'w', encoding='utf-8') as csv_out:
+        with open(target + ".json", 'w', encoding='utf-8') as out:
+            reader = read_source(filename, delimiter, has_header)
+            if substitution_enabled:
+                reader = perform_substitution(reader)
 
-        for i, row in reader:
-            row["index"] = i
-            obj = json.dumps(row)
-            out.write(obj + ",\n")
+            for i, row in reader:
+                if duplicate and has_header and i == 0:
+                    headers = row.keys()
+                    csv_out.write(delimiter.join(headers) + "\n")
+                if duplicate:
+                    values = [str(v) for v in row.values()]
+                    csv_out.write(delimiter.join(values) + "\n")
+                row["index"] = i
+                obj = json.dumps(row)
+                out.write(obj + ",\n")
 
 
 if __name__ == "__main__":
@@ -74,11 +80,13 @@ if __name__ == "__main__":
                         help='set to true of the csv file has a header line')
     parser.add_argument('-s', '--substitute', action='store_true',
                         help='use integer value substitution')
+    parser.add_argument('-d', '--duplicate', action='store_true',
+                        help='also write all data to a separate csv file')
     parser.add_argument('source',
                         help='source file path (csv format)')
     parser.add_argument('target',
                         help='target file path (where json is written to')
 
     args = parser.parse_args()
-    # main("../data/adult-48842-14.csv", ";", False, "../data/adult.json")
-    main(args.source, args.delimiter, args.has_header, args.target, args.substitute)
+    # main("../data/adult-48842-14.csv", ";", False, "../data/adult-sub")
+    main(args.source, args.delimiter, args.has_header, args.target, args.substitute, args.duplicate)

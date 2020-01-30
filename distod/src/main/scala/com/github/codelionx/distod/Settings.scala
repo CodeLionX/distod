@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.typed.{ActorSystem, DispatcherSelector, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
-import com.github.codelionx.distod.Settings.InputParsingSettings
+import com.github.codelionx.distod.Settings.{InputParsingSettings, PartitionCompactionSettings}
 import com.typesafe.config.{Config, ConfigException}
 
 import scala.concurrent.duration.FiniteDuration
@@ -28,6 +28,15 @@ object Settings extends ExtensionId[Settings] {
     def maxColumns: Option[Int]
 
     def maxRows: Option[Int]
+  }
+
+  trait PartitionCompactionSettings {
+
+    def enabled: Boolean
+
+    def interval: FiniteDuration
+
+    def levelAccessThreshold: Long
   }
 
 }
@@ -80,12 +89,21 @@ class Settings private(config: Config) extends Extension {
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 
-  // cuts off nanosecond part of durations (we dont care about this, because duration should be in
-  // seconds or greater anyway
-  val partitionManagerCleanupInterval: FiniteDuration = FiniteDuration.apply(
-    config.getDuration(s"$namespace.partition-manager.cleanup-interval").getSeconds,
-    TimeUnit.SECONDS
-  )
+  val partitionCompactionSettings: PartitionCompactionSettings = new PartitionCompactionSettings {
+
+    private val subnamesapce = s"$namespace.partition-compaction"
+
+    override def enabled: Boolean = config.getBoolean(s"$subnamesapce.enabled")
+
+    // cuts off nanosecond part of durations (we dont care about this, because duration should be in
+    // seconds or greater anyway)
+    override def interval: FiniteDuration = FiniteDuration.apply(
+      config.getDuration(s"$subnamesapce.interval").getSeconds,
+      TimeUnit.SECONDS
+    )
+
+    override def levelAccessThreshold: Long = config.getLong(s"$subnamesapce.level-access-threshold")
+  }
 
   val inputParsingSettings: InputParsingSettings = new InputParsingSettings {
 

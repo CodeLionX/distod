@@ -2,6 +2,7 @@ package com.github.codelionx.distod.actors.partitionMgmt
 
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.Settings.PartitionCompactionSettings
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.mutable
@@ -9,15 +10,22 @@ import scala.collection.mutable
 
 object CompactingPartitionMap {
 
-  val AUTO_COMPACTION_ACCESS_THRESHOLD = 50000
+  def apply(settings: PartitionCompactionSettings): CompactingPartitionMapBuilder =
+    new CompactingPartitionMapBuilder(settings)
 
-  def from(singletonPartitions: Map[CandidateSet, FullPartition]): CompactingPartitionMap =
-    new CompactingPartitionMap(singletonPartitions)
+  class CompactingPartitionMapBuilder private[CompactingPartitionMap] (settings: PartitionCompactionSettings) {
 
+    def from(singletonPartitions: Map[CandidateSet, FullPartition]): CompactingPartitionMap =
+      new CompactingPartitionMap(settings, singletonPartitions)
+  }
 }
 
 
-class CompactingPartitionMap private(initialSingletonPartitions: Map[CandidateSet, FullPartition]) {
+class CompactingPartitionMap private(
+    compactionSettings: PartitionCompactionSettings,
+    initialSingletonPartitions: Map[CandidateSet, FullPartition]
+) {
+
   // keys of size == 1
   private val singletonPartitions: Map[CandidateSet, FullPartition] = initialSingletonPartitions
   // keys of size != 1
@@ -37,7 +45,7 @@ class CompactingPartitionMap private(initialSingletonPartitions: Map[CandidateSe
         mutable.Map.empty[CandidateSet, Int]
       }
       accessCounter ++= IndexedSeq.fill(missing)(0)
-      if(size > 3) {
+      if(compactionSettings.enabled && size > 3) {
         log.info("Triggering auto-compaction based on level growth to level {}", size)
         compact()
       }
@@ -50,7 +58,7 @@ class CompactingPartitionMap private(initialSingletonPartitions: Map[CandidateSe
       case Some(v) => Some(v + 1)
     }
     accessCounter(key.size) = accessCounter(key.size) + 1
-    if(accessCounter(key.size) % CompactingPartitionMap.AUTO_COMPACTION_ACCESS_THRESHOLD == 0L) {
+    if(accessCounter(key.size) >= compactionSettings.levelAccessThreshold) {
       log.info("Triggering auto-compaction based on access counter threshold")
       compact()
     }
@@ -82,7 +90,8 @@ class CompactingPartitionMap private(initialSingletonPartitions: Map[CandidateSe
   def update(key: CandidateSet, value: StrippedPartition): Unit = {
     growLevels(key.size)
     levels(key.size).update(key, value)
-    updateUsage(key)
+    if(compactionSettings.enabled)
+      updateUsage(key)
   }
 
   /**
@@ -111,7 +120,7 @@ class CompactingPartitionMap private(initialSingletonPartitions: Map[CandidateSe
         singletonPartitions.get(key).map(_.stripped)
       case i if i < levels.size =>
         val result = levels(key.size).get(key)
-        if(result.isDefined) {
+        if(compactionSettings.enabled && result.isDefined) {
           updateUsage(key)
         }
         result

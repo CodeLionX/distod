@@ -39,6 +39,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   import PartitionManager._
 
   private val settings = Settings(context.system)
+  private val compactionSettings = settings.partitionCompactionSettings
 
   private val generatorPool = context.spawn(
     PartitionGenerator.createPool(settings.numberOfWorkers),
@@ -52,7 +53,8 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   private var partitions: CompactingPartitionMap = _
 
   def start(): Behavior[PartitionCommand] = {
-    timers.startTimerWithFixedDelay("cleanup", Cleanup, settings.partitionManagerCleanupInterval)
+    if(compactionSettings.enabled)
+      timers.startTimerWithFixedDelay("cleanup", Cleanup, compactionSettings.interval)
     initialize(Seq.empty, Map.empty)
   }
 
@@ -88,7 +90,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         attributes.size,
         singletonPartitions.size
       )
-      partitions = CompactingPartitionMap.from(singletonPartitions)
+      partitions = CompactingPartitionMap(compactionSettings).from(singletonPartitions)
       stash.unstashAll(
         behavior(attributes, PendingJobMap.empty)
       )

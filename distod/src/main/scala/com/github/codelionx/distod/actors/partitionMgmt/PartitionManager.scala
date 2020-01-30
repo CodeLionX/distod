@@ -49,7 +49,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
 
   private val timings = Timing(context.system)
 
-  private var partitions: LRUPartitionMap = _
+  private var partitions: CompactingPartitionMap = _
 
   def start(): Behavior[PartitionCommand] = {
     timers.startTimerWithFixedDelay("cleanup", Cleanup, settings.partitionManagerCleanupInterval)
@@ -88,7 +88,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
         attributes.size,
         singletonPartitions.size
       )
-      partitions = LRUPartitionMap.from(singletonPartitions)
+      partitions = CompactingPartitionMap.from(singletonPartitions)
       stash.unstashAll(
         behavior(attributes, PendingJobMap.empty)
       )

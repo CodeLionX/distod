@@ -7,17 +7,17 @@ import org.slf4j.{Logger, LoggerFactory}
 import scala.collection.mutable
 
 
-object LRUPartitionMap {
+object CompactingPartitionMap {
 
   val AUTO_COMPACTION_ACCESS_THRESHOLD = 50000
 
-  def from(singletonPartitions: Map[CandidateSet, FullPartition]): LRUPartitionMap =
-    new LRUPartitionMap(singletonPartitions)
+  def from(singletonPartitions: Map[CandidateSet, FullPartition]): CompactingPartitionMap =
+    new CompactingPartitionMap(singletonPartitions)
 
 }
 
 
-class LRUPartitionMap private(initialSingletonPartitions: Map[CandidateSet, FullPartition]) {
+class CompactingPartitionMap private(initialSingletonPartitions: Map[CandidateSet, FullPartition]) {
   // keys of size == 1
   private val singletonPartitions: Map[CandidateSet, FullPartition] = initialSingletonPartitions
   // keys of size != 1
@@ -25,7 +25,7 @@ class LRUPartitionMap private(initialSingletonPartitions: Map[CandidateSet, Full
   private var usage: IndexedSeq[mutable.Map[CandidateSet, Int]] = IndexedSeq.empty
   private val accessCounter: mutable.IndexedBuffer[Long] = mutable.IndexedBuffer.empty
 
-  private val log: Logger = LoggerFactory.getLogger(classOf[LRUPartitionMap])
+  private val log: Logger = LoggerFactory.getLogger(classOf[CompactingPartitionMap])
 
   private def growLevels(size: Int): Unit = {
     val missing = size - (levels.size - 1)
@@ -50,7 +50,7 @@ class LRUPartitionMap private(initialSingletonPartitions: Map[CandidateSet, Full
       case Some(v) => Some(v + 1)
     }
     accessCounter(key.size) = accessCounter(key.size) + 1
-    if(accessCounter(key.size) % LRUPartitionMap.AUTO_COMPACTION_ACCESS_THRESHOLD == 0L) {
+    if(accessCounter(key.size) % CompactingPartitionMap.AUTO_COMPACTION_ACCESS_THRESHOLD == 0L) {
       log.info("Triggering auto-compaction based on access counter threshold")
       compact()
     }

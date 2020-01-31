@@ -1,16 +1,13 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
 import com.github.codelionx.util.timing.Timing
-
-import scala.concurrent.duration._
-import scala.language.postfixOps
 
 
 object PartitionManager {

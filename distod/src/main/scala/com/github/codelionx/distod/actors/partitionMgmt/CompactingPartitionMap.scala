@@ -192,6 +192,19 @@ class CompactingPartitionMap private(
   }
 
   /**
+   * Frees up the memory that is used by temporary partitions. This does not include the singleton partitions.
+   * This method also resets all partition usage statistics.
+   */
+  def clear(): Unit = {
+    // skip empty partition to prevent early deletion
+    levels.tail.foreach(_.clear())
+    usage.foreach(_.clear())
+    for(i <- accessCounter.indices) {
+      accessCounter(i) = 0
+    }
+  }
+
+  /**
    * Frees up the space of a complete level by discarding all partitions corresponding to this level.
    *
    * @param level id of the level (key size) != 1

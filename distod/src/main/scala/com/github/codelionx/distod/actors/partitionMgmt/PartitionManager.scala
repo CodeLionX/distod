@@ -4,6 +4,8 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
+import com.github.codelionx.distod.actors.SystemMonitor
+import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, Register, SystemEvent}
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
@@ -15,6 +17,7 @@ object PartitionManager {
   private[partitionMgmt] case class ProductComputed(key: CandidateSet, partition: StrippedPartition)
     extends PartitionCommand
   private case object Cleanup extends PartitionCommand
+  private final case class WrappedSystemEvent(event: SystemEvent) extends PartitionCommand
 
   private sealed trait PendingResponse
   private final case class PendingError(replyTo: ActorRef[ErrorFound]) extends PendingResponse
@@ -22,16 +25,21 @@ object PartitionManager {
 
   val name = "partition-manager"
 
-  def apply(): Behavior[PartitionCommand] = Behaviors.setup(context =>
+  def apply(monitor: ActorRef[SystemMonitor.Command]): Behavior[PartitionCommand] = Behaviors.setup(context =>
     Behaviors.withStash(300) { stash =>
       Behaviors.withTimers{ timers =>
-        new PartitionManager(context, stash, timers).start()
+        new PartitionManager(context, stash, timers, monitor).start()
   }})
 
 }
 
 
-class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuffer[PartitionCommand], timers: TimerScheduler[PartitionCommand]) {
+class PartitionManager(
+    context: ActorContext[PartitionCommand],
+    stash: StashBuffer[PartitionCommand],
+    timers: TimerScheduler[PartitionCommand],
+    monitor: ActorRef[SystemMonitor.Command]
+) {
 
   import PartitionManager._
 
@@ -52,6 +60,8 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
   def start(): Behavior[PartitionCommand] = {
     if(compactionSettings.enabled)
       timers.startTimerWithFixedDelay("cleanup", Cleanup, compactionSettings.interval)
+
+    monitor ! Register(context.messageAdapter(WrappedSystemEvent))
     initialize(Seq.empty, Map.empty)
   }
 
@@ -68,7 +78,7 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       val newSingletonPartitions = singletonPartitions + (key -> value)
       nextBehavior(attributes, newSingletonPartitions)
 
-    case Cleanup =>
+    case Cleanup | WrappedSystemEvent(_) =>
       // ignore
       Behaviors.same
 
@@ -213,6 +223,11 @@ class PartitionManager(context: ActorContext[PartitionCommand], stash: StashBuff
       case Cleanup =>
         context.log.info("Triggering time-based compaction")
         partitions.compact()
+        Behaviors.same
+
+      case WrappedSystemEvent(CriticalHeapUsage) =>
+        context.log.warn("Clearing all temporary partitions in consequence of memory shortage")
+        partitions.clear()
         Behaviors.same
     }
   }

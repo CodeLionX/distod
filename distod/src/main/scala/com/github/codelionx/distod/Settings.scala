@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.typed.{ActorSystem, DispatcherSelector, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
-import com.github.codelionx.distod.Settings.{InputParsingSettings, PartitionCompactionSettings}
+import com.github.codelionx.distod.Settings.{InputParsingSettings, MonitoringSettings, PartitionCompactionSettings}
 import com.typesafe.config.{Config, ConfigException}
 
 import scala.concurrent.duration.FiniteDuration
@@ -39,6 +39,16 @@ object Settings extends ExtensionId[Settings] {
     def levelAccessThreshold: Long
   }
 
+  trait MonitoringSettings {
+
+    def interval: FiniteDuration
+
+    def heapEvictionThreshold: Double
+
+    def statisticsLogInterval: FiniteDuration
+
+    def statisticsLogLevel: String
+  }
 }
 
 
@@ -91,18 +101,18 @@ class Settings private(config: Config) extends Extension {
 
   val partitionCompactionSettings: PartitionCompactionSettings = new PartitionCompactionSettings {
 
-    private val subnamesapce = s"$namespace.partition-compaction"
+    private val subnamespace = s"$namespace.partition-compaction"
 
-    override def enabled: Boolean = config.getBoolean(s"$subnamesapce.enabled")
+    override def enabled: Boolean = config.getBoolean(s"$subnamespace.enabled")
 
     // cuts off nanosecond part of durations (we dont care about this, because duration should be in
     // seconds or greater anyway)
     override def interval: FiniteDuration = FiniteDuration.apply(
-      config.getDuration(s"$subnamesapce.interval").getSeconds,
+      config.getDuration(s"$subnamespace.interval").getSeconds,
       TimeUnit.SECONDS
     )
 
-    override def levelAccessThreshold: Long = config.getLong(s"$subnamesapce.level-access-threshold")
+    override def levelAccessThreshold: Long = config.getLong(s"$subnamespace.level-access-threshold")
   }
 
   val inputParsingSettings: InputParsingSettings = new InputParsingSettings {
@@ -122,5 +132,34 @@ class Settings private(config: Config) extends Extension {
       Some(config.getInt(s"$subnamespace.max-rows"))
     else
       None
+  }
+
+  val monitoringSettings: MonitoringSettings = new MonitoringSettings {
+
+    private val subnamespace = s"$namespace.monitoring"
+
+    override def interval: FiniteDuration = {
+      val duration = config.getDuration(s"$subnamespace.interval")
+      val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
+      val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)
+      finiteDurationOnlySeconds + finiteDurationOnlyNanos
+    }
+
+    override def heapEvictionThreshold: Double = config.getInt(s"$subnamespace.heap-eviction-threshold") match {
+      case i if i <= 0 || i > 100 => throw new ConfigException.BadValue(
+        s"$subnamespace.heap-eviction-threshold",
+        s"threshold must be between [excluding] 0 and [including] 100 (percent value)"
+      )
+      case i => i / 100.0
+    }
+
+    override def statisticsLogInterval: FiniteDuration = {
+      val duration = config.getDuration(s"$subnamespace.statistics-log-interval")
+      val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
+      val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)
+      finiteDurationOnlySeconds + finiteDurationOnlyNanos
+    }
+
+    override def statisticsLogLevel: String = config.getString(s"$subnamespace.statistics-log-level")
   }
 }

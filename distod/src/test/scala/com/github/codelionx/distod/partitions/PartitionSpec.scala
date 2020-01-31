@@ -10,12 +10,12 @@ class PartitionSpec extends WordSpec with Matchers {
   "A full partition" should {
     val partition = Partition.fullFrom(column)
 
-    "contain all values of the column" in {
-      partition.numberElements shouldBe column.length
+    "contain all values of the column that were not stripped" in {
+      partition.numberElements shouldBe 8
     }
 
     "have the right number of classes" in {
-      partition.numberClasses shouldBe 5
+      partition.numberClasses shouldBe 3
     }
 
     "sort the classes" in {
@@ -23,18 +23,19 @@ class PartitionSpec extends WordSpec with Matchers {
         Set(0, 2, 4, 8),
         Set(1, 5),
         Set(3, 7),
-        Set(6),
-        Set(9)
       )
     }
 
-    def makePartition(classes: Set[Index]*) =
+    def makePartition(classes: Set[Index]*) = {
+      val stripped = Partition.stripClasses(classes.toIndexedSeq)
       FullPartition(
-        nTuples = classes.size,
-        numberClasses = classes.size,
-        numberElements = classes.map(_.size).sum,
-        equivClasses = classes.toIndexedSeq
+        nTuples = classes.map(_.size).sum,
+        numberClasses = stripped.size,
+        numberElements = stripped.map(_.size).sum,
+        equivClasses = stripped,
+        tupleValueMap = Partition.convertToTupleValueMap(classes.toIndexedSeq)
       )
+    }
 
     "compute the product correctly" in {
       {
@@ -197,7 +198,7 @@ class PartitionSpec extends WordSpec with Matchers {
         "3.3", "3.0", "2.5", "3.0", "3.4", "3.0"
       ))
 
-      (part0 * part1).stripped.equivClasses should contain theSameElementsAs expectedClasses
+      (part0 * part1).equivClasses should contain theSameElementsAs expectedClasses
       (part0.stripped * part1.stripped).equivClasses should contain theSameElementsAs expectedClasses
     }
   }

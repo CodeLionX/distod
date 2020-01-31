@@ -27,7 +27,7 @@ object CandidateValidation {
       fastSort(fullPartition)
 
     private def myFunctionalSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
-      val indexLUT = fullPartition.toTupleValueMap
+      val indexLUT = fullPartition.tupleValueMap
 
       p.equivClasses.map { clazz =>
         val subClazzes = mutable.SortedMap.empty[Int, mutable.Buffer[Int]]
@@ -41,11 +41,11 @@ object CandidateValidation {
     }
 
     private def fastSort(fullPartition: FullPartition): IndexedSeq[IndexedSeq[Seq[Int]]] = {
-      val indexLUT = fullPartition.toTupleValueMap
+      val indexLUT = fullPartition.tupleValueMap
       val resultClasses = Array.ofDim[IndexedSeq[Seq[Int]]](p.numberClasses)
 
       val classes = p.equivClasses
-      for (i <- 0 until classes.size) {
+      for (i <- classes.indices) {
         val clazz = classes(i)
         val subClazzes = mutable.SortedMap.empty[Int, mutable.Builder[Int, Seq[Int]]]
         for (tuple <- clazz) {
@@ -147,7 +147,7 @@ trait CandidateValidation {
       val (swap, reverseSwap) =
         if (contextPartition.numberClasses != 0) {
           val sortedContextClasses = contextPartition.sortEquivClassesBy(leftPartition)
-          val rightTupleValueMapping = rightPartition.toTupleValueMap
+          val rightTupleValueMapping = rightPartition.tupleValueMap
 
           val swapFinder = findSwapFast(rightTupleValueMapping) _
           val results = sortedContextClasses.map(swapFinder)

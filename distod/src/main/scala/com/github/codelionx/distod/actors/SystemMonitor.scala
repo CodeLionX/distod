@@ -51,25 +51,55 @@ class SystemMonitor(context: ActorContext[Command], timer: TimerScheduler[Comman
       behavior(listeners + ref)
 
     case Tick =>
-      free = runtime.freeMemory()
-      total = runtime.maxMemory()
-      val usage = total - free
-      usageP = usage.toDouble / total.toDouble
+      updateStatistics()
       if (usageP > settings.heapEvictionThreshold) {
+        logStatistics("CriticalHeapUsage event triggered!")
         listeners.foreach(_ ! CriticalHeapUsage)
+        waitForGC(listeners)
+      } else {
+        Behaviors.same
       }
-      max = scala.math.max(max, usage)
-      Behaviors.same
 
     case StatisticsTick =>
-      context.log.log(
-        settings.statisticsLogLevel,
-        "Heap usage: {} % [free={} mb, total={} mb, max={} mb]",
-        scala.math.ceil(usageP * 100),
-        free / megabyte,
-        total / megabyte,
-        max / megabyte
-      )
+      logStatistics()
       Behaviors.same
+  }
+
+  def waitForGC(listeners: Set[ActorRef[SystemEvent]], waitingTicks: Int = 3): Behavior[Command] = Behaviors.receiveMessage{
+    case Register(ref) =>
+      waitForGC(listeners + ref)
+
+    case Tick =>
+      updateStatistics()
+      val newWaitingTicks = waitingTicks - 1
+      if (usageP > settings.heapEvictionThreshold || newWaitingTicks > 0) {
+        waitForGC(listeners, newWaitingTicks)
+      } else {
+        max = 0
+        behavior(listeners)
+      }
+
+    case StatisticsTick =>
+      logStatistics()
+      Behaviors.same
+  }
+
+  private def updateStatistics(): Unit = {
+    free = runtime.freeMemory()
+    total = runtime.totalMemory()
+    val usage = total - free
+    usageP = usage.toDouble / total.toDouble
+    max = scala.math.max(max, usage)
+  }
+
+  private def logStatistics(prefixMessage: String = ""): Unit = {
+    context.log.log(
+      settings.statisticsLogLevel,
+      s"Heap usage: {} % [free={} mb, total={} mb, max={} mb] ${prefixMessage}",
+      scala.math.ceil(usageP * 100),
+      free / megabyte,
+      total / megabyte,
+      max / megabyte
+    )
   }
 }

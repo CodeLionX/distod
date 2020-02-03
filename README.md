@@ -22,12 +22,18 @@ Running DISTOD with a custom logging configuration:
 java -Dlogback.configurationFile=deployment/logback.xml -jar distod.jar
 ```
 
+> **Attention!**
+>
+> Please make sure to always run DISTOD with the G1 GC (`-XX:+UseG1GC`).
+> If you do not explicitly disable system monitoring, it is required to set both heap memory limits (`-Xms` and `-Xmx`) during application start to the same value.
+> This allows the system monitoring component to make more accurate decision regarding the memory usage. 
+
 ## Profiling with JMC
 
 [JMC](https://www.oracle.com/technetwork/java/javaseproducts/mission-control/index.html) is a tool to analyze metric recordings with the Java Flight Recorder (JFR).
 JFR is a very lightweight way to collect low level and detailed runtime information built into the Oracle JDK.
 The application (JAR) must therefore be run with an Oracle JVM.
-You can download it (Java SE JDK 11) from [their wesite](https://www.oracle.com/technetwork/java/javase/downloads/jdk11-downloads-5066655.html).
+You can download it (Java SE JDK 11) from [their website](https://www.oracle.com/technetwork/java/javase/downloads/jdk11-downloads-5066655.html).
 A Oracle account is required (free).
 
 To profile the application, build the DISTOD assembly with `sbt assembly` and run it with an Oracle JVM using the following parameters:

@@ -43,7 +43,7 @@ sealed trait DataType[T <: Any] extends Ordered[DataType[_]] {
    *
    * @return `true` if `v1` is less then `v2`
    */
-  def valueLt(v1: String, v2: String): Boolean
+  def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 
   /**
    * Broaden type of this datatype.
@@ -85,8 +85,6 @@ final case class ZonedDateTimeType private[types](formatter: DateTimeFormatter) 
     formatter.parse[ZonedDateTime](value, (temp: TemporalAccessor) => ZonedDateTime.from(temp))
   }.getOrElse(ZonedDateTime.of(LocalDateTime.MIN, ZoneOffset.UTC))
 
-  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
-
 }
 
 /**
@@ -99,8 +97,6 @@ final case class LocalDateTimeType private[types](formatter: DateTimeFormatter) 
   override def parse(value: String): LocalDateTime = Try {
     formatter.parse[LocalDateTime](value, (temp: TemporalAccessor) => LocalDateTime.from(temp))
   }.getOrElse(LocalDateTime.MIN)
-
-  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 /**
@@ -115,8 +111,6 @@ final case class LocalDateType private[types](formatter: DateTimeFormatter) exte
   override def parse(value: String): LocalDate = Try {
     formatter.parse[LocalDate](value, (temp: TemporalAccessor) => LocalDate.from(temp))
   }.getOrElse(LocalDate.MIN)
-
-  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 /**
@@ -139,8 +133,6 @@ case object DoubleType extends DataType[Double] {
   override def parse(value: String): Double = Try {
     value.toDouble
   }.getOrElse(Double.MinValue)
-
-  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
 /**
@@ -157,10 +149,9 @@ trait StringType extends DataType[String] {
   override def parse(value: String): String =
     if (NullType.isNull(value)) NullType.parse(value)
     else value
-
-  override def valueLt(v1: String, v2: String): Boolean = valueOrdering.lt(parse(v1), parse(v2))
 }
 
+/** @inheritdoc */
 case object StringType extends StringType
 
 /**

@@ -44,8 +44,11 @@ object FollowerGuardian {
 //    val clusterTester = context.spawn[Nothing](ClusterTester(), ClusterTester.name)
 //    context.watch(clusterTester)
 
+    // system montior
+    val monitor = context.spawn(SystemMonitor(), SystemMonitor.name)
+
     // local partition manager
-    val partitionManager = context.spawn(PartitionManager(), PartitionManager.name)
+    val partitionManager = context.spawn(PartitionManager(monitor), PartitionManager.name)
     context.watch(partitionManager)
 
     // local result collector proxy

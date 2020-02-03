@@ -1,8 +1,8 @@
 package com.github.codelionx.distod.actors.master
 
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
-import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
@@ -10,10 +10,10 @@ import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateCandidate
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.StrippedPartition
+import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
-import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
 import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.util.Math
 import com.github.codelionx.util.largeMap.mutable.FastutilState
@@ -115,7 +115,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         ))
 
         // L1: single attribute candidate nodes
-        val (l1candidates, l1candidateState) = generateLevel1(attributes, partitions)
+        val (l1candidates, l1candidateState) = generateLevel1(attributes)
         l1candidates.zipWithIndex.foreach { case (candidate, index) =>
           partitionManager ! InsertPartition(candidate, partitions(index))
         }

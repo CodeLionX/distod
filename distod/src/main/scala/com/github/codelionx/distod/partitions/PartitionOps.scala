@@ -1,15 +1,9 @@
 package com.github.codelionx.distod.partitions
 
-import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 
 trait PartitionOps { this: Partition =>
-
-  /**
-   * Converts this partition to a stripped partition by removing equivalence classes with size 1.
-   */
-  def stripped: StrippedPartition
 
   /**
    * Alias to [[com.github.codelionx.distod.partitions.PartitionOps#product]].
@@ -27,42 +21,13 @@ trait PartitionOps { this: Partition =>
    * @param other the other partition
    * @throws IllegalArgumentException if two different partition types should be multiplied
    */
-  def product(other: Partition): Partition = product(this, other)
-
-  private def product(partition1: Partition, partition2: Partition): Partition = (partition1, partition2) match {
+  def product(other: Partition): Partition = (this, other) match {
     // if both partitions are the same, we do not need to perform any computation
     case (p1, p2) if p1 equals p2 => p1
-
-    case (_: FullPartition, _: StrippedPartition) | (_: StrippedPartition, _: FullPartition) =>
-      throw new IllegalArgumentException("Can not build product of full and stripped partitions")
-
-    case (p1: FullPartition, p2: FullPartition) =>
-//      throw new IllegalArgumentException("Should not build product of full partitions")
-      // only intersect sets with > 1 elements
-      val (p1Classes, singletonP1Classes) = p1.equivClasses.partition(_.size > 1)
-      val (p2Classes, singletonP2Classes) = p2.equivClasses.partition(_.size > 1)
-      val newClasses: Iterable[Set[Index]] = for {
-        x <- p1Classes
-        y <- p2Classes
-        newClass = x.intersect(y)
-        if newClass.nonEmpty
-      } yield newClass
-
-      val equivClasses = (singletonP1Classes ++ singletonP2Classes).distinct ++ newClasses
-      FullPartition(
-        nTuples = scala.math.max(p1.nTuples, p2.nTuples),
-        numberElements = p1.numberElements, // we include all elements, so save summing it up
-        numberClasses = equivClasses.size,
-        equivClasses = equivClasses
-      )
-
-    case (p1: StrippedPartition, p2: StrippedPartition) =>
-      fastProduct(p1, p2)
+    case (p1, p2) => fastProduct(p1, p2)
   }
 
-  private def setIntersectionProduct(
-      partition1: StrippedPartition, partition2: StrippedPartition
-  ): StrippedPartition = {
+  private def setIntersectionProduct(partition1: Partition, partition2: Partition): Partition = {
     val newClasses: IndexedSeq[Set[Index]] = for {
       x <- partition1.equivClasses
       y <- partition2.equivClasses
@@ -78,7 +43,7 @@ trait PartitionOps { this: Partition =>
     )
   }
 
-  private def fastProduct(partition1: StrippedPartition, partition2: StrippedPartition): StrippedPartition = {
+  private def fastProduct(partition1: Partition, partition2: Partition): Partition = {
     val nTuples = scala.math.max(partition1.nTuples, partition2.nTuples)
     val tempClasses = Array.fill(partition1.numberClasses)(Set.newBuilder[Int])
     val resultClasses = mutable.Buffer.empty[Set[Int]]
@@ -117,25 +82,4 @@ trait PartitionOps { this: Partition =>
     )
   }
 
-  protected def stripClasses(classes: IndexedSeq[Set[Index]]): IndexedSeq[Set[Index]] =
-    classes.filterNot { indexSet => indexSet.size <= 1 }
-
-  protected def convertToTupleValueMap: Map[Index, Value] = fastTupleValueMapper
-
-  private def functionalTupleValueMapper: Map[Index, Value] = {
-    val indexedClasses = equivClasses.zipWithIndex
-    indexedClasses.flatMap {
-      case (set, value) => set.map(_ -> value)
-    }.toMap
-  }
-
-  private def fastTupleValueMapper: Map[Index, Value] = {
-    val builder = HashMap.newBuilder[Index, Value]
-    equivClasses.zipWithIndex.foreach{ case (set, value) =>
-      set.foreach(index =>
-        builder.addOne(index, value)
-      )
-    }
-    builder.result()
-  }
 }

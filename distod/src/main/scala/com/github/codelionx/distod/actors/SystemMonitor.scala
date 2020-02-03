@@ -35,9 +35,9 @@ class SystemMonitor(context: ActorContext[Command], timer: TimerScheduler[Comman
   private val runtime = Runtime.getRuntime
 
   if(context.log.isEnabled(settings.statisticsLogLevel)) {
-    timer.startTimerWithFixedDelay("tick", Tick, settings.interval)
+    timer.startTimerWithFixedDelay("statistics-tick", StatisticsTick, settings.statisticsLogInterval)
   }
-  timer.startTimerWithFixedDelay("statistics-tick", StatisticsTick, settings.statisticsLogInterval)
+  timer.startTimerWithFixedDelay("tick", Tick, settings.interval)
 
   def start(): Behavior[Command] = behavior(Set.empty)
 

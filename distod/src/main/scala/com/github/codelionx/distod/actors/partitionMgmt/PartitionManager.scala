@@ -221,7 +221,6 @@ class PartitionManager(
         next(_pendingJobs = pendingJobs.keyRemoved(key))
 
       case Cleanup =>
-        context.log.info("Triggering time-based compaction")
         partitions.compact()
         Behaviors.same
 

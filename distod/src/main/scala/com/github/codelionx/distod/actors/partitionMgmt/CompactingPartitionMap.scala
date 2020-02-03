@@ -30,8 +30,11 @@ class CompactingPartitionMap private(
   private val singletonPartitions: Map[CandidateSet, FullPartition] = initialSingletonPartitions
   // keys of size != 1
   private var levels: IndexedSeq[mutable.Map[CandidateSet, StrippedPartition]] = IndexedSeq.empty
-  private var usage: IndexedSeq[mutable.Map[CandidateSet, Int]] = IndexedSeq.empty
-  private val accessCounter: mutable.IndexedBuffer[Long] = mutable.IndexedBuffer.empty
+
+  // access statistics for compaction
+  private var usage: IndexedSeq[mutable.Set[CandidateSet]] = IndexedSeq.empty
+  private var currentLevel: Int = 0
+  private var minLevelAccessed: Int = Int.MaxValue
 
   private val log: Logger = LoggerFactory.getLogger(classOf[CompactingPartitionMap])
 
@@ -42,31 +45,30 @@ class CompactingPartitionMap private(
         mutable.Map.empty[CandidateSet, StrippedPartition]
       }
       usage ++= IndexedSeq.fill(missing) {
-        mutable.Map.empty[CandidateSet, Int]
+        mutable.Set.empty[CandidateSet]
       }
-      accessCounter ++= IndexedSeq.fill(missing)(0)
-      if(compactionSettings.enabled && size > 3) {
-        log.info("Triggering auto-compaction based on level growth to level {}", size)
-        compact()
+      if(minLevelAccessed != Int.MaxValue && minLevelAccessed >= currentLevel) {
+        val oldSize = this.size
+        (currentLevel until minLevelAccessed).foreach(level => removeLevel(level))
+        if (log.isInfoEnabled) {
+          val removed = oldSize - this.size
+          log.info("Automatically cleaning up {} old partitions (from levels < {})", removed, minLevelAccessed)
+        }
+        currentLevel = minLevelAccessed
       }
+      minLevelAccessed = Int.MaxValue
     }
+
   }
 
   private def updateUsage(key: CandidateSet): Unit = {
-    usage(key.size).updateWith(key){
-      case None => Some(1)
-      case Some(v) => Some(v + 1)
-    }
-    accessCounter(key.size) = accessCounter(key.size) + 1
-    if(accessCounter(key.size) >= compactionSettings.levelAccessThreshold) {
-      log.info("Triggering auto-compaction based on access counter threshold")
-      compact()
-    }
+    usage(key.size).add(key)
+    minLevelAccessed = scala.math.min(minLevelAccessed, key.size)
   }
 
   private def logStatistics(message: String, log: (String, Any) => Unit): Unit = {
     val statistics = levels.indices.map(i =>
-      s"level $i: level ${levels(i).size}, usage ${usage(i).size}, accesses: ${accessCounter(i)}"
+      s"level $i: level ${levels(i).size}, usage ${usage(i).size}}"
     )
     log(s"$message Partition Statistics: {}", statistics.mkString("\n", "\n", ""))
   }
@@ -176,15 +178,12 @@ class CompactingPartitionMap private(
       val level = levels(i)
       val use = usage(i)
       if(use.size < level.size) {
-        val removableKeys = level.keySet.toSet -- use.keySet
+        val removableKeys = level.keySet.toSet -- use
         level.subtractAll(removableKeys)
         removed += removableKeys.size
       }
     }
     usage.foreach(usageLevel => usageLevel.clear())
-    for(i <- accessCounter.indices) {
-      accessCounter(i) = 0
-    }
     log.info("Partition map compaction removed {} partitions", removed)
     if(log.isTraceEnabled) {
       logStatistics("After compaction:", log.trace)
@@ -192,16 +191,14 @@ class CompactingPartitionMap private(
   }
 
   /**
-   * Frees up the memory that is used by temporary partitions. This does not include the singleton partitions.
+   * Frees up all memory that is used by temporary partitions. This does not include the singleton partitions.
    * This method also resets all partition usage statistics.
    */
   def clear(): Unit = {
     // skip empty partition to prevent early deletion
     levels.tail.foreach(_.clear())
     usage.foreach(_.clear())
-    for(i <- accessCounter.indices) {
-      accessCounter(i) = 0
-    }
+    minLevelAccessed = Int.MaxValue
   }
 
   /**
@@ -210,9 +207,8 @@ class CompactingPartitionMap private(
    * @param level id of the level (key size) != 1
    */
   def removeLevel(level: Int): Unit = {
-    if (level == 1) {
-      throw new IllegalArgumentException("Can not discard all singleton partitions!")
-    }
+    // partitions for level 1 (singleton partitions) are stored in another collection, so it's safe to delete level 1 here
+    // besides we do not want to delete them ever
     levels = levels.updated(level, mutable.Map.empty[CandidateSet, StrippedPartition])
   }
 

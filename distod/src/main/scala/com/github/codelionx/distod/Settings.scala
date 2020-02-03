@@ -35,8 +35,6 @@ object Settings extends ExtensionId[Settings] {
     def enabled: Boolean
 
     def interval: FiniteDuration
-
-    def levelAccessThreshold: Long
   }
 
   trait MonitoringSettings {
@@ -111,8 +109,6 @@ class Settings private(config: Config) extends Extension {
       config.getDuration(s"$subnamespace.interval").getSeconds,
       TimeUnit.SECONDS
     )
-
-    override def levelAccessThreshold: Long = config.getLong(s"$subnamespace.level-access-threshold")
   }
 
   val inputParsingSettings: InputParsingSettings = new InputParsingSettings {

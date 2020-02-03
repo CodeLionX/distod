@@ -239,6 +239,9 @@ class PartitionManager(
   ): PendingJobMap[CandidateSet, PendingResponse] = {
     timings.time("Partition generation") {
       val jobs = calcJobChain(key)
+      if(jobs.size > 2) {
+        context.log.debug(s"Generating expensive job chain of size ${jobs.size}")
+      }
       generatorPool ! ComputePartitions(jobs, context.self)
       val x = jobs.map { job =>
         if (job.key == key)

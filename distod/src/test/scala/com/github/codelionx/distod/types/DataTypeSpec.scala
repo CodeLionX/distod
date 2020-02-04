@@ -1,9 +1,10 @@
 package com.github.codelionx.distod.types
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class DataTypeSpec extends WordSpec with Matchers {
+class DataTypeSpec extends AnyWordSpec with Matchers {
 
   "The StringType" should {
     val dt = StringType
@@ -11,7 +12,7 @@ class DataTypeSpec extends WordSpec with Matchers {
     "parse nulls correctly as empty string" when {
 
       def shouldParseToNull(value: String): Unit = {
-        s"the value is `${if(value == null) "literal<null>" else value}`" in {
+        s"the value is `${if (value == null) "literal<null>" else value}`" in {
           val nullValue = dt.parse(value)
           nullValue shouldBe ""
         }

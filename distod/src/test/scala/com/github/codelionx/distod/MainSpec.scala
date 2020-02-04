@@ -4,10 +4,11 @@ import akka.actor.testkit.typed.scaladsl.{ActorTestKit, LogCapturing}
 import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.util.ResultFileParsing
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 
-class MainSpec extends WordSpec with Matchers with LogCapturing {
+class MainSpec extends AnyWordSpecLike with Matchers with LogCapturing {
 
   "distod" should {
 

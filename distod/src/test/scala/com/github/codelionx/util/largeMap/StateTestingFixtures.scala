@@ -2,10 +2,10 @@ package com.github.codelionx.util.largeMap
 
 import com.github.codelionx.distod.actors.master.CandidateState
 import com.github.codelionx.distod.types.CandidateSet
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
 
 
-object StateTestingFixtures extends WordSpec with Matchers {
+object StateTestingFixtures extends Matchers {
 
   implicit class ExpectingCandidateSet(val cs: CandidateSet) extends AnyVal {
 

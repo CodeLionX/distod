@@ -35,6 +35,7 @@ object WorkerManager {
               .withLimit(3, 5 seconds)
           ),
         Worker.name(id),
+        // TODO: test if separate dispatcher is helpful
 //        settings.cpuBoundTaskDispatcher
       )
       context.watch(ref)

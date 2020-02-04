@@ -1,9 +1,10 @@
 package com.github.codelionx.distod.types
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class PendingJobMapSpec extends WordSpec with Matchers {
+class PendingJobMapSpec extends AnyWordSpec with Matchers {
 
   type SpecificPendingJobMap = PendingJobMap[CandidateSet, Int]
 

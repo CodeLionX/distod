@@ -3,10 +3,11 @@ package com.github.codelionx.util.largeMap.mutable
 import com.github.codelionx.distod.actors.master.{CandidateState, SplitReadyCandidateState}
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.util.largeMap.StateTestingFixtures._
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class FastutilStateSpec extends WordSpec with Matchers {
+class FastutilStateSpec extends AnyWordSpec with Matchers {
 
   "A FastutilState for CandidateSets" should {
     val map = FastutilState.empty[CandidateState]

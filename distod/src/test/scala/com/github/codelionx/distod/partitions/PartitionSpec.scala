@@ -1,9 +1,10 @@
 package com.github.codelionx.distod.partitions
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class PartitionSpec extends WordSpec with Matchers {
+class PartitionSpec extends AnyWordSpec with Matchers {
 
   val column: Array[String] = Array("a", "b", "a", "c", "a", "b", "d", "c", "a", "e")
 

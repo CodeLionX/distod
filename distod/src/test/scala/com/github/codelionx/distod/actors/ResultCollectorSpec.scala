@@ -10,15 +10,16 @@ import com.github.codelionx.distod.io.ColumnProcessor
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol._
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
-import org.scalatest
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.Assertion
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
 
 class ResultCollectorSpec
-  extends ScalaTestWithActorTestKit() with WordSpecLike with Matchers with LogCapturing {
+  extends ScalaTestWithActorTestKit() with AnyWordSpecLike with Matchers with LogCapturing {
 
   val writeBuffer = new StringWriter()
 
@@ -45,7 +46,7 @@ class ResultCollectorSpec
     val columnNames = ColumnProcessor.generateSyntheticColumnNames(10).toIndexedSeq
     val expectedFileContent = (deps1 ++ deps2).map(_.withAttributeNames(columnNames)).mkString("", "\n", "\n")
 
-    def testFileContents(expected: String = expectedFileContent): scalatest.Assertion = {
+    def testFileContents(expected: String = expectedFileContent): Assertion = {
       val fileContent = writeBuffer.toString
 
 //      println(fileContent)

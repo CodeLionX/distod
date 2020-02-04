@@ -1,6 +1,6 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, SupervisorStrategy}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionManager.ProductComputed
 import com.github.codelionx.distod.partitions.StrippedPartition
@@ -20,13 +20,17 @@ object PartitionGenerator {
 
   def name(n: Int): String = s"partition-generator-$n"
 
-  def createPool(n: Int): PoolRouter[ComputePartitions] = Routers.pool(n)(
-    Behaviors.supervise(apply()).onFailure[Exception](
-      SupervisorStrategy.restart
-        .withLoggingEnabled(true)
-        .withLimit(3, 10 seconds)
+  def createPool(n: Int): PoolRouter[ComputePartitions] = Routers
+    .pool(n)(
+      Behaviors.supervise(apply()).onFailure[Exception](
+        SupervisorStrategy.restart
+          .withLoggingEnabled(true)
+          .withLimit(3, 10 seconds)
+      )
     )
-  ).withRoundRobinRouting()
+    .withRoundRobinRouting()
+    // TODO: test if separate dispatcher is helpful
+//    .withRouteeProps(DispatcherSelector.fromConfig("distod.cpu-bound-tasks-dispatcher"))
 
   private def apply(): Behavior[ComputePartitions] = Behaviors.setup(context =>
     new PartitionGenerator(context).start()
@@ -37,6 +41,7 @@ object PartitionGenerator {
 class PartitionGenerator(context: ActorContext[PartitionGenerator.ComputePartitions]) {
 
   import PartitionGenerator._
+
 
   private val timing: Timing = Timing(context.system)
 

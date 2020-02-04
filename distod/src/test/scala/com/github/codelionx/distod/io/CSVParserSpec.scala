@@ -1,9 +1,10 @@
 package com.github.codelionx.distod.io
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class CSVParserSpec extends WordSpec with Matchers {
+class CSVParserSpec extends AnyWordSpec with Matchers {
 
   "The CSVParser" should {
 

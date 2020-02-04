@@ -6,7 +6,8 @@ import com.github.codelionx.distod.protocols.ResultCollectionProtocol._
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 
 object ResultCollectorProxySpec {
@@ -18,7 +19,10 @@ object ResultCollectorProxySpec {
 
 
 class ResultCollectorProxySpec
-  extends ScalaTestWithActorTestKit(ResultCollectorProxySpec.config) with WordSpecLike with LogCapturing with Matchers {
+  extends ScalaTestWithActorTestKit(ResultCollectorProxySpec.config)
+    with AnyWordSpecLike
+    with LogCapturing
+    with Matchers {
 
   private val deps = Seq(
     ConstantOrderDependency(CandidateSet.empty, 0),

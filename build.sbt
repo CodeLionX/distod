@@ -1,4 +1,4 @@
-lazy val akkaVersion = "2.6.0"
+lazy val akkaVersion = "2.6.3"
 lazy val univocityVersion = "2.8.3"
 lazy val clistVersion = "3.5.1"
 
@@ -40,8 +40,8 @@ lazy val distod = (project in file("distod"))
 
       // test
       "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
-      "org.scalactic" %% "scalactic" % "3.0.8",
-      "org.scalatest" %% "scalatest" % "3.0.8" % Test,
+      "org.scalactic" %% "scalactic" % "3.1.0",
+      "org.scalatest" %% "scalatest" % "3.1.0" % Test,
 
       // serialization
       "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion

@@ -7,10 +7,13 @@ import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.types.CandidateSet
 import com.typesafe.config.ConfigFactory
 import org.scalatest.TryValues._
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.BeforeAndAfterAll
 
 import scala.language.postfixOps
 import scala.util.Success
+
 
 object SerializationSpec {
 
@@ -18,9 +21,10 @@ object SerializationSpec {
 
 }
 
-class SerializationSpec extends WordSpec with Matchers with BeforeAndAfterAll {
+class SerializationSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
 
   import SerializationSpec._
+
 
   val testkit = ActorTestKit(
     ConfigFactory.load("application-test")

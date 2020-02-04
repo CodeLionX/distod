@@ -1,11 +1,12 @@
 package com.github.codelionx.distod.actors.master
 
-import com.github.codelionx.distod.actors.master.CandidateState.{IncPrecondition, NewSplitCandidates, NewSwapCandidates, Prune}
+import com.github.codelionx.distod.actors.master.CandidateState.{IncPrecondition, Prune}
 import com.github.codelionx.distod.types.CandidateSet
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class CandidateStateSpec extends WordSpec with Matchers {
+class CandidateStateSpec extends AnyWordSpec with Matchers {
 
   "The initial candidate state" should {
     val initialState = CandidateState(CandidateSet.from(0))
@@ -45,7 +46,7 @@ class CandidateStateSpec extends WordSpec with Matchers {
     }
 
     "reject state updates" in {
-      a[UnsupportedOperationException] shouldBe thrownBy{
+      a[UnsupportedOperationException] shouldBe thrownBy {
         initialState.updated(CandidateState.NewSplitCandidates(CandidateSet.empty))
       }
     }
@@ -94,7 +95,7 @@ class CandidateStateSpec extends WordSpec with Matchers {
         swapCandidates = Seq.empty
       )
       val prunedCandidate =
-        if(toBePrunedCandidate.shouldBePruned)
+        if (toBePrunedCandidate.shouldBePruned)
           toBePrunedCandidate.updated(Prune())
         else
           toBePrunedCandidate

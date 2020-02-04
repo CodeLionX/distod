@@ -3,10 +3,11 @@ package com.github.codelionx.distod.partitions
 import java.time.format.DateTimeFormatter._
 
 import com.github.codelionx.distod.types._
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class TypeInferrerSpec extends WordSpec with Matchers {
+class TypeInferrerSpec extends AnyWordSpec with Matchers {
 
   "A TypeInferrer" should {
     "infer doubles" in {
@@ -21,7 +22,7 @@ class TypeInferrerSpec extends WordSpec with Matchers {
 
     "infer ints as doubles" in {
       TypeInferrer.inferType("123876") shouldEqual DoubleType
-      TypeInferrer.inferType(Int.MaxValue.toString) shouldEqual(DoubleType)
+      TypeInferrer.inferType(Int.MaxValue.toString) shouldEqual (DoubleType)
     }
 
     "infer datetimes with time zone" in {

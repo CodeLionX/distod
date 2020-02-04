@@ -2,9 +2,11 @@ package com.github.codelionx.distod.types
 
 import java.time.format.DateTimeFormatter._
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
-class DateTimeTypeSpec extends WordSpec with Matchers {
+
+class DateTimeTypeSpec extends AnyWordSpec with Matchers {
 
   import DateTimeType._
 

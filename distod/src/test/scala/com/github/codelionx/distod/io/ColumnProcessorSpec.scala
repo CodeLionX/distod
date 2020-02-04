@@ -1,8 +1,10 @@
 package com.github.codelionx.distod.io
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
-class ColumnProcessorSpec extends WordSpec with Matchers {
+
+class ColumnProcessorSpec extends AnyWordSpec with Matchers {
 
   "A ColumnProcessor" should {
 

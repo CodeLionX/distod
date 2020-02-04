@@ -4,10 +4,11 @@ import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.partitions.{Partition, StrippedPartition}
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 
-class CandidateValidationSpec extends WordSpec with Matchers {
+class CandidateValidationSpec extends AnyWordSpec with Matchers {
 
   "The candidate validation trait" should {
     val tester = new CandidateValidation {}

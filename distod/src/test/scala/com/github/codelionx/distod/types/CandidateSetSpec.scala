@@ -1,11 +1,12 @@
 package com.github.codelionx.distod.types
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 import scala.collection.immutable.BitSet
 
 
-class CandidateSetSpec extends WordSpec with Matchers {
+class CandidateSetSpec extends AnyWordSpec with Matchers {
 
   private val attributes = Set(0, 1, 2, 3)
 

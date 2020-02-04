@@ -27,9 +27,10 @@ object PartitionManager {
 
   def apply(monitor: ActorRef[SystemMonitor.Command]): Behavior[PartitionCommand] = Behaviors.setup(context =>
     Behaviors.withStash(300) { stash =>
-      Behaviors.withTimers{ timers =>
+      Behaviors.withTimers { timers =>
         new PartitionManager(context, stash, timers, monitor).start()
-  }})
+      }
+    })
 
 }
 
@@ -43,14 +44,13 @@ class PartitionManager(
 
   import PartitionManager._
 
+
   private val settings = Settings(context.system)
   private val compactionSettings = settings.partitionCompactionSettings
 
   private val generatorPool = context.spawn(
     PartitionGenerator.createPool(settings.numberOfWorkers),
-    name = PartitionGenerator.poolName,
-    // FIXME: only creates the head actor with the props (instead of the pool workers)
-//    props = settings.cpuBoundTaskDispatcher
+    name = PartitionGenerator.poolName
   )
 
   private val timings = Timing(context.system)
@@ -58,7 +58,7 @@ class PartitionManager(
   private var partitions: CompactingPartitionMap = _
 
   def start(): Behavior[PartitionCommand] = {
-    if(compactionSettings.enabled)
+    if (compactionSettings.enabled)
       timers.startTimerWithFixedDelay("cleanup", Cleanup, compactionSettings.interval)
 
     monitor ! Register(context.messageAdapter(WrappedSystemEvent))
@@ -110,9 +110,9 @@ class PartitionManager(
       pendingJobs: PendingJobMap[CandidateSet, PendingResponse]
   ): Behavior[PartitionCommand] = {
     def next(
-              _attributes: Seq[Int] = attributes,
-              _pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = pendingJobs,
-            ): Behavior[PartitionCommand] =
+        _attributes: Seq[Int] = attributes,
+        _pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = pendingJobs,
+    ): Behavior[PartitionCommand] =
       behavior(_attributes, _pendingJobs)
 
     Behaviors.receiveMessage {
@@ -238,7 +238,7 @@ class PartitionManager(
   ): PendingJobMap[CandidateSet, PendingResponse] = {
     timings.time("Partition generation") {
       val jobs = calcJobChain(key)
-      if(jobs.size > 2) {
+      if (jobs.size > 2) {
         context.log.debug(s"Generating expensive job chain of size ${jobs.size}")
       }
       generatorPool ! ComputePartitions(jobs, context.self)

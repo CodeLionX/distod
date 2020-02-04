@@ -136,6 +136,12 @@ class PartitionManager(
         replyTo ! AttributesFound(attributes)
         Behaviors.same
 
+      // request from a partition replicator
+      case OpenConnection(replyTo) =>
+        context.log.info("Opening sidechannel to {}", replyTo)
+        context.spawn(PartitionManagerEndpoint(partitions, replyTo, attributes), PartitionManagerEndpoint.name())
+        Behaviors.same
+
       // single-attr keys
       case LookupError(key, replyTo) if key.size == 1 =>
         partitions.getSingletonPartition(key) match {

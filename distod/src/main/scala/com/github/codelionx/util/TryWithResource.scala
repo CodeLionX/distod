@@ -22,12 +22,13 @@ object TryWithResource {
    * @return the result of the processing function `f`
    */
   def withResource[T <: AutoCloseable, V](r: => T)(f: T => V): V = {
+    // evaluate `r` only once!!
     val resource: T = r
     require(resource != null, "resource is null")
 
     var exception: Throwable = null
     try {
-      f(r)
+      f(resource)
     } catch {
       case NonFatal(e) =>
         exception = e

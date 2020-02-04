@@ -55,13 +55,13 @@ object ResultFileParsing {
 
   def readAndParseDistodResults(path: String): Seq[ODResult] =
     withResource(new BufferedReader(new FileReader(path))) { reader =>
-      val lines = reader.lines().toScala(LazyList)
+      val lines = reader.lines().toScala(List)
       DistodResultParser.parseAll(lines)
     }
 
   def readAndParseFastodResults(path: String): Seq[ODResult] =
     withResource(new BufferedReader(new FileReader(path))) { reader =>
-      val lines = reader.lines().toScala(LazyList)
+      val lines = reader.lines().toScala(List)
       FastodResultParser.parseAll(lines)
     }
 

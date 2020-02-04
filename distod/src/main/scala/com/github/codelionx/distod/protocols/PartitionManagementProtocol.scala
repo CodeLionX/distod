@@ -2,7 +2,7 @@ package com.github.codelionx.distod.protocols
 
 import akka.actor.typed.ActorRef
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.partitionMgmt.PartitionManagerEndpoint
+import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint
 import com.github.codelionx.distod.partitions.{FullPartition, Partition, StrippedPartition}
 import com.github.codelionx.distod.types.CandidateSet
 

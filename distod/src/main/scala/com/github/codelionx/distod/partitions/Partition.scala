@@ -47,7 +47,9 @@ case class FullPartition private[partitions](
     nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
+    @JsonDeserialize(contentAs = classOf[Set[Index]])
     equivClasses: IndexedSeq[Set[Index]],
+    @JsonDeserialize(keyAs = classOf[Index], contentAs = classOf[Value])
     tupleValueMap: Map[Index, Value]
 ) extends Partition {
 

@@ -25,7 +25,7 @@ lazy val distod = (project in file("distod"))
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-stream" % akkaVersion,
+      "com.typesafe.akka" %% "akka-stream-typed" % akkaVersion,
       //  "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
 
       // fastutil

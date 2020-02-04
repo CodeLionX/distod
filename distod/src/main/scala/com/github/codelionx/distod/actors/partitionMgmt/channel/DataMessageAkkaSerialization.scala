@@ -6,6 +6,8 @@ import akka.actor.typed.ActorSystem
 import akka.serialization.{SerializationExtension, Serializers}
 import akka.util.{ByteString, ByteStringBuilder}
 
+import scala.util.{Failure, Success}
+
 
 trait DataMessageAkkaSerialization {
 
@@ -34,6 +36,9 @@ trait DataMessageAkkaSerialization {
     val manifestSize = manifestSizeBytes.toByteBuffer.getInt
     val (manifestBytes, contentBytes) = other.splitAt(manifestSize)
     val manifest = manifestBytes.utf8String
-    serialization.deserialize(contentBytes.toArray[Byte], serializerId, manifest).get.asInstanceOf[DataMessage]
+    serialization.deserialize(contentBytes.toArray[Byte], serializerId, manifest) match {
+      case Success(value) => value.asInstanceOf[DataMessage]
+      case Failure(cause) => throw new RuntimeException("Failed to deserialize data message", cause)
+    }
   }
 }

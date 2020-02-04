@@ -3,12 +3,12 @@ package com.github.codelionx.distod.actors.partitionMgmt
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.stream.{Materializer, SourceRef, SystemMaterializer}
 import akka.stream.typed.scaladsl.ActorSink
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.actors.master.MasterHelper.GetPrimaryPartitionManager
-import com.github.codelionx.distod.actors.partitionMgmt.PartitionManagerEndpoint._
+import com.github.codelionx.distod.actors.partitionMgmt.channel._
+import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint.{ConnectionOpened, SendAttributes, SendEmptyPartition, SendFullPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.CandidateSet
 
@@ -18,10 +18,9 @@ object PartitionReplicator {
   sealed trait Command
   final case class PrimaryPartitionManager(ref: ActorRef[PartitionCommand]) extends Command with CborSerializable
   private final case class WrappedListing(listing: Receptionist.Listing) extends Command
-  //  private final case class WrappedPartitionEvent(message: PartitionEvent) extends Command
   private final case class WrappedEndpointEvent(message: PartitionManagerEndpoint.Event) extends Command
   private final case class WrappedDataMessage(
-      ackTo: ActorRef[StreamAck.type], message: PartitionManagerEndpoint.DataMessage
+      ackTo: ActorRef[StreamAck.type], message: DataMessage
   ) extends Command
 
   private case class StreamInit(ackTo: ActorRef[StreamAck.type]) extends Command
@@ -34,8 +33,15 @@ object PartitionReplicator {
 
   def apply(local: ActorRef[PartitionCommand]): Behavior[Command] = Behaviors.setup { context =>
     val listingAdapter = context.messageAdapter(WrappedListing)
-    //    val partitionProtocolAdapter = context.messageAdapter(WrappedPartitionEvent)
     val endpointAdapter = context.messageAdapter(WrappedEndpointEvent)
+    val selfSink = ActorSink.actorRefWithBackpressure(
+      ref = context.self,
+      messageAdapter = WrappedDataMessage,
+      onInitMessage = StreamInit,
+      ackMessage = StreamAck,
+      onCompleteMessage = StreamComplete,
+      onFailureMessage = StreamFailure
+    )
     context.system.receptionist ! Receptionist.Subscribe(Master.MasterServiceKey, listingAdapter)
 
     Behaviors.receiveMessage {
@@ -58,18 +64,15 @@ object PartitionReplicator {
         context.log.debug("Loading attributes ...")
         controller ! SendAttributes
 
-        implicit val mat: Materializer = SystemMaterializer(context.system).materializer
-        channel.runWith(ActorSink.actorRefWithBackpressure(context.self, WrappedDataMessage, StreamInit, StreamAck, StreamComplete, StreamFailure))
-        behavior(context, local, controller, endpointAdapter, channel)
+        StreamChannel.consumeSourceRefWith(channel, selfSink, context.system)
+        behavior(context, local, controller)
     }
   }
 
   private def behavior(
       context: ActorContext[Command],
       local: ActorRef[PartitionCommand],
-      primary: ActorRef[PartitionManagerEndpoint.Command],
-      endpointAdapter: ActorRef[PartitionManagerEndpoint.Event],
-      channel: SourceRef[PartitionManagerEndpoint.DataMessage]
+      primary: ActorRef[PartitionManagerEndpoint.Command]
   ): Behavior[Command] = Behaviors.receiveMessage {
 
     // stream based:
@@ -78,9 +81,9 @@ object PartitionReplicator {
       context.log.info("Stream initialized")
       Behaviors.same
 
-    case WrappedDataMessage(ackTo, Attributes(attributes)) =>
+    case WrappedDataMessage(ackTo, AttributeData(attributes)) =>
       ackTo ! StreamAck
-      context.log.debug("{} attributes received, loading initial partition set...", attributes.size)
+      context.log.info("{} attributes received, loading initial partition set...", attributes.size)
       local ! SetAttributes(attributes)
       primary ! SendEmptyPartition
       attributes.foreach(a =>
@@ -88,13 +91,13 @@ object PartitionReplicator {
       )
       Behaviors.same
 
-    case WrappedDataMessage(ackTo, FullPartitionFound(id, partition)) =>
+    case WrappedDataMessage(ackTo, FullPartitionData(id, partition)) =>
       ackTo ! StreamAck
       context.log.debug("Received full partition for key {}: {}", id, partition.equivClasses.size)
       local ! InsertPartition(id, partition)
       Behaviors.same
 
-    case WrappedDataMessage(ackTo, EmptyPartition(value)) =>
+    case WrappedDataMessage(ackTo, EmptyPartitionData(value)) =>
       ackTo ! StreamAck
       context.log.debug("Received empty partition: {}", value.equivClasses.size)
       local ! InsertPartition(CandidateSet.empty, value)
@@ -105,7 +108,7 @@ object PartitionReplicator {
       Behaviors.stopped
 
     case StreamFailure(cause) =>
-      context.log.error("Stream failed: {}", cause)
+      context.log.error("Stream failed", cause)
       Behaviors.stopped
 
     // other:

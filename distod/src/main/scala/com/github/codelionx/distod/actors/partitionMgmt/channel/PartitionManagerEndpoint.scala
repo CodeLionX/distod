@@ -1,16 +1,14 @@
-package com.github.codelionx.distod.actors.partitionMgmt
+package com.github.codelionx.distod.actors.partitionMgmt.channel
 
-import java.nio.ByteOrder
 import java.util.UUID
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
-import akka.serialization.{SerializationExtension, Serializers}
 import akka.stream._
-import akka.stream.scaladsl.{Framing, Keep, Source, SourceQueueWithComplete, StreamRefs}
-import akka.util.{ByteString, ByteStringBuilder}
+import akka.stream.scaladsl.SourceQueueWithComplete
+import akka.util.ByteString
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
+import com.github.codelionx.distod.actors.partitionMgmt.CompactingPartitionMap
 import com.github.codelionx.distod.types.CandidateSet
 
 import scala.util.{Failure, Success, Try}
@@ -36,11 +34,6 @@ object PartitionManagerEndpoint {
 
   trait Event extends CborSerializable
   final case class ConnectionOpened(controller: ActorRef[Command], channel: SourceRef[ByteString]) extends Event
-
-  trait DataMessage extends CborSerializable
-  final case class Attributes(attributes: Seq[Int]) extends DataMessage
-  final case class EmptyPartition(value: StrippedPartition) extends DataMessage
-  final case class FullPartitionFound(key: CandidateSet, value: FullPartition) extends DataMessage
 
   def name(): String = {
     val uuid = UUID.randomUUID().toString.split("-")(0)
@@ -68,19 +61,18 @@ class PartitionManagerEndpoint(
   import PartitionManagerEndpoint._
 
 
-  implicit private val mat: Materializer = SystemMaterializer(context.system).materializer
   private val channel = openChannel()
 
   def start(): Behavior[Command] = Behaviors.receiveMessage {
     case SendAttributes =>
-      val message = Attributes(attributes)
+      val message = AttributeData(attributes)
       val future = channel.offer(message)
       context.pipeToSelf(future)(WrappedQueueOfferResult.fromTry(message))
       waitForResult()
 
     case SendEmptyPartition =>
       val p = partitions(CandidateSet.empty)
-      val message = EmptyPartition(p)
+      val message = EmptyPartitionData(p)
       val future = channel.offer(message)
       context.pipeToSelf(future)(WrappedQueueOfferResult.fromTry(message))
       waitForResult()
@@ -88,60 +80,44 @@ class PartitionManagerEndpoint(
     case SendFullPartition(key) =>
       partitions.getSingletonPartition(key) match {
         case Some(p) =>
-          val message = FullPartitionFound(key, p)
+          val message = FullPartitionData(key, p)
           val future = channel.offer(message)
-          context.pipeToSelf(future)(WrappedQueueOfferResult.fromTry(FullPartitionFound(key, p)))
+          context.pipeToSelf(future)(WrappedQueueOfferResult.fromTry(message))
           waitForResult()
         case None =>
           throw new RuntimeException(s"Full partition for key $key not found!")
       }
+
+    case m: WrappedQueueOfferResult =>
+      // should not happen
+      context.log.warn("Received unexpected queue result: {}", m)
+      Behaviors.same
   }
 
   private def waitForResult(): Behavior[Command] = Behaviors.receiveMessage {
     case WrappedQueueOfferResult(QueueOfferResult.Enqueued, m) =>
-      context.log.info("Successfully enqueued DataMessage: {}", m.getClass.getSimpleName)
-      stash.unstashAll(
-        start()
+      context.log.trace("Successfully enqueued DataMessage: {}", m.getClass.getSimpleName)
+      stash.unstash(
+        start(), numberOfMessages = 1, wrap = identity
       )
     case WrappedQueueOfferResult(QueueOfferResult.Dropped, m) =>
-      context.log.error("Enqueueing data message {} failed: dropped", m)
+      context.log.error("Enqueueing data message {} failed: dropped", m.getClass.getSimpleName)
       Behaviors.stopped
     case WrappedQueueOfferResult(QueueOfferResult.Failure(cause), m) =>
-      context.log.error("Enqueueing data message {} failed: {}", m, cause)
+      context.log.error("Enqueueing data message {} failed: {}", m.getClass.getSimpleName, cause)
       Behaviors.stopped
     case WrappedQueueOfferResult(QueueOfferResult.QueueClosed, m) =>
-      context.log.warn("Channel closed, stopping endpoint. Data message {} not sent!", m)
+      context.log.warn("Channel closed, stopping endpoint. Data message {} not sent!", m.getClass.getSimpleName)
       Behaviors.stopped
     case m =>
-      context.log.info("Stashing {}", m)
+      context.log.trace("Stashing {}", m)
       stash.stash(m)
       Behaviors.same
   }
 
   private def openChannel(): SourceQueueWithComplete[DataMessage] = {
-    val source = Source
-      .queue[DataMessage](10, OverflowStrategy.backpressure)
-      .map(serialize)
-      .flatMapConcat(bytes => Source.fromIterator(() => bytes.grouped(200000)))
-//      .via(Framing.simpleFramingProtocolEncoder(200000))
-    val graph = source.toMat(StreamRefs.sourceRef())(Keep.both)
-    val (queue, sourceRef) = graph.run()
+    val (queue, sourceRef) = StreamChannel.prepareSourceRef(context.system)
     remote ! ConnectionOpened(context.self, sourceRef)
     queue
-  }
-
-  private def serialize(m: DataMessage): ByteString = {
-    implicit val byteOrder: ByteOrder = ByteOrder.BIG_ENDIAN
-    val serialization = SerializationExtension(context.system)
-    val serializer = serialization.findSerializerFor(m)
-    val manifest = Serializers.manifestFor(serializer, m)
-    val manifestBytes = ByteString(manifest)
-
-    val b = new ByteStringBuilder
-    b.putInt(serializer.identifier)
-    b.putInt(manifestBytes.size)
-    b.append(manifestBytes)
-    b.putBytes(serializer.toBinary(m))
-    b.result().compact ++ ByteString(0.toByte, 0.toByte, 0.toByte, 0.toByte)
   }
 }

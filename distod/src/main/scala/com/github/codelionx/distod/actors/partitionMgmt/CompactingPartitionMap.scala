@@ -174,7 +174,8 @@ class CompactingPartitionMap private(
       logStatistics("Before compaction:", log.trace)
     }
     var removed = 0
-    for(i <- levels.indices) {
+    // .tail --> skip level 0
+    for(i <- levels.indices.tail) {
       val level = levels(i)
       val use = usage(i)
       if(use.size < level.size) {
@@ -195,7 +196,7 @@ class CompactingPartitionMap private(
    * This method also resets all partition usage statistics.
    */
   def clear(): Unit = {
-    // skip empty partition to prevent early deletion
+    // skip empty partition to prevent deletion
     levels.tail.foreach(_.clear())
     usage.foreach(_.clear())
     minLevelAccessed = Int.MaxValue
@@ -208,8 +209,9 @@ class CompactingPartitionMap private(
    */
   def removeLevel(level: Int): Unit = {
     // partitions for level 1 (singleton partitions) are stored in another collection, so it's safe to delete level 1 here
-    // besides we do not want to delete them ever
-    levels = levels.updated(level, mutable.Map.empty[CandidateSet, StrippedPartition])
+    // besides we do not want to delete them ever, but we must skip level == 0
+    if(level > 0)
+      levels = levels.updated(level, mutable.Map.empty[CandidateSet, StrippedPartition])
   }
 
 }

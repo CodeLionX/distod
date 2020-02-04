@@ -6,6 +6,7 @@ import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
 import com.github.codelionx.distod.actors.SystemMonitor
 import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, Register, SystemEvent}
+import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
@@ -134,6 +135,12 @@ class PartitionManager(
       // request attributes
       case LookupAttributes(replyTo) =>
         replyTo ! AttributesFound(attributes)
+        Behaviors.same
+
+      // request from a partition replicator
+      case OpenConnection(replyTo) =>
+        context.log.info("Opening sidechannel to {}", replyTo)
+        context.spawn(PartitionManagerEndpoint(partitions, replyTo, attributes), PartitionManagerEndpoint.name())
         Behaviors.same
 
       // single-attr keys

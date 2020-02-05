@@ -99,7 +99,10 @@ class ResultCollectorProxy(
       Behaviors.same
 
     case WrappedListing(ResultCollector.CollectorServiceKey.Listing(listings)) =>
-      context.log.warn("Collector service listing changed during runtime to {}", listings)
+      context.log.warn(
+        "Collector service listing changed during runtime to {}. This could lead to results being lost.",
+        listings
+      )
       withFirstCollector(listings) { newCollector =>
         context.log.info("Changing result collector reference to {}", newCollector)
         if (pending.nonEmpty) {

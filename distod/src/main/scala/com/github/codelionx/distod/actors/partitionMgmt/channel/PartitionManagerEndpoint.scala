@@ -20,7 +20,9 @@ object PartitionManagerEndpoint {
   case object SendAttributes extends Command
   case object SendEmptyPartition extends Command
   final case class SendFullPartition(key: CandidateSet) extends Command
+  case object TeardownChannel extends Command
   private final case class WrappedQueueOfferResult(result: QueueOfferResult, dataMessage: DataMessage) extends Command
+  private case object StreamCompleted extends Command
 
   private object WrappedQueueOfferResult {
 
@@ -87,6 +89,15 @@ class PartitionManagerEndpoint(
         case None =>
           throw new RuntimeException(s"Full partition for key $key not found!")
       }
+
+    case TeardownChannel =>
+      channel.complete()
+      context.pipeToSelf(channel.watchCompletion())(_ => StreamCompleted)
+      Behaviors.same
+
+    case StreamCompleted =>
+      context.log.info("Stream completed, shutting down")
+      Behaviors.stopped
 
     case m: WrappedQueueOfferResult =>
       // should not happen

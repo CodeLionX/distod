@@ -2,13 +2,14 @@ package com.github.codelionx.distod.actors
 
 import java.io.{BufferedWriter, FileWriter}
 
-import akka.actor.typed.{Behavior, PostStop}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.ActorPath
+import akka.actor.typed.{ActorRef, Behavior, PostStop}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{AckBatch, DependencyBatch, ResultCommand, SetAttributeNames}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.types.{OrderDependency, PendingJobMap}
+
+import scala.collection.immutable.HashSet
 
 
 object ResultCollector {
@@ -21,12 +22,12 @@ object ResultCollector {
     new ResultCollector(context).start()
   }
 
-  implicit class WasSeenJobMap(val jobMap: PendingJobMap[ActorPath, Int]) extends AnyVal {
+  implicit class WasSeenJobMap(val jobMap: PendingJobMap[ActorRef[_], Int]) extends AnyVal {
 
-    def wasSeen(actorPath: ActorPath, id: Int): Boolean =
-      jobMap.get(actorPath).fold(false)(_.contains(id))
+    def wasSeen(actorRef: ActorRef[_], id: Int): Boolean =
+      jobMap.get(actorRef).fold(false)(_.contains(id))
 
-    def wasNotSeen(actorPath: ActorPath, id: Int): Boolean = !wasSeen(actorPath, id)
+    def wasNotSeen(actorRef: ActorRef[_], id: Int): Boolean = !wasSeen(actorRef, id)
   }
 }
 
@@ -76,46 +77,59 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
     context.system.receptionist ! Receptionist.Register(ResultCollector.CollectorServiceKey, context.self)
 
     // wait for attribute names before writing results to file (& console)
-    initialize(Seq.empty, PendingJobMap.empty)
+    initialize(HashSet.empty, PendingJobMap.empty)
   }
 
   private def initialize(
-      buffer: Seq[OrderDependency], seenBatches: PendingJobMap[ActorPath, Int]
+      buffer: Set[OrderDependency],
+      seenBatches: PendingJobMap[ActorRef[_], Int]
   ): Behavior[ResultCommand] = Behaviors.receiveMessage {
-    case DependencyBatch(id, _, ackTo) if seenBatches.wasSeen(ackTo.path, id) =>
+    case DependencyBatch(id, _, ackTo) if seenBatches.wasSeen(ackTo, id) =>
       context.log.warn("Ignoring duplicated batch {} from {}", id, ackTo)
       ackTo ! AckBatch(id)
       Behaviors.same
 
-    case DependencyBatch(id, deps, ackTo) if seenBatches.wasNotSeen(ackTo.path, id) =>
+    case DependencyBatch(id, deps, ackTo) if seenBatches.wasNotSeen(ackTo, id) =>
       val newBuffer = buffer ++ deps
-      val newSeen = seenBatches + (ackTo.path -> id)
+      val newSeenBatches = seenBatches + (ackTo -> id)
       ackTo ! AckBatch(id)
-      initialize(newBuffer, newSeen)
+      initialize(newBuffer, newSeenBatches)
 
     case SetAttributeNames(attributes) =>
       val writer = createWriter(append = false)
-      writeBatch(buffer, writer, attributes)
-      behavior(attributes, writer, seenBatches)
+      writeBatch(buffer.toSeq, writer, attributes)
+      // ODs are collected in Set (this ensure uniqueness), so we have seen the buffered ODs already
+      behavior(attributes, writer, seenBatches, buffer)
   }
 
   private def behavior(
-      attributes: Seq[String], writer: BufferedWriter, seenBatches: PendingJobMap[ActorPath, Int]
+      attributes: Seq[String],
+      writer: BufferedWriter,
+      seenBatches: PendingJobMap[ActorRef[_], Int],
+      seenODs: Set[OrderDependency]
   ): Behavior[ResultCommand] = Behaviors
     .receiveMessage[ResultCommand] {
-      case DependencyBatch(id, _, ackTo) if seenBatches.wasSeen(ackTo.path, id) =>
+      case DependencyBatch(id, _, ackTo) if seenBatches.wasSeen(ackTo, id) =>
         context.log.warn("Ignoring duplicated batch {} from {}", id, ackTo)
         ackTo ! AckBatch(id)
         Behaviors.same
 
-      case DependencyBatch(id, deps, ackTo) if seenBatches.wasNotSeen(ackTo.path, id) =>
-        writeBatch(deps, writer, attributes)
+      case DependencyBatch(id, deps, ackTo) if seenBatches.wasNotSeen(ackTo, id) =>
+        val (seenDeps, newDeps) = deps.partition(seenODs.contains)
+        val newSeenODs =
+          if (seenDeps.nonEmpty) {
+            context.log.warn("Ignoring {} duplicated ODs from {}", seenDeps.size, ackTo)
+            seenODs ++ seenDeps
+          } else {
+            seenODs
+          }
+        writeBatch(newDeps, writer, attributes)
         ackTo ! AckBatch(id)
-        behavior(attributes, writer, seenBatches + (ackTo.path -> id))
+        behavior(attributes, writer, seenBatches + (ackTo -> id), newSeenODs)
 
       case SetAttributeNames(newAttributes) if attributes != newAttributes =>
         context.log.warn("Attribute mapping changed during runtime!!")
-        behavior(newAttributes, writer, seenBatches)
+        behavior(newAttributes, writer, seenBatches, seenODs)
 
       case SetAttributeNames(newAttributes) if attributes == newAttributes =>
         Behaviors.same

@@ -48,10 +48,12 @@ class ResultCollectorSpec
 
     def testFileContents(expected: String = expectedFileContent): Assertion = {
       val fileContent = writeBuffer.toString
+      val actualLines = fileContent.split("\n").sorted
+      val expectedLines = fileContent.split("\n").sorted
 
-//      println(fileContent)
-//      println(expected)
-      fileContent shouldEqual expected
+//      println(actualLines)
+//      println(expectedLines)
+      actualLines shouldEqual expectedLines
     }
 
     "register at the receptionist" in {
@@ -88,6 +90,19 @@ class ResultCollectorSpec
       collector ! DependencyBatch(0, deps3, probe.ref)
       probe.expectMessageType[AckBatch]
       collector ! DependencyBatch(0, deps3, probe.ref)
+      probe.expectMessageType[AckBatch]
+
+      testFileContents(
+        expectedFileContent + deps3.map(_.withAttributeNames(columnNames)).mkString("", "\n", "\n")
+      )
+    }
+
+    "ignore duplicate ODs in different batches" in {
+      val probe = createTestProbe[ResultProxyCommand]()
+      collector ! DependencyBatch(0, Seq(
+        ConstantOrderDependency(CandidateSet.from(6), 1),
+        EquivalencyOrderDependency(CandidateSet.from(0, 2), 3, 4, reverse = true),
+      ), probe.ref)
       probe.expectMessageType[AckBatch]
 
       testFileContents(

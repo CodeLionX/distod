@@ -29,8 +29,7 @@ object PartitionGenerator {
       )
     )
     .withRoundRobinRouting()
-    // TODO: test if separate dispatcher is helpful
-//    .withRouteeProps(DispatcherSelector.fromConfig("distod.cpu-bound-tasks-dispatcher"))
+    .withRouteeProps(DispatcherSelector.fromConfig("distod.cpu-bound-tasks-dispatcher"))
 
   private def apply(): Behavior[ComputePartitions] = Behaviors.setup(context =>
     new PartitionGenerator(context).start()

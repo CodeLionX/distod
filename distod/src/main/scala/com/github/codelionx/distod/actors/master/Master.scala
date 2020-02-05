@@ -100,7 +100,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
         // create helper pool and register it at the receptionist
         val pool = context.spawn(
-          MasterHelper.createPool(settings.numberOfWorkers)(state, context.self, partitionManager, attributeSet),
+          MasterHelper.createPool(settings.parallelism)(state, context.self, partitionManager, attributeSet),
           name = MasterHelper.poolName
         )
         context.system.receptionist ! Receptionist.Register(MasterServiceKey, pool)

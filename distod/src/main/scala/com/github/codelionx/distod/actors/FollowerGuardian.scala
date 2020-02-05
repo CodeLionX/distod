@@ -24,8 +24,8 @@ object FollowerGuardian {
     val executioner = context.spawn(Executioner(context.self, rsProxy, Shutdown), Executioner.name)
     context.watch(executioner)
 
-    val partitionReplicator = context.spawn(PartitionReplicator(partitionManager), PartitionReplicator.name)
-    context.watch(partitionReplicator)
+    // will terminate after successful replication
+    context.spawn(PartitionReplicator(partitionManager), PartitionReplicator.name)
 
     Behaviors
       .receiveMessage[Command] {

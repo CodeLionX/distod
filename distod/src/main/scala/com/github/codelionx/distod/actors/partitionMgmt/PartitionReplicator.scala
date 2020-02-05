@@ -8,7 +8,7 @@ import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.actors.master.MasterHelper.GetPrimaryPartitionManager
 import com.github.codelionx.distod.actors.partitionMgmt.channel._
-import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint.{ConnectionOpened, SendAttributes, SendEmptyPartition, SendFullPartition}
+import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint.{ConnectionOpened, SendAttributes, SendEmptyPartition, SendFullPartition, TeardownChannel}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.types.CandidateSet
 
@@ -65,44 +65,76 @@ object PartitionReplicator {
         controller ! SendAttributes
 
         StreamChannel.consumeSourceRefWith(channel, selfSink, context.system)
-        behavior(context, local, controller)
+        behavior(context, local, controller, 1)
     }
   }
 
   private def behavior(
       context: ActorContext[Command],
       local: ActorRef[PartitionCommand],
-      primary: ActorRef[PartitionManagerEndpoint.Command]
-  ): Behavior[Command] = Behaviors.receiveMessage {
+      primary: ActorRef[PartitionManagerEndpoint.Command],
+      remainingDataMessages: Int
+  ): Behavior[Command] = {
+    def next(newRemaining: Int = remainingDataMessages - 1): Behavior[Command] = {
+      if(newRemaining == 0) {
+        primary ! TeardownChannel
+        finished(context)
+      } else {
+        behavior(context, local, primary, newRemaining)
+      }
+    }
 
-    // stream based:
-    case StreamInit(ackTo) =>
-      ackTo ! StreamAck
-      context.log.info("Stream initialized")
-      Behaviors.same
+    Behaviors.receiveMessage{
+      // stream based:
+      case StreamInit(ackTo) =>
+        ackTo ! StreamAck
+        context.log.info("Stream initialized")
+        Behaviors.same
 
-    case WrappedDataMessage(ackTo, AttributeData(attributes)) =>
-      ackTo ! StreamAck
-      context.log.info("{} attributes received, loading initial partition set...", attributes.size)
-      local ! SetAttributes(attributes)
-      primary ! SendEmptyPartition
-      attributes.foreach(a =>
-        primary ! SendFullPartition(CandidateSet.from(a))
-      )
-      Behaviors.same
+      case WrappedDataMessage(ackTo, AttributeData(attributes)) =>
+        ackTo ! StreamAck
+        context.log.debug("{} attributes received, loading initial partition set...", attributes.size)
+        local ! SetAttributes(attributes)
 
-    case WrappedDataMessage(ackTo, FullPartitionData(id, partition)) =>
-      ackTo ! StreamAck
-      context.log.debug("Received full partition for key {}: {}", id, partition.equivClasses.size)
-      local ! InsertPartition(id, partition)
-      Behaviors.same
+        primary ! SendEmptyPartition
+        attributes.foreach(a =>
+          primary ! SendFullPartition(CandidateSet.from(a))
+        )
+        // received attributes (-1) and new empty partition (+1) cancel each other out:
+        next(remainingDataMessages + attributes.size)
 
-    case WrappedDataMessage(ackTo, EmptyPartitionData(value)) =>
-      ackTo ! StreamAck
-      context.log.debug("Received empty partition: {}", value.equivClasses.size)
-      local ! InsertPartition(CandidateSet.empty, value)
-      Behaviors.same
+      case WrappedDataMessage(ackTo, FullPartitionData(id, partition)) =>
+        ackTo ! StreamAck
+        context.log.debug("Received full partition for key {}: {}", id, partition.equivClasses.size)
+        local ! InsertPartition(id, partition)
+        next()
 
+      case WrappedDataMessage(ackTo, EmptyPartitionData(value)) =>
+        ackTo ! StreamAck
+        context.log.debug("Received empty partition: {}", value.equivClasses.size)
+        local ! InsertPartition(CandidateSet.empty, value)
+        next()
+
+      case StreamComplete=>
+        context.log.error("Stream finished too early, still missing partitions.")
+        Behaviors.stopped
+
+      case StreamFailure(cause) =>
+        context.log.error("Stream finished too early, still missing partitions.", cause)
+        Behaviors.stopped
+
+      // other:
+      case WrappedListing(Master.MasterServiceKey.Listing(_)) =>
+        context.log.error("Master service listing changed despite that we are already running!")
+        Behaviors.same
+
+      case PrimaryPartitionManager(_) | WrappedEndpointEvent(ConnectionOpened(_, _)) =>
+        // ignore
+        Behaviors.same
+    }
+  }
+
+  private def finished(context: ActorContext[Command]): Behavior[Command] = Behaviors.receiveMessage{
     case StreamComplete =>
       context.log.info("Stream finished")
       Behaviors.stopped
@@ -111,17 +143,9 @@ object PartitionReplicator {
       context.log.error("Stream failed", cause)
       Behaviors.stopped
 
-    // other:
-    case WrappedListing(Master.MasterServiceKey.Listing(_)) =>
-      context.log.error("Master service listing changed despite that we are already running!")
-      Behaviors.same
-
-    case PrimaryPartitionManager(_) | WrappedEndpointEvent(ConnectionOpened(_, _)) =>
-      // ignore
-      Behaviors.same
-
     case m =>
-      context.log.warn("received unknown msg: {}", m)
+      context.log.warn("Ignoring message during channel teardown: {}", m)
+      // ignore
       Behaviors.same
   }
 }

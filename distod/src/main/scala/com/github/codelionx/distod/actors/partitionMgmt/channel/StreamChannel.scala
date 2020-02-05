@@ -33,8 +33,7 @@ object StreamChannel {
 
     sourceRef
       .via(Framing.delimiter(terminationMarker, maximumFrameLength = 200000000, allowTruncation = true))
-      .wireTap(s => println(s"Size: ${s.size}"))
-      .via(parallelDeserializer(Settings(system).numberOfWorkers))
+      .via(parallelDeserializer(Settings(system).parallelism))
 //      .map(DataMessage.deserialize)
       .runWith(sink)
   }

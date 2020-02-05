@@ -87,12 +87,21 @@ class Settings private(config: Config) extends Extension {
   val leaderHost: String = config.getString(s"$namespace.leader-host")
   val leaderPort: Int = config.getInt(s"$namespace.leader-port")
 
+  val maxParallelism: Int = {
+    val path = s"$namespace.max-parallelism"
+    val value = config.getInt(path)
+    if(value < 1)
+      throw new ConfigException.BadValue(path, "value can not be 0 (or less)")
+    value
+  }
+
   val maxWorkers: Int = config.getInt(s"$namespace.max-workers")
 
-  val numberOfWorkers: Int = {
-    val cores = Runtime.getRuntime.availableProcessors()
-    scala.math.min(maxWorkers, cores)
-  }
+  private val cores = Runtime.getRuntime.availableProcessors()
+
+  val parallelism: Int = Seq(maxParallelism, cores).min
+
+  val numberOfWorkers: Int = Seq(maxWorkers, maxParallelism, cores).min
 
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")

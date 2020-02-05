@@ -73,7 +73,11 @@ object LeaderGuardian {
     context.watch(rs)
 
     // master
-    val master = context.spawn(Master(context.self, dataReader, partitionManager, rs), Master.name, DispatcherSelector.fromConfig("distod.master-pinned-dispatcher"))
+    val master = context.spawn(
+      Master(context.self, dataReader, partitionManager, rs),
+      Master.name,
+      DispatcherSelector.fromConfig("distod.master-pinned-dispatcher")
+    )
     context.watch(master)
   }
 

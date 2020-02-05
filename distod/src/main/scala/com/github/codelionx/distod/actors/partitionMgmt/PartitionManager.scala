@@ -49,10 +49,14 @@ class PartitionManager(
   private val settings = Settings(context.system)
   private val compactionSettings = settings.partitionCompactionSettings
 
-  private val generatorPool = context.spawn(
-    PartitionGenerator.createPool(settings.numberOfWorkers),
-    name = PartitionGenerator.poolName
-  )
+  private val generatorPool =
+    if(settings.numberOfWorkers > 0)
+      Some(context.spawn(
+        PartitionGenerator.createPool(settings.numberOfWorkers),
+        name = PartitionGenerator.poolName
+      ))
+    else
+      None
 
   private val timings = Timing(context.system)
 
@@ -244,18 +248,24 @@ class PartitionManager(
       pendingResponse: PendingResponse
   ): PendingJobMap[CandidateSet, PendingResponse] = {
     timings.time("Partition generation") {
-      val jobs = calcJobChain(key)
-      if (jobs.size > 2) {
-        context.log.debug(s"Generating expensive job chain of size ${jobs.size}")
+      generatorPool match {
+        case Some(pool) =>
+          val jobs = calcJobChain(key)
+          if (jobs.size > 2) {
+            context.log.debug(s"Generating expensive job chain of size ${jobs.size}")
+          }
+          pool ! ComputePartitions(jobs, context.self)
+          val x = jobs.map { job =>
+            if (job.key == key)
+              job.key -> Seq(pendingResponse)
+            else
+              job.key -> Seq.empty
+          }
+          pendingJobs ++ x
+        case None =>
+          context.log.error("Could not generate partition, because no partition generator pool is not available (max-workers < 1)")
+          pendingJobs
       }
-      generatorPool ! ComputePartitions(jobs, context.self)
-      val x = jobs.map { job =>
-        if (job.key == key)
-          job.key -> Seq(pendingResponse)
-        else
-          job.key -> Seq.empty
-      }
-      pendingJobs ++ x
     }
   }
 

@@ -87,7 +87,13 @@ class Settings private(config: Config) extends Extension {
   val leaderHost: String = config.getString(s"$namespace.leader-host")
   val leaderPort: Int = config.getInt(s"$namespace.leader-port")
 
-  val maxParallelism: Int = config.getInt(s"$namespace.max-parallelism")
+  val maxParallelism: Int = {
+    val path = s"$namespace.max-parallelism"
+    val value = config.getInt(path)
+    if(value < 1)
+      throw new ConfigException.BadValue(path, "value can not be 0 (or less)")
+    value
+  }
 
   val maxWorkers: Int = config.getInt(s"$namespace.max-workers")
 

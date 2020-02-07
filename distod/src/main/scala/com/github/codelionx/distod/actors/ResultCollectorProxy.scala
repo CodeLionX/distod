@@ -5,7 +5,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerSch
 import akka.actor.Cancellable
 import akka.actor.typed.receptionist.Receptionist
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.ResultCollectorProxy.{Timeout, WrappedListing}
+import com.github.codelionx.distod.actors.ResultCollectorProxy.{RetryTick, Timeout, WrappedListing}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{ResultCommand, _}
 import com.github.codelionx.distod.types.OrderDependency
 
@@ -18,6 +18,7 @@ object ResultCollectorProxy {
 
   private final case class WrappedListing(listing: Receptionist.Listing) extends ResultProxyCommand
   private case object Timeout extends ResultProxyCommand
+  private case object RetryTick extends ResultProxyCommand
 
   val name = "local-result-proxy"
 
@@ -49,13 +50,14 @@ class ResultCollectorProxy(
 
   private def initialize(): Behavior[ResultProxyCommand] = {
     context.system.receptionist ! Receptionist.Subscribe(ResultCollector.CollectorServiceKey, receptionistAdapter)
+    timers.startTimerWithFixedDelay("retryTick", RetryTick, 2 seconds)
 
     Behaviors.receiveMessage {
       case m: FoundDependencies =>
         context.log.trace("Stashing message: {}", m)
         stash.stash(m)
         Behaviors.same
-      case _: AckBatch =>
+      case _: AckBatch | Timeout | RetryTick =>
         // should not occur --> ignore
         Behaviors.same
       case WrappedListing(ResultCollector.CollectorServiceKey.Listing(listings)) =>
@@ -76,58 +78,60 @@ class ResultCollectorProxy(
       collector: ActorRef[ResultCommand],
       nextId: Int,
       buffer: Seq[OrderDependency],
-      pendingAcks: Map[Int, Cancellable]
+      pending: Map[Int, Seq[OrderDependency]]
   ): Behavior[ResultProxyCommand] = Behaviors.receiveMessage {
     case FoundDependencies(deps) =>
       val newBuffer = buffer :++ deps
       if (newBuffer.size >= batchSize) {
         val (batch, stillBuffered) = newBuffer.splitAt(batchSize)
-        val cancellable = scheduleSendingBatch(collector, nextId, batch)
-        behavior(collector, nextId + 1, stillBuffered, pendingAcks + (nextId -> cancellable))
+        collector ! DependencyBatch(nextId, batch, context.self)
+        behavior(collector, nextId + 1, stillBuffered, pending + (nextId -> batch))
 
       } else {
-        behavior(collector, nextId, newBuffer, pendingAcks)
+        behavior(collector, nextId, newBuffer, pending)
       }
 
     case AckBatch(id) =>
-      val cancellable = pendingAcks(id)
-      cancellable.cancel()
-      behavior(collector, nextId, buffer, pendingAcks.removed(id))
+      behavior(collector, nextId, buffer, pending.removed(id))
+
+    case RetryTick =>
+      sendPendingBatches(collector, pending)
+      Behaviors.same
 
     case WrappedListing(ResultCollector.CollectorServiceKey.Listing(listings)) =>
-      context.log.warn("Collector service listing changed during runtime to {}", listings)
+      context.log.warn(
+        "Collector service listing changed during runtime to {}. This could lead to results being lost.",
+        listings
+      )
       withFirstCollector(listings) { newCollector =>
         context.log.info("Changing result collector reference to {}", newCollector)
-        if (pendingAcks.nonEmpty) {
-          context.log.error(
-            "Lost {} batches, because they were not acknowledged by collector ({}) before changing to {}!",
-            pendingAcks.size,
-            collector,
-            newCollector
-          )
+        if (pending.nonEmpty) {
+          context.log.debug("Sending {} pending batches to new collector", pending.size)
+          sendPendingBatches(newCollector, pending)
         }
-        behavior(newCollector, nextId, buffer, pendingAcks.empty)
+        behavior(newCollector, nextId, buffer, pending)
       }
 
-    case FlushAndStop(replyTo) if buffer.isEmpty && pendingAcks.isEmpty =>
+    case FlushAndStop(replyTo) if buffer.isEmpty && pending.isEmpty =>
       context.log.debug("Buffer and pending buffer are empty, finished.")
       replyTo ! FlushFinished
       Behaviors.stopped
 
-    case FlushAndStop(replyTo) if buffer.isEmpty && pendingAcks.nonEmpty =>
-      context.log.debug("Nothing to flush, waiting for {} pending acks", pendingAcks.size)
-      flushing(pendingAcks, Seq(replyTo))
+    case FlushAndStop(replyTo) if buffer.isEmpty && pending.nonEmpty =>
+      context.log.debug("Nothing to flush, waiting for {} pending acks", pending.size)
+      flushing(collector, pending, Seq(replyTo))
 
     case FlushAndStop(replyTo) if buffer.nonEmpty =>
-      val cancellable = scheduleSendingBatch(collector, nextId, buffer)
+      collector ! DependencyBatch(nextId, buffer, context.self)
       timers.startSingleTimer(timoutTimerKey, Timeout, 2 seconds)
-      val newPendingAcks = pendingAcks + (nextId -> cancellable)
-      context.log.debug("Flushed buffer, pending acks: {}", newPendingAcks.size)
-      flushing(newPendingAcks, Seq(replyTo))
+      val newPending = pending + (nextId -> buffer)
+      context.log.debug("Flushed buffer, pending acks: {}", newPending.size)
+      flushing(collector, newPending, Seq(replyTo))
   }
 
   private def flushing(
-      pendingAcks: Map[Int, Cancellable],
+      collector: ActorRef[ResultCommand],
+      pending: Map[Int, Seq[OrderDependency]],
       ackReceivers: Seq[ActorRef[FlushFinished.type]]
   ): Behavior[ResultProxyCommand] = Behaviors.receiveMessage {
     case FoundDependencies(_) =>
@@ -135,18 +139,23 @@ class ResultCollectorProxy(
       Behaviors.same
 
     case AckBatch(id) =>
-      pendingAcks(id).cancel()
-      val newPending = pendingAcks - id
+      val newPending = pending - id
       if (newPending.isEmpty) {
         context.log.debug("Successfully flushed buffer to result collector")
         ackReceivers.foreach(_ ! FlushFinished)
+        timers.cancelAll()
         Behaviors.stopped
       } else {
         context.log.trace("Current pending acks: {}", newPending.keys)
-        flushing(newPending, ackReceivers)
+        flushing(collector, newPending, ackReceivers)
       }
 
+    case RetryTick =>
+      sendPendingBatches(collector, pending)
+      Behaviors.same
+
     case Timeout =>
+      timers.cancelAll()
       context.log.error("Could not flush dependencies to result collector in time, pending batches will be lost!")
       ackReceivers.foreach(_ ! FlushFinished)
       Behaviors.stopped
@@ -156,7 +165,7 @@ class ResultCollectorProxy(
       Behaviors.same
 
     case FlushAndStop(replyTo) =>
-      flushing(pendingAcks, ackReceivers :+ replyTo)
+      flushing(collector, pending, ackReceivers :+ replyTo)
   }
 
   private def withFirstCollector(listings: Set[ActorRef[ResultCommand]])(
@@ -164,10 +173,9 @@ class ResultCollectorProxy(
   ): Behavior[ResultProxyCommand] =
     listings.headOption.fold(Behaviors.same[ResultProxyCommand])(behaviorFactory)
 
-  private def scheduleSendingBatch(
-      collector: ActorRef[ResultCommand], id: Int, batch: Seq[OrderDependency]
-  ): Cancellable =
-    context.system.scheduler.scheduleWithFixedDelay(0 seconds, 2 seconds) {
-      () => collector ! DependencyBatch(id, batch, context.self)
+  private def sendPendingBatches(collector: ActorRef[ResultCommand], pending: Map[Int, Seq[OrderDependency]]): Unit = {
+    pending.foreach { case (i, value) =>
+      collector ! DependencyBatch(i, value, context.self)
     }
+  }
 }

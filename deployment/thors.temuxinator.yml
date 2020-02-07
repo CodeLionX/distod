@@ -1,0 +1,42 @@
+# ./.tmuxinator.yml
+
+name: thors
+root: /home/sebastian/Documents/Projects/distod/deployment
+
+windows:
+  - deployment:
+      layout: tiled
+      synchronize: after
+      panes:
+        - thor01:
+            - set -x host thor01
+            - ssh $host
+            - clear
+        - thor02:
+            - set -x host thor02
+            - ssh $host
+            - clear
+        - thor03:
+            - set -x host thor03
+            - ssh $host
+            - clear
+        - thor04:
+            - set -x host thor04
+            - ssh $host
+            - clear
+  - monitor:
+      layout: tiled
+      synchronize: after
+      panes:
+        - thor01:
+            - ssh thor01
+            - htop
+        - thor02:
+            - ssh thor02
+            - htop
+        - thor03:
+            - ssh thor03
+            - htop
+        - thor04:
+            - ssh thor04
+            - htop

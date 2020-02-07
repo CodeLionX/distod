@@ -1,0 +1,113 @@
+# ./.tmuxinator.yml
+
+name: cluster
+root: /home/sebastian/Documents/Projects/distod
+
+startup_window: dev
+startup_pane: 1
+
+windows:
+  - dev:
+      layout: even-horizontal
+      panes:
+        - sbt:
+            - clear
+            - sbt
+        - git:
+            - clear
+            - git status
+  - deployment:
+      layout: tiled
+      # Synchronize all panes of this window
+      synchronize: after
+      pre:
+        - cd deployment
+      panes:
+        - odin01:
+            - set -x host odin01
+            - ssh $host
+            - clear
+        - odin02:
+            - set -x host odin02
+            - ssh $host
+            - clear
+        - odin03:
+            - set -x host odin03
+            - ssh $host
+            - clear
+        - odin04:
+            - set -x host odin04
+            - ssh $host
+            - clear
+        - odin05:
+            - set -x host odin05
+            - ssh $host
+            - clear
+        - odin06:
+            - set -x host odin06
+            - ssh $host
+            - clear
+        - odin07:
+            - set -x host odin07
+            - ssh $host
+            - clear
+        - odin08:
+            - set -x host odin08
+            - ssh $host
+            - clear
+        - thor01:
+            - set -x host thor01
+            - ssh $host
+            - clear
+        - thor02:
+            - set -x host thor02
+            - ssh $host
+            - clear
+        - thor03:
+            - set -x host thor03
+            - ssh $host
+            - clear
+        - thor04:
+            - set -x host thor04
+            - ssh $host
+            - clear
+  - monitor:
+      layout: tiled
+      synchronize: after
+      panes:
+        - odin01:
+            - ssh odin01
+            - htop
+        - odin02:
+            - ssh odin02
+            - htop
+        - odin03:
+            - ssh odin03
+            - htop
+        - odin04:
+            - ssh odin04
+            - htop
+        - odin05:
+            - ssh odin05
+            - htop
+        - odin06:
+            - ssh odin06
+            - htop
+        - odin07:
+            - ssh odin07
+            - htop
+        - odin08:
+            - ssh odin08
+            - htop
+        - thor01:
+            - ssh thor01
+            - htop
+        - thor02:
+            - ssh thor02
+            - htop
+        - thor03:
+            - ssh thor03
+            - htop
+        - thor04:
+            - ssh thor04
+            - htop

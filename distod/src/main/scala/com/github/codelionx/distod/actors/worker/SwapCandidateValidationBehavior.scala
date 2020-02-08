@@ -77,6 +77,9 @@ class SwapCandidateValidationBehavior(
         val newPartitions = candidatePartitions + (key -> value)
         nextBehavior(singletonPartitions, newPartitions)
 
+      case m =>
+        stash.stash(m)
+        Behaviors.same
     }
   }
 

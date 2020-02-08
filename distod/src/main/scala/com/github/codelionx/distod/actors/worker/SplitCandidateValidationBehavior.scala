@@ -50,7 +50,7 @@ class SplitCandidateValidationBehavior(
   }
 
   def collectErrors(errors: Map[CandidateSet, Double], expected: Int): Behavior[Command] =
-    Behaviors.receiveMessagePartial {
+    Behaviors.receiveMessage {
       case WrappedPartitionEvent(ErrorFound(key, value)) =>
         context.log.trace("Received partition error value: {}, {}", key, value)
         val newErrorMap = errors + (key -> value)
@@ -59,6 +59,9 @@ class SplitCandidateValidationBehavior(
         } else {
           collectErrors(newErrorMap, expected)
         }
+      case m =>
+        stash.stash(m)
+        Behaviors.same
     }
 
   def performCheck(errors: Map[CandidateSet, Double]): Behavior[Command] = {

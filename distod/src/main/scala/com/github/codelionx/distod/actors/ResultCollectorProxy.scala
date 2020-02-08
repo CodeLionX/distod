@@ -1,9 +1,10 @@
 package com.github.codelionx.distod.actors
 
-import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
-import akka.actor.Cancellable
+import akka.actor.CoordinatedShutdown
 import akka.actor.typed.receptionist.Receptionist
+import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.ResultCollectorProxy.{RetryTick, Timeout, WrappedListing}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{ResultCommand, _}
@@ -67,9 +68,8 @@ class ResultCollectorProxy(
             behavior(collectorRef, 0, Seq.empty, Map.empty)
           )
         }
-      case FlushAndStop(replyTo) =>
+      case FlushAndStop =>
         // nothing to flush --> always successful
-        replyTo ! FlushFinished
         Behaviors.stopped
     }
   }
@@ -112,28 +112,29 @@ class ResultCollectorProxy(
         behavior(newCollector, nextId, buffer, pending)
       }
 
-    case FlushAndStop(replyTo) if buffer.isEmpty && pending.isEmpty =>
+    case FlushAndStop if buffer.isEmpty && pending.isEmpty =>
+      context.log.info("Flushing buffer in order to shut down.")
       context.log.debug("Buffer and pending buffer are empty, finished.")
-      replyTo ! FlushFinished
       Behaviors.stopped
 
-    case FlushAndStop(replyTo) if buffer.isEmpty && pending.nonEmpty =>
+    case FlushAndStop if buffer.isEmpty && pending.nonEmpty =>
+      context.log.info("Flushing buffer in order to shut down.")
       context.log.debug("Nothing to flush, waiting for {} pending acks", pending.size)
-      flushing(collector, pending, Seq(replyTo))
+      Behaviors.same
 
-    case FlushAndStop(replyTo) if buffer.nonEmpty =>
+    case FlushAndStop if buffer.nonEmpty =>
+      context.log.info("Flushing buffer in order to shut down.")
       collector ! DependencyBatch(nextId, buffer, context.self)
       timers.startSingleTimer(timoutTimerKey, Timeout, 2 seconds)
       val newPending = pending + (nextId -> buffer)
       context.log.debug("Flushed buffer, pending acks: {}", newPending.size)
-      flushing(collector, newPending, Seq(replyTo))
+      flushing(collector, newPending)
   }
 
   private def flushing(
-      collector: ActorRef[ResultCommand],
-      pending: Map[Int, Seq[OrderDependency]],
-      ackReceivers: Seq[ActorRef[FlushFinished.type]]
-  ): Behavior[ResultProxyCommand] = Behaviors.receiveMessage {
+                        collector: ActorRef[ResultCommand],
+                        pending: Map[Int, Seq[OrderDependency]]
+                      ): Behavior[ResultProxyCommand] = Behaviors.receiveMessage {
     case FoundDependencies(_) =>
       context.log.error("Received additional dependencies in flushing state, they will be lost!")
       Behaviors.same
@@ -142,12 +143,11 @@ class ResultCollectorProxy(
       val newPending = pending - id
       if (newPending.isEmpty) {
         context.log.debug("Successfully flushed buffer to result collector")
-        ackReceivers.foreach(_ ! FlushFinished)
         timers.cancelAll()
         Behaviors.stopped
       } else {
         context.log.trace("Current pending acks: {}", newPending.keys)
-        flushing(collector, newPending, ackReceivers)
+        Behaviors.same
       }
 
     case RetryTick =>
@@ -157,15 +157,14 @@ class ResultCollectorProxy(
     case Timeout =>
       timers.cancelAll()
       context.log.error("Could not flush dependencies to result collector in time, pending batches will be lost!")
-      ackReceivers.foreach(_ ! FlushFinished)
       Behaviors.stopped
 
     case WrappedListing(ResultCollector.CollectorServiceKey.Listing(_)) =>
-      context.log.error("Collector service listing changed in flushing state")
+      context.log.error("Collector service listing changed in flushing state: ignoring")
       Behaviors.same
 
-    case FlushAndStop(replyTo) =>
-      flushing(collector, pending, ackReceivers :+ replyTo)
+    case FlushAndStop =>
+      Behaviors.same
   }
 
   private def withFirstCollector(listings: Set[ActorRef[ResultCommand]])(

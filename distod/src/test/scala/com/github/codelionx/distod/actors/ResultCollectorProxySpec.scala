@@ -70,7 +70,7 @@ class ResultCollectorProxySpec
       targetProbe.expectNoMessage()
 
       // send flush and stop command
-      proxy ! FlushAndStop(stopperProbe.ref)
+      proxy ! FlushAndStop
       targetProbe.expectMessage(DependencyBatch(2, deps, proxy))
 
       // flush should only be finished if all sent batches are acked
@@ -78,7 +78,6 @@ class ResultCollectorProxySpec
       stopperProbe.expectNoMessage()
 
       proxy ! AckBatch(2)
-      stopperProbe.expectMessage(FlushFinished)
       stopperProbe.expectTerminated(proxy)
     }
 
@@ -86,8 +85,7 @@ class ResultCollectorProxySpec
       val proxy = spawn(ResultCollectorProxy())
       val stopperProbe = createTestProbe[FlushFinished.type]("stopper")
 
-      proxy ! FlushAndStop(stopperProbe.ref)
-      stopperProbe.expectMessage(FlushFinished)
+      proxy ! FlushAndStop
       stopperProbe.expectTerminated(proxy)
     }
   }

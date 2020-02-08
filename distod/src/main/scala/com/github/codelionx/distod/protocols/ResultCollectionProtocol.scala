@@ -15,7 +15,7 @@ object ResultCollectionProtocol {
   trait ResultProxyCommand
   final case class AckBatch(id: Int) extends ResultProxyCommand with CborSerializable
   final case class FoundDependencies(deps: Seq[OrderDependency]) extends ResultProxyCommand
-  final case class FlushAndStop(replyTo: ActorRef[FlushFinished.type]) extends ResultProxyCommand
+  final case object FlushAndStop extends ResultProxyCommand
 
   case object FlushFinished
 }

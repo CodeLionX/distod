@@ -50,6 +50,7 @@ class ResultCollectorProxy(
   def start(): Behavior[ResultProxyCommand] = initialize()
 
   private def initialize(): Behavior[ResultProxyCommand] = {
+    registerShutdownTask()
     context.system.receptionist ! Receptionist.Subscribe(ResultCollector.CollectorServiceKey, receptionistAdapter)
     timers.startTimerWithFixedDelay("retryTick", RetryTick, 2 seconds)
 
@@ -176,5 +177,14 @@ class ResultCollectorProxy(
     pending.foreach { case (i, value) =>
       collector ! DependencyBatch(i, value, context.self)
     }
+  }
+
+  private def registerShutdownTask(): Unit = {
+    CoordinatedShutdown(context.system).addActorTerminationTask(
+      CoordinatedShutdown.PhaseBeforeServiceUnbind,
+      "RSProxy flush results",
+      context.self.toClassic,
+      Some(FlushAndStop)
+    )
   }
 }

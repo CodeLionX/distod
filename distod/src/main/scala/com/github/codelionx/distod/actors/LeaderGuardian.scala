@@ -1,12 +1,13 @@
 package com.github.codelionx.distod.actors
 
+import akka.actor.CoordinatedShutdown
 import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, Terminated}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.Master
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
-import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FlushAndStop, FlushFinished}
 import com.github.codelionx.distod.protocols.ShutdownProtocol
+import com.github.codelionx.distod.types.ShutdownReason
 import com.github.codelionx.util.timing.Timing
 
 
@@ -14,15 +15,12 @@ object LeaderGuardian {
 
   sealed trait Command
   case object AlgorithmFinished extends Command
-  case object Shutdown extends Command
-  case class WrappedRSProxyEvent(event: FlushFinished.type) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
-    val rsAdapter = context.messageAdapter(WrappedRSProxyEvent)
     context.log.info("LeaderGuardian started, spawning actors ...")
 
     // spawn follower actors for local computation
-    val (partitionManager, rsProxy) = FollowerGuardian.startFollowerActors(context)
+    val partitionManager = FollowerGuardian.startFollowerActors(context)
 
     // shutdown coordinator first stops the followers and then the leader when algorithm has finished
     val shutdownCoordinator = context.spawn(ShutdownCoordinator(context.self), ShutdownCoordinator.name)
@@ -41,25 +39,17 @@ object LeaderGuardian {
           timingSpan.end("Overall runtime")
           shutdownCoordinator ! ShutdownProtocol.AlgorithmFinished
           Behaviors.same
-
-        case Shutdown =>
-          rsProxy ! FlushAndStop(rsAdapter)
-          Behaviors.same
-
-        case WrappedRSProxyEvent(FlushFinished) =>
-          context.log.info("Stopping leader node!")
-          context.unwatch(rsProxy)
-          Behaviors.stopped
       }
       .receiveSignal {
         case (context, Terminated(ref)) =>
-          context.log.warn("{} has stopped working!", ref)
+          if(CoordinatedShutdown(context.system).shutdownReason().isEmpty) {
+            context.log.warn("{} has stopped working!", ref)
+          }
           if (context.children.isEmpty) {
             context.log.error("There are no child actors left. Shutting down system.")
-            Behaviors.stopped
-          } else {
-            Behaviors.same
+            CoordinatedShutdown(context.system).run(ShutdownReason.AllActorsDiedReason)
           }
+          Behaviors.same
       }
   }
 

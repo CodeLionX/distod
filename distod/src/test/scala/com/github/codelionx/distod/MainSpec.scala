@@ -7,6 +7,8 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 class MainSpec extends AnyWordSpecLike with Matchers with LogCapturing {
 
@@ -36,7 +38,7 @@ class MainSpec extends AnyWordSpecLike with Matchers with LogCapturing {
     val settings = Settings(testKit.system)
     val guardProbe = testKit.createTestProbe("guard")
     val userGuardian = testKit.spawn(LeaderGuardian(), "user")
-    guardProbe.expectTerminated(userGuardian)
+    guardProbe.expectTerminated(userGuardian, 5 seconds)
 
     val distodResults = ResultFileParsing.readAndParseDistodResults(settings.outputFilePath)
     val expectedResults = ResultFileParsing.readAndParseFastodResults(resultFilePath)

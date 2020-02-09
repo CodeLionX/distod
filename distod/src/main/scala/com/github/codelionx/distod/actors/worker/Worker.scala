@@ -1,9 +1,9 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.master.{Master, MasterHelper}
+import com.github.codelionx.distod.actors.master.MasterHelper
 import com.github.codelionx.distod.actors.master.MasterHelper.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
@@ -14,15 +14,11 @@ import com.github.codelionx.distod.types.CandidateSet
 object Worker {
 
   sealed trait Command extends CborSerializable
-  final case class CheckSplitCandidates(
-      candidateId: CandidateSet,
-      splitCandidates: CandidateSet
-  ) extends Command
-  final case class CheckSwapCandidates(
-      candidateId: CandidateSet,
-      swapCandidates: Seq[(Int, Int)]
-  ) extends Command
+
+  final case class CheckSplitCandidates(candidateId: CandidateSet, splitCandidates: CandidateSet) extends Command
+  final case class CheckSwapCandidates(candidateId: CandidateSet, swapCandidates: Seq[(Int, Int)]) extends Command
   private[worker] case class WrappedPartitionEvent(event: PartitionEvent) extends Command
+  private[worker] case object Stop extends Command
 
   def name(n: Int): String = s"worker-$n"
 
@@ -31,11 +27,12 @@ object Worker {
       rsProxy: ActorRef[ResultProxyCommand],
       master: ActorRef[MasterHelper.Command]
   ): Behavior[Command] =
-    Behaviors.setup[Command] { context =>
-      val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
-      new Worker(WorkerContext(context, master, partitionManager, rsProxy, partitionEventMapper)).start()
-    }
-
+    Behaviors.setup[Command](context =>
+      Behaviors.withStash[Command](10) { stash =>
+        val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
+        new Worker(WorkerContext(context, stash, master, partitionManager, rsProxy, partitionEventMapper)).start()
+      }
+    )
 }
 
 
@@ -44,9 +41,10 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
   import Worker._
   import workerContext._
 
+
   def start(): Behavior[Command] = initialize()
 
-  def initialize(): Behavior[Command] = {
+  private def initialize(): Behavior[Command] = {
     partitionManager ! LookupAttributes(partitionEventMapper)
 
     Behaviors.receiveMessagePartial {
@@ -54,10 +52,13 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
         context.log.trace("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
         master ! DispatchWork(context.self)
         behavior(attributes)
+
+      case Stop =>
+        Behaviors.stopped
     }
   }
 
-  def behavior(attributes: Seq[Int]): Behavior[Command] = Behaviors.receiveMessage {
+  private def behavior(attributes: Seq[Int], stopped: Boolean = false): Behavior[Command] = Behaviors.receiveMessage {
     case CheckSplitCandidates(candidateId, splitCandidates) =>
       context.log.debug("Checking split candidates of node {}", candidateId)
 
@@ -67,8 +68,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
         master ! SplitCandidatesChecked(candidateId, removedSplitCandidates)
 
         // ready to work on next node:
-        master ! DispatchWork(context.self)
-        behavior(attributes)
+        next(attributes, stopped)
       }
 
       if (splitCandidates.nonEmpty) {
@@ -88,8 +88,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
         master ! SwapCandidatesChecked(candidateId, removedSwapCandidates)
 
         // ready to work on next node:
-        master ! DispatchWork(context.self)
-        behavior(attributes)
+        next(attributes, stopped)
       }
 
       if (swapCandidates.nonEmpty) {
@@ -100,8 +99,22 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
         handleResults()
       }
 
+    case Stop =>
+      context.log.info("Finishing last job before stopping")
+      behavior(attributes, stopped = true)
+
     case WrappedPartitionEvent(event) =>
       context.log.debug("Ignored {}", event)
       Behaviors.same
   }
+
+  private def next(attributes: Seq[Int], stopped: Boolean): Behavior[Command] =
+    if (!stopped) {
+      master ! DispatchWork(context.self)
+      stash.unstashAll(
+        behavior(attributes)
+      )
+    } else {
+      Behaviors.stopped
+    }
 }

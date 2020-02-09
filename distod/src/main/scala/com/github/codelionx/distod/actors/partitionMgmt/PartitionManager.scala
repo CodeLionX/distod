@@ -88,7 +88,7 @@ class PartitionManager(
       Behaviors.same
 
     case m =>
-      context.log.debug("Stashing request {}", m.getClass.getSimpleName)
+      context.log.warn("Stashing request {}", m.getClass.getSimpleName)
       stash.stash(m)
       Behaviors.same
   }
@@ -219,7 +219,6 @@ class PartitionManager(
 
       case ProductComputed(key, partition) =>
         context.log.trace("Received computed partition for key {}", key)
-        partitions + (key -> partition)
         pendingJobs.get(key) match {
           case Some(pendingResponses) => pendingResponses.foreach {
             case PendingStrippedPartition(ref) =>
@@ -229,15 +228,21 @@ class PartitionManager(
           }
           case None => // do nothing
         }
+        if(settings.cacheEnabled)
+          partitions + (key -> partition)
         next(_pendingJobs = pendingJobs.keyRemoved(key))
 
       case Cleanup =>
         partitions.compact()
         Behaviors.same
 
-      case WrappedSystemEvent(CriticalHeapUsage) =>
+      case WrappedSystemEvent(CriticalHeapUsage) if settings.cacheEnabled =>
         context.log.warn("Clearing all temporary partitions in consequence of memory shortage")
         partitions.clear()
+        Behaviors.same
+
+      case WrappedSystemEvent(CriticalHeapUsage) if settings.cacheDisabled =>
+        // ignore
         Behaviors.same
     }
   }

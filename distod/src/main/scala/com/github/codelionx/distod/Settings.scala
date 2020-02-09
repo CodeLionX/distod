@@ -90,7 +90,7 @@ class Settings private(config: Config) extends Extension {
   val maxParallelism: Int = {
     val path = s"$namespace.max-parallelism"
     val value = config.getInt(path)
-    if(value < 1)
+    if (value < 1)
       throw new ConfigException.BadValue(path, "value can not be 0 (or less)")
     value
   }
@@ -106,11 +106,14 @@ class Settings private(config: Config) extends Extension {
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 
+  val cacheEnabled: Boolean = config.getBoolean(s"$namespace.enable-partition-cache")
+  val cacheDisabled: Boolean = !cacheEnabled
+
   val partitionCompactionSettings: PartitionCompactionSettings = new PartitionCompactionSettings {
 
     private val subnamespace = s"$namespace.partition-compaction"
 
-    override def enabled: Boolean = config.getBoolean(s"$subnamespace.enabled")
+    override def enabled: Boolean = cacheEnabled && config.getBoolean(s"$subnamespace.enabled")
 
     // cuts off nanosecond part of durations (we dont care about this, because duration should be in
     // seconds or greater anyway)

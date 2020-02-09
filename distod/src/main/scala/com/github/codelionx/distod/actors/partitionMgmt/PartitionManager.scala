@@ -50,7 +50,7 @@ class PartitionManager(
   private val compactionSettings = settings.partitionCompactionSettings
 
   private val generatorPool =
-    if(settings.numberOfWorkers > 0)
+    if (settings.numberOfWorkers > 0)
       Some(context.spawn(
         PartitionGenerator.createPool(settings.numberOfWorkers),
         name = PartitionGenerator.poolName
@@ -228,7 +228,7 @@ class PartitionManager(
           }
           case None => // do nothing
         }
-        if(settings.cacheEnabled)
+        if (settings.cacheEnabled)
           partitions + (key -> partition)
         next(_pendingJobs = pendingJobs.keyRemoved(key))
 
@@ -256,19 +256,21 @@ class PartitionManager(
       generatorPool match {
         case Some(pool) =>
           val jobs = calcJobChain(key)
-          if (jobs.size > 2) {
-            context.log.debug(s"Generating expensive job chain of size ${jobs.size}")
+          if (jobs.size > 5) {
+            context.log.debug("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
           }
           pool ! ComputePartitions(jobs, context.self)
-          val x = jobs.map { job =>
-            if (job.key == key)
-              job.key -> Seq(pendingResponse)
-            else
-              job.key -> Seq.empty
-          }
+          val x = jobs
+            .filter(_.store)
+            .map { job =>
+              if (job.key == key)
+                job.key -> Seq(pendingResponse)
+              else
+                job.key -> Seq.empty
+            }
           pendingJobs ++ x
         case None =>
-          context.log.error("Could not generate partition, because no partition generator pool is not available (max-workers < 1)")
+          context.log.error("Could not generate partition, because the partition generator pool is not available (max-workers < 1)")
           pendingJobs
       }
     }
@@ -282,19 +284,20 @@ class PartitionManager(
       val predecessorKeys = subkey.predecessors.toSeq
       val foundKeys = predecessorKeys.filter(partitions.contains)
       val missingKeys = predecessorKeys.diff(foundKeys)
+      val store = subkey.size >= key.size - 1 // store the requested partition and its predecessors (discard others)
 
       foundKeys match {
         case Nil =>
           val nextPred1 :: nextPred2 :: _ = missingKeys
-          loop(nextPred1) ++ loop(nextPred2) :+ ComputePartitionProductJob(subkey, Left(nextPred1), Left(nextPred2))
+          loop(nextPred1) ++ loop(nextPred2) :+ ComputePartitionProductJob(subkey, Left(nextPred1), Left(nextPred2), store)
 
         case foundPred :: Nil =>
           val nextPred :: _ = missingKeys
-          loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundPred)), Left(nextPred))
+          loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundPred)), Left(nextPred), store)
 
         case _ =>
           val p1 :: p2 :: _ = foundKeys.map(partitions.apply).take(2)
-          Seq(ComputePartitionProductJob(subkey, Right(p1), Right(p2)))
+          Seq(ComputePartitionProductJob(subkey, Right(p1), Right(p2), store))
       }
     }
 

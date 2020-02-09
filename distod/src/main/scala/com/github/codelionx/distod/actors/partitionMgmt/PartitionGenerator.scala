@@ -69,7 +69,8 @@ class PartitionGenerator(context: ActorContext[PartitionGenerator.ComputePartiti
         case Left(candidate) => partitions(candidate)
       }
       val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
-      onNewPartition(job.key, newPartition)
+      if(job.store)
+        onNewPartition(job.key, newPartition)
 
       if (newRemainingJobs != Nil)
         loop(partitions + (job.key -> newPartition), newRemainingJobs)

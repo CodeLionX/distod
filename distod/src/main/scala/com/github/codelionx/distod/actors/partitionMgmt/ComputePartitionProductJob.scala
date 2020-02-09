@@ -7,5 +7,6 @@ import com.github.codelionx.distod.types.CandidateSet
 case class ComputePartitionProductJob(
     key: CandidateSet,
     partitionA: Either[CandidateSet, StrippedPartition],
-    partitionB: Either[CandidateSet, StrippedPartition]
+    partitionB: Either[CandidateSet, StrippedPartition],
+    store: Boolean
 )

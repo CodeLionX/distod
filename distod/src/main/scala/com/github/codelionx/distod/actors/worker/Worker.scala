@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.MasterHelper
 import com.github.codelionx.distod.actors.master.MasterHelper.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
@@ -27,12 +27,12 @@ object Worker {
       rsProxy: ActorRef[ResultProxyCommand],
       master: ActorRef[MasterHelper.Command]
   ): Behavior[Command] =
-    Behaviors.setup[Command] ( context =>
+    Behaviors.setup[Command](context =>
       Behaviors.withStash[Command](10) { stash =>
         val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
         new Worker(WorkerContext(context, stash, master, partitionManager, rsProxy, partitionEventMapper)).start()
       }
-  )
+    )
 }
 
 
@@ -68,14 +68,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
         master ! SplitCandidatesChecked(candidateId, removedSplitCandidates)
 
         // ready to work on next node:
-        if (!stopped) {
-          master ! DispatchWork(context.self)
-          stash.unstashAll(
-            behavior(attributes)
-          )
-        } else {
-          Behaviors.stopped
-        }
+        next(attributes, stopped)
       }
 
       if (splitCandidates.nonEmpty) {
@@ -95,14 +88,7 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
         master ! SwapCandidatesChecked(candidateId, removedSwapCandidates)
 
         // ready to work on next node:
-        if (!stopped) {
-          master ! DispatchWork(context.self)
-          stash.unstashAll(
-            behavior(attributes)
-          )
-        } else {
-          Behaviors.stopped
-        }
+        next(attributes, stopped)
       }
 
       if (swapCandidates.nonEmpty) {
@@ -121,4 +107,14 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
       context.log.debug("Ignored {}", event)
       Behaviors.same
   }
+
+  private def next(attributes: Seq[Int], stopped: Boolean): Behavior[Command] =
+    if (!stopped) {
+      master ! DispatchWork(context.self)
+      stash.unstashAll(
+        behavior(attributes)
+      )
+    } else {
+      Behaviors.stopped
+    }
 }

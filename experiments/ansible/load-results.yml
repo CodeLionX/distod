@@ -1,0 +1,12 @@
+# No Vars!
+# adapt this file on each usage
+
+---
+- hosts: leader
+  gather_facts: no
+  vars:
+    - experiment: exp1-datasets
+  vars_files:
+    - vars/fastod-spark.yml
+  tasks:
+    - import_tasks: common_tasks/collect-results.yml

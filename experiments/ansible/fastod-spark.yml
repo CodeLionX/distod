@@ -1,5 +1,5 @@
-# Variables:
-# - experiment name of the experiments to run (without suffix)
+# Vars:
+# - experiment (name of the experiments to run (without suffix))
 
 ---
 - hosts: follower

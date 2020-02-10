@@ -12,6 +12,7 @@
     state: absent
     delay: 2
     sleep: 2
+    timeout: 3600
 
 - name: Ensure result path exists
   delegate_to: localhost

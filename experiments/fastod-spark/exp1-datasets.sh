@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.json" #adult-sub.json"
+datasets="hepatitis-sub.json" #adult-sub.json"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 
@@ -20,11 +20,11 @@ for dataset in ${datasets}; do
   /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
     --class FastODMain \
     --master spark://odin01:7077 \
-    --executor-memory 30G \
+    --executor-memory 28G \
     --num-executors 11 \
     --executor-cores 20 \
     --total-executor-cores 220 \
-    distributed-fastod.jar "file:$(pwd)/data/${dataset}" "100" | tee "${logfile}"
+    distributed-fastod.jar "file:$(pwd)/data/${dataset}" "100" 2>&1 | tee "${logfile}"
 
 
   echo "Gathering results for dataset ${dataset}"

@@ -86,3 +86,17 @@ spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar --class F
 ```
 
 The `total-executor-cores` values is calculated based on the number of executors (nodes) and the number of processors (cores) that should be used by the executor.
+
+Executing an experiment from the `experiments`-folder is done using [Ansible](https://www.ansible.com/) playbooks:
+
+```bash
+cd experiments
+ansible-playbook -i ansible/inventory.ini ansible/fastod.yml -e 'experiment=exp1-datasets'
+```
+
+If the experiment is in the _Wait until experiment finished_ step, one can safely stop the Ansible _driver_ process (on the local machine) using `Ctrl-C`.
+The results can then be obtained by **changing** the `load-results.yml` playbook to the executed experiment and running:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/load-results.yml
+```

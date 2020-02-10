@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-declare -a datasets=( "test-sub.csv" ) #adult-sub.csv" )
+declare -a datasets=( "hepatitis-sub.csv" ) #test-sub.csv, adult-sub.csv" )
 declare -a delimiters=( "," ) #;" )
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"

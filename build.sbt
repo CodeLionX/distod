@@ -64,6 +64,8 @@ lazy val distod = (project in file("distod"))
       case "module-info.class" => MergeStrategy.discard
       // discard logging configuration (set during deployment)
       case PathList("logback.xml") => MergeStrategy.discard
+      // discard follower configuration (only used for local testing)
+      case PathList("application-follower.conf") => MergeStrategy.discard
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)

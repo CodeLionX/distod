@@ -121,3 +121,4 @@ deployment-single/data
 # symlinks and scripts
 oracle-java
 start-jmc.fish
+profiling

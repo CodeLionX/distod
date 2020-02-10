@@ -25,7 +25,7 @@ def generate_synthetic_column_names(length):
 
 
 def read_source(filename, delimiter, has_header):
-    with open(filename, "r", newline="") as f:
+    with open(filename, "r", newline="", encoding="utf-8") as f:  # if error try using iso-8859-1
         if has_header:
             reader = csv.DictReader(f, delimiter=delimiter)
             offset = 0

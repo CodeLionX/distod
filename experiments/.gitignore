@@ -1,3 +1,7 @@
+# ignore data (too large: a couple hundrets of MB)
+data
+fastod-spark/data
+
 # ignore results folder
 results
 

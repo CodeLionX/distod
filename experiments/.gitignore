@@ -1,0 +1,9 @@
+# ignore results folder
+results
+
+# ignore our own artefact, but include the other ones
+!fastod/fastod.jar
+!fastod-spark/libs/*
+!fastod-spark/distributed-fastod.jar
+
+**/distod.jar

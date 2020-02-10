@@ -3,7 +3,7 @@
 declare -a datasets=( "test-sub.csv" ) #adult-sub.csv" )
 declare -a delimiters=( "," ) #;" )
 resultfolder="results"
-resultfile="${resultfolder}/results.csv"
+resultfile="${resultfolder}/metrics.csv"
 
 # write lock file
 touch /var/lock/fastod-exp1-datasets.lock

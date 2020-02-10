@@ -2,7 +2,7 @@
 
 datasets="test-sub.json" #adult-sub.json"
 resultfolder="results"
-resultfile="${resultfolder}/results.csv"
+resultfile="${resultfolder}/metrics.csv"
 
 # write lock file
 touch /var/lock/fastod-spark-exp1-datasets.lock

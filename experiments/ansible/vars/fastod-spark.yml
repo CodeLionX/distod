@@ -1,0 +1,6 @@
+# Configuration variables for the FASTOD spark experiments
+---
+component: "fastod-spark"
+src_path: "../{{ component }}"
+deployment_path: "~/{{ component }}"
+lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"

@@ -20,7 +20,7 @@ for dataset in ${datasets}; do
   /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
     --class FastODMain \
     --master spark://odin01:7077 \
-    --driver-memory 60GB \
+    --driver-memory 60G \
     --executor-memory 28G \
     --num-executors 11 \
     --executor-cores 20 \
@@ -35,7 +35,9 @@ for dataset in ${datasets}; do
     echo -n ","
     grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
     echo -n ","
-    grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+    grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+    # force newline
+    echo ""
   } >>"${resultfile}"
 done
 

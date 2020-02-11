@@ -119,9 +119,9 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
         val newSeenODs =
           if (seenDeps.nonEmpty) {
             context.log.warn("Ignoring {} duplicated ODs from {}", seenDeps.size, ackTo)
-            seenODs ++ seenDeps
-          } else {
             seenODs
+          } else {
+            seenODs ++ newDeps
           }
         writeBatch(newDeps, writer, attributes)
         ackTo ! AckBatch(id)
@@ -136,6 +136,12 @@ class ResultCollector(context: ActorContext[ResultCommand]) {
     }
     .receiveSignal { case (_, PostStop) =>
       cleanup(Some(writer))
+      val (fds, ods) = seenODs.partition {
+        case _: OrderDependency.ConstantOrderDependency => true
+        case _: OrderDependency.EquivalencyOrderDependency => false
+      }
+      println(s"# FDs: ${fds.size}")
+      println(s"# ODs: ${ods.size}")
       Behaviors.stopped
     }
 }

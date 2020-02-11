@@ -20,6 +20,7 @@ for dataset in ${datasets}; do
   /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
     --class FastODMain \
     --master spark://odin01:7077 \
+    --driver-memory 60GB \
     --executor-memory 28G \
     --num-executors 11 \
     --executor-cores 20 \

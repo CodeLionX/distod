@@ -5,7 +5,7 @@ package object timing {
 
   // static (and not setting-key) to allow compiler to optimize NoOps
   // enable / disable timings during compile-time
-  final val GATHER_TIMINGS = true
+  final val GATHER_TIMINGS = false
 
   final val MESSAGE_PREFIX = "TIME"
 

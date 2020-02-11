@@ -11,8 +11,6 @@ import com.github.codelionx.distod.protocols.PartitionManagementProtocol.Partiti
 object FollowerGuardian {
 
   sealed trait Command
-  case object Shutdown extends Command
-
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.log.info("FollowerGuardian started, spawning actors ...")

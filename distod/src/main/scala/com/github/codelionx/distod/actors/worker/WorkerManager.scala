@@ -6,8 +6,6 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy, Terminated}
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.FollowerGuardian
-import com.github.codelionx.distod.actors.FollowerGuardian.Shutdown
 import com.github.codelionx.distod.actors.master.{Master, MasterHelper}
 import com.github.codelionx.distod.actors.worker.WorkerManager.{Command, DisconnectTimeout, Stop, WrappedListing}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
@@ -52,18 +50,21 @@ class WorkerManager(
     registerShutdownTask()
     val receptionistAdapter = context.messageAdapter(WrappedListing)
     context.system.receptionist ! Receptionist.Subscribe(Master.MasterServiceKey, receptionistAdapter)
+    timers.startSingleTimer("node-disconnect-timeout", DisconnectTimeout, 30 seconds)
 
     Behaviors.receiveMessage {
       case WrappedListing(Master.MasterServiceKey.Listing(listings)) =>
         withFirstRef(listings) { masterRef =>
           context.log.info("Found master at {}", masterRef)
           spawnWorkers(masterRef)
+          timers.cancel("node-disconnect-timeout")
           supervising(masterRef)
         }
 
       case DisconnectTimeout =>
-        // ignore
-        Behaviors.same
+        context.log.error("Could not connect to leader node (master) in time ({} s), shutting down local node!", 30)
+        CoordinatedShutdown(context.system).run(ShutdownReason.ConnectionToMasterLostReason)
+        Behaviors.stopped
 
       case Stop(_) =>
         Behaviors.stopped
@@ -84,19 +85,19 @@ class WorkerManager(
             timers.cancel("node-disconnect-timeout")
             supervising(newMasterRef)
           } else {
-            context.log.warn("Master service listing changed from {} to {}! " +
+            context.log.error("Master service listing changed from {} to {}! " +
               "DISTOD can not switch between master nodes as it would mean message loss. Shutting down local node!",
               masterRef,
               newMasterRef
             )
-            context.system.asInstanceOf[ActorRef[FollowerGuardian.Command]] ! Shutdown
+            CoordinatedShutdown(context.system).run(ShutdownReason.ConnectionToMasterLostReason)
             Behaviors.stopped
           }
         }
 
       case DisconnectTimeout =>
         context.log.error("Lost connection to leader node (master), shutting down local node!")
-        context.system.asInstanceOf[ActorRef[FollowerGuardian.Command]] ! Shutdown
+        CoordinatedShutdown(context.system).run(ShutdownReason.ConnectionToMasterLostReason)
         Behaviors.stopped
 
       case Stop(Some(ShutdownReason.AlgorithmFinishedReason)) =>

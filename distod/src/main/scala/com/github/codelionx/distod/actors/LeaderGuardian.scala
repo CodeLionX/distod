@@ -26,7 +26,7 @@ object LeaderGuardian {
     val shutdownCoordinator = context.spawn(ShutdownCoordinator(context.self), ShutdownCoordinator.name)
     context.watch(shutdownCoordinator)
 
-    val timingSpan = Timing(context.system).startSpan("Overall runtime")
+    val startNanos = System.nanoTime()
 
     // spawn leader actors
     startLeaderActors(context, partitionManager)
@@ -36,7 +36,8 @@ object LeaderGuardian {
     Behaviors
       .receiveMessage[Command] {
         case AlgorithmFinished =>
-          timingSpan.end("Overall runtime")
+          val duration = System.nanoTime() - startNanos
+          println(s"TIME Overall runtime: ${(duration / 1e6).toLong} ms")
           shutdownCoordinator ! ShutdownProtocol.AlgorithmFinished
           Behaviors.same
       }

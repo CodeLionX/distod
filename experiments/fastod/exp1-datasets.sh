@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-declare -a datasets=( "test-sub.json chess-sub.json plista-sub.json letter-sub.json hepatitis-sub.json adult-sub.json fd-reduced-1k-30-sub.json flight_1k_30c-sub.json ncvoter-1m-19-sub.json" )
+declare -a datasets=( "test-sub.csv" "chess-sub.csv" "plista-sub.csv" "letter-sub.csv" "hepatitis-sub.csv" "adult-sub.csv" "fd-reduced-1k-30-sub.csv" "flight_1k_30c-sub.csv" "ncvoter-1m-19-sub.csv" )
 declare -a delimiters=( "," "," ";" "," "," ";" "," ";" "," )
+
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 
@@ -18,10 +19,10 @@ for (( i=0; i<${#datasets[@]}; ++i )); do
 
   echo ""
   echo ""
-  echo "Running FASTOD on dataset ${dataset}"
+  echo "Running FASTOD on dataset ${dataset} and delimiter ${delimiter}"
 
   # fastod arguments: dataset csv_delimiter has_header
-  /usr/bin/java -Xms30G -Xmx30G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" | tee "${logfile}"
+  /usr/bin/java -Xms60G -Xmx60G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
 
   echo "Gathering results for dataset ${dataset}"
   {

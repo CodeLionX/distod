@@ -6,7 +6,7 @@ fastod-spark/data
 results
 
 # ignore our own artefact, but include the other ones
-**/distod.jar
+distod.jar
 
 !fastod/fastod.jar
 !fastod-spark/libs/*

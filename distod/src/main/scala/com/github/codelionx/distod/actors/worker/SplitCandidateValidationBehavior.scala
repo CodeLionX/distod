@@ -36,6 +36,7 @@ class SplitCandidateValidationBehavior(
 
 
   private val timing = Timing(context.system)
+  private val spans = timing.createSpans
 
   def start(): Behavior[Command] = {
     context.log.trace("Loading partition errors for all split checks")

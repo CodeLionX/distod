@@ -32,7 +32,7 @@ private[timing] class TimingImpl(system: ActorSystem[_]) extends Timing {
     }
   }
 
-  def spans: TimingSpans = TimingSpans(Map.empty, ref)
+  def createSpans: TimingSpans = TimingSpans(Map.empty, ref)
 
   def startSpan(label: String): TimingSpans = TimingSpans(Map(label -> System.nanoTime()), ref)
 

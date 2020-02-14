@@ -29,7 +29,7 @@ trait Timing extends Extension {
 
   def time[R](label: String)(block: => R): R
 
-  def spans: TimingSpans
+  def createSpans: TimingSpans
 
   def startSpan(label: String): TimingSpans
 }

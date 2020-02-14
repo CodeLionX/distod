@@ -7,7 +7,7 @@ private[timing] object NoOpTimingImpl extends Timing {
 
   override def time[R](label: String)(block: => R): R = block
 
-  override def spans: TimingSpans = TimingSpans.NoOpTimingSpans
+  override def createSpans: TimingSpans = TimingSpans.NoOpTimingSpans
 
   override def startSpan(label: String): TimingSpans = TimingSpans.NoOpTimingSpans
 }

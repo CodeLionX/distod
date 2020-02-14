@@ -73,7 +73,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
   private val state: FastutilState[CandidateState] = FastutilState.empty
   private val timing: Timing = Timing(context.system)
-  private val timingSpans = timing.spans
+  private val timingSpans = timing.createSpans
   private var level: Int = 0
 
   private val settings = Settings(context.system)

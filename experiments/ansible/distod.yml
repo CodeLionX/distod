@@ -49,7 +49,7 @@
 #      command:
 #        chdir: "{{ deployment_path }}"
 #        # for debugging
-#        #        cmd: screen -d -L -S "fastod-{{ experiment }}" -m "./{{ experiment }}.sh"
-#        cmd: screen -d -S "fastod-{{ experiment }}" -m "./{{ experiment }}.sh"
+#        #        cmd: screen -d -L -S "distod-{{ experiment }}" -m "./{{ experiment }}.sh"
+#        cmd: screen -d -S "distod-{{ experiment }}" -m "./{{ experiment }}.sh"
 #        creates: "{{ lock_file }}"
 #    - import_tasks: common_tasks/collect-results.yml

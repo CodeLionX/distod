@@ -13,8 +13,8 @@ mkdir -p "${resultfolder}"
 echo "Dataset,Runtime (ms),#FDs,#ODs" >"${resultfile}"
 
 for dataset in ${datasets}; do
-  logfile="${resultfolder}/${dataset}/out.log"
   mkdir -p "${resultfolder}/${dataset}"
+  logfile="${resultfolder}/${dataset}/out.log"
 
   echo ""
   echo ""
@@ -37,31 +37,43 @@ for dataset in ${datasets}; do
 
   t1=$(date +%s)
   duration=$(( t1 - t0 ))
+  echo "Duration: ${duration} s"
 
+  # wait for followers to stop (we need the resources, e.g. NIC, RAM, ...)
   running_nodes=""
   for node in ${nodes}; do
     ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
-    if [ $? == 1 ]; then
-      running_nodes="yes"
-      break
+    if [ $? == 0 ]; then
+      running_nodes="${running_nodes}${node} "
     fi
   done
+  echo "Checked node status, still running nodes: '${running_nodes}'"
 
-  if [[ $duration -lt 30 && "${running_nodes}" != "" ]]; then
+  if [[ $duration < 30 && "${running_nodes}" != "" ]]; then
     echo "Waiting till followers stopped, before force killing them."
     sleep $(( 30 - duration ))
   fi
 
+  while [[ "${running_nodes}" != "" ]]; do
+    echo "Still waiting for nodes: '${running_nodes}'"
+    for node in ${running_nodes}; do
+      ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
+      # still running --> kill follower
+      if [ $? == 0 ]; then
+        echo "Killing follower on node ${node}"
+        ssh "${node}" screen -S distod-exp1-datasets -X quit
+      else
+        # remove node from running set
+        running_nodes=$( echo "${running_nodes}" | sed -s "s/${node} //" )
+      fi
+    done
+  done
+
   # collect results
-  echo "Killing still running nodes and gathering results for dataset ${dataset}"
+  echo "Collecting results for dataset ${dataset}"
   mv distod.log "${resultfolder}/${dataset}/distod-odin01.log"
+  mv results.txt "${resultfolder}/${dataset}/"
   for node in ${nodes}; do
-    ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
-    # still running --> kill follower
-    if [ $? == 1 ]; then
-      echo "Killing follower on node ${node}"
-      ssh "${node}" screen -S distod-exp1-datasets -X quit
-    fi
     scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/distod-${node}.log" >/dev/null
     # intentially put argument in single quotes to let the target shell expand the ~
     ssh "${node}" rm -f '~/distod/distod.log'
@@ -78,9 +90,8 @@ for dataset in ${datasets}; do
     echo ""
   } >>"${resultfile}"
 
-  # synchronize and wait a bit
+  # wait a bit
   sleep 2
-  wait
 done
 
 # release lock file

@@ -28,7 +28,7 @@ for dataset in ${datasets}; do
   t0=$(date +%s)
 
   # start leader
-  java -Xms60g -Xmx60g -XX:+UseG1GC \
+  java -Xms56g -Xmx56g -XX:+UseG1GC \
     -Dconfig.file="$(hostname).conf" \
     -Dlogback.configurationFile=logback.xml \
     -Ddistod.input.path="../data/${dataset}" \

@@ -28,7 +28,10 @@ for dataset in ${datasets}; do
   t0=$(date +%s)
 
   # start leader
-  java -Xms56g -Xmx56g -XX:+UseG1GC \
+  java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+    -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
+    -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
+    -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
     -Dconfig.file="$(hostname).conf" \
     -Dlogback.configurationFile=logback.xml \
     -Ddistod.input.path="../data/${dataset}" \

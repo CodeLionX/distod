@@ -60,20 +60,25 @@ class PartitionGenerator(context: ActorContext[PartitionGenerator.ComputePartiti
     @tailrec
     def loop(partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputePartitionProductJob]): Unit = {
       val job :: newRemainingJobs = remainingJobs
-      val pA = job.partitionA match {
-        case Right(p) => p
-        case Left(candidate) => partitions(candidate)
-      }
-      val pB = job.partitionB match {
-        case Right(p) => p
-        case Left(candidate) => partitions(candidate)
-      }
-      val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
-      if(job.store)
-        onNewPartition(job.key, newPartition)
+      // only compute product if we did not already compute this partition
+      if(!partitions.contains(job.key)) {
+        val pA = job.partitionA match {
+          case Right(p) => p
+          case Left(candidate) => partitions(candidate)
+        }
+        val pB = job.partitionB match {
+          case Right(p) => p
+          case Left(candidate) => partitions(candidate)
+        }
+        val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
+        if (job.store)
+          onNewPartition(job.key, newPartition)
 
-      if (newRemainingJobs != Nil)
-        loop(partitions + (job.key -> newPartition), newRemainingJobs)
+        if (newRemainingJobs != Nil)
+          loop(partitions + (job.key -> newPartition), newRemainingJobs)
+      } else {
+        loop(partitions, newRemainingJobs)
+      }
     }
 
     loop

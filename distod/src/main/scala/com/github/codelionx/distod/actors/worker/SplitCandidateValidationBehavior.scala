@@ -89,7 +89,7 @@ class SplitCandidateValidationBehavior(
 
           spans.end("Split check")
           if (remainingCandidates.isEmpty)
-            changeToNext(newValidCandidates)
+            processResults(newValidCandidates)
           else
             checking(errorCompare, toBeChecked - attribute, newValidCandidates)
         } else {
@@ -116,12 +116,12 @@ class SplitCandidateValidationBehavior(
 
     spans.end("Split check")
     if(remainingCandidates.isEmpty)
-      changeToNext(validCandidates)
+      processResults(validCandidates)
     else
       checking(errorCompare, remainingCandidates, validCandidates)
   }
 
-  private def changeToNext(validCandidates: Set[Int]): Behavior[Command] = {
+  private def processResults(validCandidates: Set[Int]): Behavior[Command] = {
     if (validCandidates.nonEmpty) {
       val validODs = validCandidates.map(a => ConstantOrderDependency(candidateId - a, a)).toSeq
       context.log.trace("Found valid candidates: {}", validODs.mkString(", "))

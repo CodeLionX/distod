@@ -63,17 +63,17 @@ class SwapCandidateValidationBehavior(
   ): Behavior[Command] = Behaviors.receiveMessage {
     case WrappedPartitionEvent(PartitionFound(key, value)) =>
       context.log.trace("Received full partition {}", key)
-      val newPartitions = singletonPartitions + (key -> value)
-      if(newPartitions.size == expectedSingletons) {
-        checkAndNext(newPartitions, candidatePartitions, checks)
+      val newSingletonPartitions = singletonPartitions + (key -> value)
+      if(newSingletonPartitions.size == expectedSingletons) {
+        checkAndNext(newSingletonPartitions, candidatePartitions, checks)
       } else {
-        collectPartitions(newPartitions, candidatePartitions, expectedSingletons, checks)
+        collectPartitions(newSingletonPartitions, candidatePartitions, expectedSingletons, checks)
       }
 
     case WrappedPartitionEvent(StrippedPartitionFound(key, value)) =>
       context.log.trace("Received stripped partition {}", key)
-      val newPartitions = candidatePartitions + (key -> value)
-      collectPartitions(singletonPartitions, newPartitions, expectedSingletons, checks)
+      val newCandidatePartitions = candidatePartitions + (key -> value)
+      collectPartitions(singletonPartitions, newCandidatePartitions, expectedSingletons, checks)
 
     case m =>
       stash.stash(m)

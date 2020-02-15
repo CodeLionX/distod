@@ -92,7 +92,7 @@ class SwapCandidateValidationBehavior(
 
     case WrappedPartitionEvent(StrippedPartitionFound(candidateContext, contextPartition)) =>
       val candidatePartitions = Map(candidateContext -> contextPartition)
-      checkAndNext(singletonPartitions, candidatePartitions, checks)
+      checkAndNext(singletonPartitions, candidatePartitions, checks, validODs)
 
     case m =>
       stash.stash(m)
@@ -103,19 +103,20 @@ class SwapCandidateValidationBehavior(
       singletonPartitions: Map[CandidateSet, FullPartition],
       candidatePartitions: Map[CandidateSet, StrippedPartition],
       checks: Map[CandidateSet, (Int, Int)],
+      validODs: Seq[EquivalencyOrderDependency] = Seq.empty
   ): Behavior[Command] = {
     timing.unsafeTime("Swap check") {
-      val validODs = candidatePartitions.flatMap{ case (candidateContext, contextPartition) =>
+      val newValidODs = validODs ++ candidatePartitions.flatMap{ case (candidateContext, contextPartition) =>
         val (left, right) = checks(candidateContext)
         val leftPartition = singletonPartitions(CandidateSet.from(left))
         val rightPartition = singletonPartitions(CandidateSet.from(right))
         checkSwapCandidate(candidateContext, left, right, contextPartition, leftPartition, rightPartition)
-      }.toSeq
+      }
       val remainingChecks = checks -- candidatePartitions.keys
       if(remainingChecks.isEmpty) {
-        processResults(validODs)
+        processResults(newValidODs)
       } else
-        performChecks(singletonPartitions, remainingChecks, validODs)
+        performChecks(singletonPartitions, remainingChecks, newValidODs)
     }
   }
 

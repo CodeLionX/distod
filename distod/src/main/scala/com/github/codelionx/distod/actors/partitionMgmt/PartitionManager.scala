@@ -26,12 +26,15 @@ object PartitionManager {
 
   val name = "partition-manager"
 
-  def apply(monitor: ActorRef[SystemMonitor.Command]): Behavior[PartitionCommand] = Behaviors.setup(context =>
-    Behaviors.withStash(300) { stash =>
+  def apply(monitor: ActorRef[SystemMonitor.Command]): Behavior[PartitionCommand] = Behaviors.setup { context =>
+    val settings = Settings(context.system)
+    val stashSize = settings.numberOfWorkers * 4
+    Behaviors.withStash(stashSize) { stash =>
       Behaviors.withTimers { timers =>
         new PartitionManager(context, stash, timers, monitor).start()
       }
-    })
+    }
+  }
 
 }
 

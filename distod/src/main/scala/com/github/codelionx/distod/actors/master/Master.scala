@@ -22,6 +22,8 @@ import com.github.codelionx.util.timing.Timing
 
 object Master {
 
+  private final val workerMessageMultiplier = 5
+
   sealed trait Command
   // only used from master helpers
   private[master] final case class DequeueNextJob(replyTo: ActorRef[Worker.Command]) extends Command
@@ -50,10 +52,13 @@ object Master {
       dataReader: ActorRef[DataLoadingCommand],
       partitionManager: ActorRef[PartitionCommand],
       resultCollector: ActorRef[ResultCommand]
-  ): Behavior[Command] = Behaviors.setup(context =>
-    Behaviors.withStash(300) { stash =>
+  ): Behavior[Command] = Behaviors.setup { context =>
+    val settings = Settings(context.system)
+    val stashSize = settings.maxWorkers * workerMessageMultiplier * settings.expectedNodeCount
+    Behaviors.withStash(stashSize){ stash =>
       new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
-    })
+    }
+  }
 
   case class LocalPeers(
       guardian: ActorRef[LeaderGuardian.Command],

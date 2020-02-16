@@ -42,6 +42,7 @@ object Master {
   // only used inside master
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
+  private case object StatisticsTick extends Command
 
   val MasterServiceKey: ServiceKey[MasterHelper.Command] = ServiceKey("master")
 
@@ -55,9 +56,11 @@ object Master {
   ): Behavior[Command] = Behaviors.setup { context =>
     val settings = Settings(context.system)
     val stashSize = settings.maxWorkers * workerMessageMultiplier * settings.expectedNodeCount
-    Behaviors.withStash(stashSize){ stash =>
+    Behaviors.withStash(stashSize)(stash => Behaviors.withTimers { timers =>
+      val interval = settings.monitoringSettings.statisticsLogInterval
+      timers.startTimerWithFixedDelay("statistics-tick", StatisticsTick, interval)
       new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
-    }
+    })
   }
 
   case class LocalPeers(
@@ -216,6 +219,16 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs - job, testedCandidates)
       )
 
+    case StatisticsTick =>
+      context.log.info(
+        "Master statistics: work / pending queue size=({} / {}), pending gen. jobs={}, stashed workers={}",
+        workQueue.sizeWork,
+        workQueue.sizePending,
+        pendingGenerationJobs.size,
+        stash.size
+      )
+      Behaviors.same
+
     case m =>
       context.log.warn("Received unexpected message: {}", m)
       Behaviors.same
@@ -227,6 +240,12 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     Behaviors.receiveMessage {
       case DequeueNextJob(_) =>
         // can be ignored without issues, because we are out of work
+        Behaviors.same
+      case StatisticsTick =>
+        context.log.info(
+          "Master statistics (algorithm finished): stashed workers={}",
+          stash.size
+        )
         Behaviors.same
       case m =>
         context.log.warn("Ignoring message because we are in shutdown: {}", m)

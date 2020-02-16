@@ -1,0 +1,6 @@
+# Configuration variables for the FASTOD (single-node) experiments
+---
+component: "fastod"
+src_path: "../{{ component }}"
+deployment_path: "~/{{ component }}"
+lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"

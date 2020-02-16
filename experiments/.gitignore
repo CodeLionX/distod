@@ -1,0 +1,16 @@
+# data folders (too large: a couple hundrets of MB)
+data
+fastod-spark/data
+
+# results folder
+results
+
+# ignore our own artefact, but include the other ones
+distod.jar
+
+!fastod/fastod.jar
+!fastod-spark/libs/*
+!fastod-spark/distributed-fastod.jar
+
+# ansible retry files
+ansible/*.retry

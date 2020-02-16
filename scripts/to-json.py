@@ -25,7 +25,7 @@ def generate_synthetic_column_names(length):
 
 
 def read_source(filename, delimiter, has_header):
-    with open(filename, "r", newline="") as f:
+    with open(filename, "r", newline="", encoding="utf-8") as f:  # if error try using iso-8859-1
         if has_header:
             reader = csv.DictReader(f, delimiter=delimiter)
             offset = 0
@@ -85,8 +85,8 @@ if __name__ == "__main__":
     parser.add_argument('source',
                         help='source file path (csv format)')
     parser.add_argument('target',
-                        help='target file path (where json is written to')
+                        help='target file path (where json is written to (without suffix)')
 
     args = parser.parse_args()
-    # main("../data/adult-48842-14.csv", ";", False, "../data/adult-sub")
+    # main("../data/adult-48842-14.csv", ";", False, "../data/adult-sub", True, True)
     main(args.source, args.delimiter, args.has_header, args.target, args.substitute, args.duplicate)

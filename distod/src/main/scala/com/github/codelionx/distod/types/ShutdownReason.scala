@@ -9,6 +9,7 @@ import com.github.codelionx.distod.Serialization.CborSerializable
 @JsonSubTypes(Array(
   new JsonSubTypes.Type(value = classOf[ShutdownReason.AlgorithmFinished], name = "AlgorithmFinishedReason"),
   new JsonSubTypes.Type(value = classOf[ShutdownReason.AllActorsDied], name = "AllActorsDied"),
+  new JsonSubTypes.Type(value = classOf[ShutdownReason.ConnectionToMasterLost], name = "ConnectionToMasterLost"),
   new JsonSubTypes.Type(value = classOf[ShutdownReason.JvmExit], name = "JvmExit"),
   new JsonSubTypes.Type(value = classOf[ShutdownReason.Unknown], name = "Unknown"),
   new JsonSubTypes.Type(value = classOf[ShutdownReason.ClusterDowning], name = "ClusterDowning"),
@@ -27,6 +28,7 @@ object ShutdownReason {
   // custom reasons
   case object AlgorithmFinishedReason extends CoordinatedShutdown.Reason
   case object AllActorsDiedReason extends CoordinatedShutdown.Reason
+  case object ConnectionToMasterLostReason extends CoordinatedShutdown.Reason
 
   // wrappers
   @JsonTypeName("JvmExit")
@@ -46,6 +48,12 @@ object ShutdownReason {
   case class AllActorsDied() extends ShutdownReason {
     @transient
     override lazy val reason: AllActorsDiedReason.type = AllActorsDiedReason
+  }
+
+  @JsonTypeName("ConnectionToMasterLost")
+  case class ConnectionToMasterLost() extends ShutdownReason {
+    @transient
+    override lazy val reason: CoordinatedShutdown.Reason = ConnectionToMasterLostReason
   }
 
   @JsonTypeName("Unknown")

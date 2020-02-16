@@ -1,0 +1,10 @@
+Dataset,Columns,Rows,Size (KiB)
+test-sub.csv,4,4,0.3
+chess-sub.csv,7,"28,056","3,954.6"
+plista-sub.csv,63,"1,001",833.7
+letter-sub.csv,17,"20,000","6,634.8"
+hepatitis-sub.csv,20,155,61.4
+adult-sub.csv,15,"32,561","9,682.5"
+fd-reduced-1k-30-sub.csv,30,"1,000",597.0
+flight_1k_30c-sub.csv,30,"1,000",576.2
+ncvoter-1m-19-sub.csv,19,"999,999","326,519.1"

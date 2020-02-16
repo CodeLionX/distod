@@ -1,0 +1,47 @@
+# Vars:
+# - experiment (name of the experiments to run (without suffix))
+
+---
+- hosts: follower
+  gather_facts: no
+  vars_files:
+    - vars/fastod-spark.yml
+  tasks:
+    - name: Ensure deployment path exists
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+    - name: Copy data
+      synchronize:
+        src: "{{ src_path }}/data"
+        dest: "{{ deployment_path }}"
+        recursive: yes
+        delete: yes
+        verify_host: yes
+
+- hosts: leader
+  gather_facts: no
+  vars_files:
+    - vars/fastod-spark.yml
+  tasks:
+    - name: Ensure deployment path exists
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+    - name: Copy fastod artefacts
+      synchronize:
+        src: "{{ src_path }}/"
+        dest: "{{ deployment_path }}/"
+        recursive: yes
+        delete: yes
+        verify_host: yes
+    - debug:
+        msg: "Starting experiment {{ experiment }}.sh on leader {{ inventory_hostname }}: creates {{ lock_file }}"
+    - name: Run experiment in screen
+      command:
+        chdir: "{{ deployment_path }}"
+        # for debugging
+#        cmd: screen -d -L -S "fastod-spark-{{ experiment }}" -m "./{{ experiment }}.sh"
+        cmd: screen -d -S "fastod-spark-{{ experiment }}" -m "./{{ experiment }}.sh"
+        creates: "{{ lock_file }}"
+    - import_tasks: common_tasks/collect-results.yml

@@ -1,0 +1,27 @@
+# Retrieves all logs and results from the nodes
+
+# Vars:
+# lock_file (lock_file on the host to wait for deletion)
+# component (name of the tested component (e.g. fastod-spark, distod, ...)
+# experiment (name of the experiment)
+
+---
+- name: Wait until experiment finished
+  wait_for:
+    path: "{{ lock_file }}"
+    state: absent
+    delay: 2
+    sleep: 2
+    timeout: 3600
+
+- name: Ensure result path exists
+  delegate_to: localhost
+  file:
+    path: "../results/{{ component }}-{{ experiment }}/"
+    state: directory
+
+- name: Collect results
+  synchronize:
+    src: "{{ deployment_path }}/results/"
+    dest: "../results/{{ component }}-{{ experiment }}/"
+    mode: pull

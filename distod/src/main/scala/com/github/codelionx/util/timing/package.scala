@@ -3,6 +3,10 @@ package com.github.codelionx.util
 
 package object timing {
 
+  // static (and not setting-key) to allow compiler to optimize NoOps
+  // enable / disable timings during compile-time
+  final val GATHER_TIMINGS = false
+
   final val MESSAGE_PREFIX = "TIME"
 
   private def duration(start: Long, end: Long): Long =

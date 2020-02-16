@@ -1,0 +1,6 @@
+# Configuration variables for the DISTOD experiments
+---
+component: "distod"
+src_path: "../{{ component }}"
+deployment_path: "~/{{ component }}"
+lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"

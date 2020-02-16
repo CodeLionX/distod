@@ -1,0 +1,55 @@
+# Variables:
+# - experiment name of the experiments to run (without suffix)
+
+---
+- hosts: all
+  gather_facts: no
+  vars_files:
+    - vars/distod.yml
+  tasks:
+    - name: Ensure deployment path exists
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+    - name: Copy distod artefacts
+      synchronize:
+        src: "{{ src_path }}/{{ item }}"
+        dest: "{{ deployment_path }}/"
+        verify_host: yes
+      with_items:
+        - common.conf
+        - distod.jar
+        - logback.xml
+        - start.sh
+        - "{{ inventory_hostname }}.conf"
+
+- hosts: odin01
+  gather_facts: no
+  vars_files:
+    - vars/distod.yml
+  tasks:
+    - name: Ensure deployment path exists
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+    - name: Copy data
+      synchronize:
+        src: "../data/"
+        dest: "~/data/"
+        recursive: yes
+        verify_host: yes
+    - name: Copy distod test artefacts
+      synchronize:
+        src: "{{ src_path }}/exp1-datasets.sh"
+        dest: "{{ deployment_path }}/"
+        verify_host: yes
+    - debug:
+        msg: "Starting experiment {{ experiment }}.sh on {{ inventory_hostname }}: creates {{ lock_file }}"
+#    - name: Run experiment in screen
+#      command:
+#        chdir: "{{ deployment_path }}"
+#        # for debugging
+#        #        cmd: screen -d -L -S "distod-{{ experiment }}" -m "./{{ experiment }}.sh"
+#        cmd: screen -d -S "distod-{{ experiment }}" -m "./{{ experiment }}.sh"
+#        creates: "{{ lock_file }}"
+#    - import_tasks: common_tasks/collect-results.yml

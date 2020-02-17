@@ -11,8 +11,8 @@ import scala.util.Random
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
-@Warmup(iterations = 50, time = 1, timeUnit = TimeUnit.MILLISECONDS)
-@Measurement(iterations = 100, time = 1, timeUnit = TimeUnit.MILLISECONDS)
+@Warmup(iterations = 100, time = 1, timeUnit = TimeUnit.MILLISECONDS)
+@Measurement(iterations = 1000, time = 1, timeUnit = TimeUnit.MILLISECONDS)
 @Fork(1)
 class CandidateSetEquals {
 
@@ -25,7 +25,7 @@ class CandidateSetEquals {
 
   @Setup(Level.Iteration)
   def setup(): Unit = {
-    val bits = for(_ <- 0 until 100) yield Random.nextInt(size)
+    val bits = for(_ <- 0 until 1000) yield Random.nextInt(size)
     bitset = CandidateSet.fromSpecific(bits :+ size)
   }
 
@@ -42,5 +42,10 @@ class CandidateSetEquals {
   @Benchmark
   def hash: Boolean = {
     bitset.equals_hash(compareTo)
+  }
+
+  @Benchmark
+  def manual: Boolean = {
+    bitset.equals_manual(compareTo)
   }
 }

@@ -68,7 +68,7 @@ class SplitCandidateValidationBehavior(
     }
 
   private def checking(errorCompare: Double, toBeChecked: CandidateSet, validCandidates: Set[Int]): Behavior[Command] =
-    Behaviors.receiveMessage{
+    Behaviors.receiveMessage {
       case WrappedPartitionEvent(ErrorFound(`candidateId`, _)) =>
         // ignore, should not happen
         context.log.error("Received unexpected")
@@ -78,24 +78,24 @@ class SplitCandidateValidationBehavior(
         context.log.trace("Received partition error value: {}, {}", key, value)
         spans.begin("Split check")
         val attributeSet = candidateId diff key
-        val attribute = attributeSet.head
+        attributeSet.headOption match {
+          case Some(attribute) if toBeChecked.contains(attribute) =>
+            val isValid = checkSplitCandidate(value, errorCompare)
+            val newValidCandidates =
+              if (isValid) validCandidates + attribute
+              else validCandidates
+            val remainingCandidates = toBeChecked - attribute
 
-        if (toBeChecked.contains(attribute)) {
-          val isValid = checkSplitCandidate(value, errorCompare)
-          val newValidCandidates =
-            if (isValid) validCandidates + attribute
-            else validCandidates
-          val remainingCandidates = toBeChecked - attribute
+            spans.end("Split check")
+            if (remainingCandidates.isEmpty)
+              processResults(newValidCandidates)
+            else
+              checking(errorCompare, toBeChecked - attribute, newValidCandidates)
 
-          spans.end("Split check")
-          if (remainingCandidates.isEmpty)
-            processResults(newValidCandidates)
-          else
-            checking(errorCompare, toBeChecked - attribute, newValidCandidates)
-        } else {
-          context.log.warn("Received unnecessary partition with key {}", key)
-          spans.end("Split check")
-          checking(errorCompare, toBeChecked, validCandidates)
+          case None =>
+            context.log.warn("Received unnecessary partition with key {}", key)
+            spans.end("Split check")
+            checking(errorCompare, toBeChecked, validCandidates)
         }
 
       case m =>
@@ -103,7 +103,9 @@ class SplitCandidateValidationBehavior(
         Behaviors.same
     }
 
-  private def changeToChecking(errorCompare: Double, errors: Map[CandidateSet, Double], toBeChecked: CandidateSet): Behavior[Command] = {
+  private def changeToChecking(
+      errorCompare: Double, errors: Map[CandidateSet, Double], toBeChecked: CandidateSet
+  ): Behavior[Command] = {
     spans.begin("Split check")
     val candidates = for {
       a <- toBeChecked.unsorted
@@ -111,11 +113,11 @@ class SplitCandidateValidationBehavior(
       errorContext <- errors.get(context)
     } yield a -> checkSplitCandidate(errorContext, errorCompare)
 
-    val validCandidates = candidates.filter(_._2).map(_._1)
-    val remainingCandidates = toBeChecked diff candidates.map(_._1)
+    val validCandidates = candidates.filter(t => t._2).map(t => t._1)
+    val remainingCandidates = toBeChecked diff candidates.map(t => t._1)
 
     spans.end("Split check")
-    if(remainingCandidates.isEmpty)
+    if (remainingCandidates.isEmpty)
       processResults(validCandidates)
     else
       checking(errorCompare, remainingCandidates, validCandidates)

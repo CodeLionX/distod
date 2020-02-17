@@ -6,7 +6,7 @@ import scala.annotation.tailrec
 object Math {
 
 //  @tailrec
-  def binomialCoefficient(n: Int, k: Int): Int = {
+  def binomialCoefficient(n: Long, k: Long): Long = {
     if(n < 0 || k < 0)
       throw new IllegalArgumentException(s"One of the parameters was negative (n=$n, k=$k)")
     else

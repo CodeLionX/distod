@@ -45,11 +45,11 @@
         verify_host: yes
     - debug:
         msg: "Starting experiment {{ experiment }}.sh on {{ inventory_hostname }}: creates {{ lock_file }}"
-#    - name: Run experiment in screen
-#      command:
-#        chdir: "{{ deployment_path }}"
-#        # for debugging
-#        #        cmd: screen -d -L -S "distod-{{ experiment }}" -m "./{{ experiment }}.sh"
-#        cmd: screen -d -S "distod-{{ experiment }}" -m "./{{ experiment }}.sh"
-#        creates: "{{ lock_file }}"
-#    - import_tasks: common_tasks/collect-results.yml
+    - name: Run experiment in screen
+      command:
+        chdir: "{{ deployment_path }}"
+        # for debugging
+        #        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
+        cmd: screen -d -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
+        creates: "{{ lock_file }}"
+    - import_tasks: common_tasks/collect-results.yml

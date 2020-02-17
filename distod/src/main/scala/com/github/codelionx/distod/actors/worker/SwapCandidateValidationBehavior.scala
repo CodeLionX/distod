@@ -8,6 +8,7 @@ import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDependencies
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.types.OrderDependency.EquivalencyOrderDependency
 import com.github.codelionx.util.timing.Timing
 
 
@@ -37,66 +38,99 @@ class SwapCandidateValidationBehavior(
   private val timing = Timing(context.system)
 
   def start(): Behavior[Command] = {
-    context.log.trace("Loading partitions for all swap checks")
+    context.log.trace("Loading partitions for swap checks")
 
     val distinctAttributes = swapCandidates.flatMap { case (attr1, attr2) => Seq(attr1, attr2) }.distinct
     val singletonPartitionKeys = distinctAttributes.map(attribute => CandidateSet.from(attribute))
     singletonPartitionKeys.foreach(attribute =>
       partitionManager ! LookupPartition(attribute, partitionEventMapper)
     )
-    for ((a, b) <- swapCandidates) {
-      val fdContext = candidateId - a - b
-      partitionManager ! LookupStrippedPartition(fdContext, partitionEventMapper)
-    }
-
-    collectPartitions(Map.empty, Map.empty, singletonPartitionKeys.size, swapCandidates.size)
+    val candidates = swapCandidates
+      .map{ case (a, b) =>
+        val candidateContext = candidateId - a - b
+        partitionManager ! LookupStrippedPartition(candidateContext, partitionEventMapper)
+        candidateContext -> (a, b)
+      }
+      .toMap
+    collectPartitions(Map.empty, Map.empty, singletonPartitionKeys.size, candidates)
   }
 
-  def collectPartitions(
+  private def collectPartitions(
       singletonPartitions: Map[CandidateSet, FullPartition],
       candidatePartitions: Map[CandidateSet, StrippedPartition],
       expectedSingletons: Int,
-      expectedCandidates: Int
-  ): Behavior[Command] = {
-    val nextBehavior = (singletonPartitions: Map[CandidateSet, FullPartition], candidatePartitions: Map[CandidateSet, StrippedPartition]) => {
-      if (singletonPartitions.size == expectedSingletons && candidatePartitions.size == expectedCandidates) {
-        performCheck(singletonPartitions, candidatePartitions)
+      checks: Map[CandidateSet, (Int, Int)]
+  ): Behavior[Command] = Behaviors.receiveMessage {
+    case WrappedPartitionEvent(PartitionFound(key, value)) =>
+      context.log.trace("Received full partition {}", key)
+      val newSingletonPartitions = singletonPartitions + (key -> value)
+      if(newSingletonPartitions.size == expectedSingletons) {
+        checkAndNext(newSingletonPartitions, candidatePartitions, checks)
       } else {
-        collectPartitions(singletonPartitions, candidatePartitions, expectedSingletons, expectedCandidates)
+        collectPartitions(newSingletonPartitions, candidatePartitions, expectedSingletons, checks)
       }
-    }
 
-    Behaviors.receiveMessagePartial {
-      case WrappedPartitionEvent(PartitionFound(key, value)) =>
-        context.log.trace("Received full partition {}", key)
-        val newPartitions = singletonPartitions + (key -> value)
-        nextBehavior(newPartitions, candidatePartitions)
+    case WrappedPartitionEvent(StrippedPartitionFound(key, value)) =>
+      context.log.trace("Received stripped partition {}", key)
+      val newCandidatePartitions = candidatePartitions + (key -> value)
+      collectPartitions(singletonPartitions, newCandidatePartitions, expectedSingletons, checks)
 
-      case WrappedPartitionEvent(StrippedPartitionFound(key, value)) =>
-        context.log.trace("Received stripped partition {}", key)
-        val newPartitions = candidatePartitions + (key -> value)
-        nextBehavior(singletonPartitions, newPartitions)
+    case m =>
+      stash.stash(m)
+      Behaviors.same
+  }
 
-      case m =>
-        stash.stash(m)
-        Behaviors.same
+  private def performChecks(
+      singletonPartitions: Map[CandidateSet, FullPartition],
+      checks: Map[CandidateSet, (Int, Int)],
+      validODs: Seq[EquivalencyOrderDependency]
+  ): Behavior[Command] = Behaviors.receiveMessage {
+    case WrappedPartitionEvent(PartitionFound(key, _)) =>
+      context.log.error("Received duplicated full partition for key {}", key)
+      // ignore
+      Behaviors.same
+
+    case WrappedPartitionEvent(StrippedPartitionFound(candidateContext, contextPartition)) =>
+      val candidatePartitions = Map(candidateContext -> contextPartition)
+      checkAndNext(singletonPartitions, candidatePartitions, checks, validODs)
+
+    case m =>
+      stash.stash(m)
+      Behaviors.same
+  }
+
+  private def checkAndNext(
+      singletonPartitions: Map[CandidateSet, FullPartition],
+      candidatePartitions: Map[CandidateSet, StrippedPartition],
+      checks: Map[CandidateSet, (Int, Int)],
+      validODs: Seq[EquivalencyOrderDependency] = Seq.empty
+  ): Behavior[Command] = {
+    timing.unsafeTime("Swap check") {
+      val newValidODs = validODs ++ candidatePartitions.flatMap{ case (candidateContext, contextPartition) =>
+        val (left, right) = checks(candidateContext)
+        val leftPartition = singletonPartitions(CandidateSet.from(left))
+        val rightPartition = singletonPartitions(CandidateSet.from(right))
+        checkSwapCandidate(candidateContext, left, right, contextPartition, leftPartition, rightPartition)
+      }
+      val remainingChecks = checks -- candidatePartitions.keys
+      if(remainingChecks.isEmpty) {
+        processResults(newValidODs)
+      } else
+        performChecks(singletonPartitions, remainingChecks, newValidODs)
     }
   }
 
-  def performCheck(
-      singletonPartitions: Map[CandidateSet, FullPartition], candidatePartitions: Map[CandidateSet, StrippedPartition]
-  ): Behavior[Command] = {
-    timing.unsafeTime("Swap check") {
-      val result = checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
-
-      if (result.validOds.nonEmpty) {
-        context.log.trace("Found valid candidates: {}", result.validOds.mkString(", "))
-        rsProxy ! FoundDependencies(result.validOds)
-      } else {
-        context.log.trace("No valid equivalency candidates found")
-      }
-
-      next(result.removedCandidates)
+  private def processResults(validODs: Seq[EquivalencyOrderDependency]): Behavior[Command] = {
+    if (validODs.nonEmpty) {
+      context.log.trace("Found valid candidates: {}", validODs.mkString(", "))
+      rsProxy ! FoundDependencies(validODs)
+    } else {
+      context.log.trace("No valid equivalency candidates found")
     }
+
+    val enrichedIsValid = isValid(validODs, _)
+    val removedCandidates = swapCandidates.filter(enrichedIsValid)
+
+    next(removedCandidates)
   }
 }

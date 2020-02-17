@@ -70,7 +70,7 @@ class MasterHelper(
 
   import MasterHelper._
 
-  private val timingSpans = Timing(context.system).spans
+  private val timingSpans = Timing(context.system).createSpans
 
   def start(): Behavior[Command] = Behaviors.receiveMessage{
     case GetPrimaryPartitionManager(replyTo) =>

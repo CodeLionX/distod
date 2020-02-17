@@ -26,12 +26,15 @@ object PartitionManager {
 
   val name = "partition-manager"
 
-  def apply(monitor: ActorRef[SystemMonitor.Command]): Behavior[PartitionCommand] = Behaviors.setup(context =>
-    Behaviors.withStash(300) { stash =>
+  def apply(monitor: ActorRef[SystemMonitor.Command]): Behavior[PartitionCommand] = Behaviors.setup { context =>
+    val settings = Settings(context.system)
+    val stashSize = settings.numberOfWorkers * 4
+    Behaviors.withStash(stashSize) { stash =>
       Behaviors.withTimers { timers =>
         new PartitionManager(context, stash, timers, monitor).start()
       }
-    })
+    }
+  }
 
 }
 
@@ -255,9 +258,9 @@ class PartitionManager(
     timings.time("Partition generation") {
       generatorPool match {
         case Some(pool) =>
-          val jobs = calcJobChain(key)
-          if (jobs.size > 5) {
-            context.log.debug("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
+          val jobs = JobChainer.calcJobChain(key, partitions)
+          if (jobs.size > 20) {
+            context.log.warn("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
           }
           pool ! ComputePartitions(jobs, context.self)
           val x = jobs
@@ -274,33 +277,5 @@ class PartitionManager(
           pendingJobs
       }
     }
-  }
-
-  private def calcJobChain(
-      key: CandidateSet,
-  ): Seq[ComputePartitionProductJob] = {
-
-    def loop(subkey: CandidateSet): Seq[ComputePartitionProductJob] = {
-      val predecessorKeys = subkey.predecessors.toSeq
-      val foundKeys = predecessorKeys.filter(partitions.contains)
-      val missingKeys = predecessorKeys.diff(foundKeys)
-      val store = subkey.size >= key.size - 1 // store the requested partition and its predecessors (discard others)
-
-      foundKeys match {
-        case Nil =>
-          val nextPred1 :: nextPred2 :: _ = missingKeys
-          loop(nextPred1) ++ loop(nextPred2) :+ ComputePartitionProductJob(subkey, Left(nextPred1), Left(nextPred2), store)
-
-        case foundPred :: Nil =>
-          val nextPred :: _ = missingKeys
-          loop(nextPred) :+ ComputePartitionProductJob(subkey, Right(partitions(foundPred)), Left(nextPred), store)
-
-        case _ =>
-          val p1 :: p2 :: _ = foundKeys.map(partitions.apply).take(2)
-          Seq(ComputePartitionProductJob(subkey, Right(p1), Right(p2), store))
-      }
-    }
-
-    loop(key)
   }
 }

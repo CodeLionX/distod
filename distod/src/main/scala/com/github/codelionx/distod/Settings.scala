@@ -103,6 +103,8 @@ class Settings private(config: Config) extends Extension {
 
   val numberOfWorkers: Int = Seq(maxWorkers, maxParallelism, cores).min
 
+  val expectedNodeCount: Int = config.getInt(s"$namespace.expected-node-count")
+
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")
 

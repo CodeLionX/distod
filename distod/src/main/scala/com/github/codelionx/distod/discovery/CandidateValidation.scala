@@ -102,6 +102,10 @@ trait CandidateValidation {
 
   private val logger: Logger = LoggerFactory.getLogger(classOf[CandidateValidation])
 
+  @inline final def checkSplitCandidate(contextError: Double, errorCompare: Double): Boolean = {
+    contextError == errorCompare
+  }
+
   def checkSplitCandidates(
       candidateId: CandidateSet,
       splitCandidates: CandidateSet,
@@ -112,7 +116,7 @@ trait CandidateValidation {
     val validConstantODs = for {
       a <- splitCandidates.unsorted
       fdContext = candidateId - a
-      if errors(fdContext) == errorCompare // candidate fdContext: [] -> a holds
+      if checkSplitCandidate(errors(fdContext), errorCompare) // candidate fdContext: [] -> a holds
     } yield fdContext -> a
 
     val constantOds = validConstantODs.map {
@@ -132,6 +136,42 @@ trait CandidateValidation {
     )
   }
 
+  @inline final def checkSwapCandidate(
+      context: CandidateSet,
+      left: Int,
+      right: Int,
+      contextPartition: StrippedPartition,
+      leftPartition: FullPartition,
+      rightPartition: FullPartition
+  ): Seq[EquivalencyOrderDependency] = {
+    val (swap, reverseSwap) =
+      if (contextPartition.numberClasses != 0) {
+        val sortedContextClasses = contextPartition.sortEquivClassesBy(leftPartition)
+        val rightTupleValueMapping = rightPartition.tupleValueMap
+
+        val swapFinder = findSwapFast(rightTupleValueMapping) _
+        val results = sortedContextClasses.map(swapFinder)
+        results.reduceLeft[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
+      } else {
+        logger.error(s"Swap check in {} for '{}: {} ~ {}' hit an empty context partition: {} " +
+          "Assuming no swap and no reverse swap", () => context + left + right, context, left, right, contextPartition)
+        (false, false)
+      }
+
+    val normal =
+      if (!swap) Seq(EquivalencyOrderDependency(context, left, right))
+      else Seq.empty
+    val reverse =
+      if (!reverseSwap) Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
+      else Seq.empty
+    normal ++ reverse
+  }
+
+  @inline final def isValid(validCandidates: Seq[EquivalencyOrderDependency], swapCandidate: (Int, Int)): Boolean = {
+    val (left, right) = swapCandidate
+    validCandidates.exists(elem => elem.attribute1 == left && elem.attribute2 == right)
+  }
+
   def checkSwapCandidates(
       candidateId: CandidateSet,
       swapCandidates: Seq[(Int, Int)],
@@ -140,41 +180,17 @@ trait CandidateValidation {
   ): SwapCandidateValidationResult = {
     val validCandidates = swapCandidates.flatMap { case (left, right) =>
       val context = candidateId - left - right
+      val contextPartition = candidatePartitions(context)
       val leftPartition = singletonPartitions(CandidateSet.from(left))
       val rightPartition = singletonPartitions(CandidateSet.from(right))
 
-      val contextPartition = candidatePartitions(context)
-      val (swap, reverseSwap) =
-        if (contextPartition.numberClasses != 0) {
-          val sortedContextClasses = contextPartition.sortEquivClassesBy(leftPartition)
-          val rightTupleValueMapping = rightPartition.tupleValueMap
-
-          val swapFinder = findSwapFast(rightTupleValueMapping) _
-          val results = sortedContextClasses.map(swapFinder)
-          results.reduceLeft[(Boolean, Boolean)] { case ((s1, r1), (s2, r2)) => (s1 || s2, r1 || r2) }
-        } else {
-          logger.error(s"Swap check in {} for '{}: {} ~ {}' hit an empty context partition: {} " +
-            "Assuming no swap and no reverse swap", candidateId, context, left, right, contextPartition)
-          (false, false)
-        }
-
-      val normal =
-        if (!swap) Seq(EquivalencyOrderDependency(context, left, right))
-        else Seq.empty
-      val reverse =
-        if (!reverseSwap) Seq(EquivalencyOrderDependency(context, left, right, reverse = true))
-        else Seq.empty
-      normal ++ reverse
+      checkSwapCandidate(context, left, right, contextPartition, leftPartition, rightPartition)
     }
 
-    def isValid(candidate: (Int, Int)): Boolean = {
-      val (left, right) = candidate
-      validCandidates.exists(elem => elem.attribute1 == left && elem.attribute2 == right)
-    }
-
+    val enrichedIsValid = isValid(validCandidates, _)
     SwapCandidateValidationResult(
       validOds = validCandidates,
-      removedCandidates = swapCandidates.filter(isValid)
+      removedCandidates = swapCandidates.filter(enrichedIsValid)
     )
   }
 

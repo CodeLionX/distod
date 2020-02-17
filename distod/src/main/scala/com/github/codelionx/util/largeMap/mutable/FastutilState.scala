@@ -26,6 +26,11 @@ object FastutilState {
 
   def newBuilder[V](nAttributes: Int): mutable.Builder[(CandidateSet, V), FastutilState[V]] =
     new mutable.GrowableBuilder[(CandidateSet, V), FastutilState[V]](empty[V](nAttributes))
+
+  private def expectedSize(n: Long, k: Long): Int = {
+    val maxLevelSize = Math.binomialCoefficient(n, k)
+    scala.math.min(maxLevelSize, Int.MaxValue).toInt
+  }
 }
 
 
@@ -47,7 +52,7 @@ class FastutilState[V] private(
   def reshapeMaps(size: Int): FastutilState.this.type = {
     nAttributes = size
     val reshapedMaps = levels.zipWithIndex.map { case (hashMap, levelIndex) =>
-      val expectedSize = Math.binomialCoefficient(nAttributes, levelIndex)
+      val expectedSize = FastutilState.expectedSize(nAttributes, levelIndex)
       val updatedMap = new Object2ObjectOpenHashMap[CandidateSet, V](expectedSize, .9f)
       updatedMap.putAll(hashMap)
       updatedMap
@@ -96,7 +101,7 @@ class FastutilState[V] private(
   override def addOne(elem: (CandidateSet, V)): FastutilState.this.type = {
     val (key, value) = elem
     while (levels.size <= key.size) {
-      val expectedSize = Math.binomialCoefficient(nAttributes, levels.size)
+      val expectedSize = FastutilState.expectedSize(nAttributes, levels.size)
       levels :+= new Object2ObjectOpenHashMap(expectedSize, .9f)
     }
     levels(key.size).put(key, value)

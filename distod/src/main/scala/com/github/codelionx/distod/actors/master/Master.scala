@@ -18,6 +18,7 @@ import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.util.Math
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
+import com.github.codelionx.util.GenericLogLevelLogger._
 
 
 object Master {
@@ -56,11 +57,21 @@ object Master {
   ): Behavior[Command] = Behaviors.setup { context =>
     val settings = Settings(context.system)
     val stashSize = settings.maxWorkers * workerMessageMultiplier * settings.expectedNodeCount
-    Behaviors.withStash(stashSize)(stash => Behaviors.withTimers { timers =>
-      val interval = settings.monitoringSettings.statisticsLogInterval
-      timers.startTimerWithFixedDelay("statistics-tick", StatisticsTick, interval)
-      new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
-    })
+
+    Behaviors.withStash(stashSize) { stash =>
+      val masterBehavior =
+        new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
+
+      if (context.log.isEnabled(settings.monitoringSettings.statisticsLogLevel)) {
+        Behaviors.withTimers { timers =>
+          val interval = settings.monitoringSettings.statisticsLogInterval
+          timers.startTimerWithFixedDelay("statistics-tick", StatisticsTick, interval)
+          masterBehavior
+        }
+      } else {
+        masterBehavior
+      }
+    }
   }
 
   case class LocalPeers(
@@ -95,7 +106,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     dataReader ! LoadPartitions(loadingEventMapper)
 
     Behaviors.receiveMessagePartial[Command] {
-      case WrappedLoadingEvent(PartitionsLoaded(table@PartitionedTable(name, headers, partitions))) =>
+      case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
 
         // stop data reader to free up resources
@@ -159,8 +170,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       timingSpans.start("Master dispatch work")
       val (job, newWorkQueue) = workQueue.dequeue()
       val (id, _) = job
-      pool !  NextJob(job, replyTo)
-      if(context.log.isInfoEnabled && id.size > level) {
+      pool ! NextJob(job, replyTo)
+      if (context.log.isInfoEnabled && id.size > level) {
         context.log.info(
           "Entering next level {}, size = {}",
           id.size,
@@ -220,7 +231,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       )
 
     case StatisticsTick =>
-      context.log.info(
+      context.log.log(settings.monitoringSettings.statisticsLogLevel,
         "Master statistics: work / pending queue size=({} / {}), pending gen. jobs={}, stashed workers={}",
         workQueue.sizeWork,
         workQueue.sizePending,
@@ -242,7 +253,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // can be ignored without issues, because we are out of work
         Behaviors.same
       case StatisticsTick =>
-        context.log.info(
+        context.log.log(
+          settings.monitoringSettings.statisticsLogLevel,
           "Master statistics (algorithm finished): stashed workers={}",
           stash.size
         )

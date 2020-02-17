@@ -149,7 +149,7 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
   override def hashCode(): Int = _hashCode
 
   // optimized equals
-  @inline override def equals(that: Any): Boolean = equals_xor(that)
+  @inline override def equals(that: Any): Boolean = equals_manual(that)
 
   @inline def equals_super(other: Any): Boolean = super.equals(other)
 
@@ -164,5 +164,24 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
     case s: CandidateSet =>
       this.hashCode() == s.hashCode()
     case _ => false
+  }
+
+  def equals_manual(other: Any): Boolean = other match {
+    case s: CandidateSet =>
+      (this eq s) || s.size == this.size && check(s)
+    case _ => false
+  }
+
+  @inline private final def check(cs: CandidateSet): Boolean = {
+    val set1 = this._underlying.toBitMask
+    val set2 = cs._underlying.toBitMask
+    val len = set1.length max set2.length
+    var idx = 0
+    while (idx < len) {
+      if(set1(idx) != set2(idx))
+        return false
+      idx += 1
+    }
+    true
   }
 }

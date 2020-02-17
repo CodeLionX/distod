@@ -1,13 +1,12 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
 import com.github.codelionx.distod.Settings.PartitionCompactionSettings
-import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
+import com.github.codelionx.distod.partitions.FullPartition
 import com.github.codelionx.distod.types.CandidateSet
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.duration._
+import scala.concurrent.duration.{FiniteDuration, _}
 import scala.language.postfixOps
 
 
@@ -15,6 +14,7 @@ class JobChainerSpec extends AnyWordSpec with Matchers {
 
   private val compactionSettings = new PartitionCompactionSettings {
     override def enabled: Boolean = false
+
     override def interval: FiniteDuration = 1 minute
   }
 
@@ -30,7 +30,6 @@ class JobChainerSpec extends AnyWordSpec with Matchers {
 
       val chain = JobChainer.calcJobChain(parent, partitions)
       chain.size shouldBe 6
-      println(chain.mkString("\n"))
       chain shouldEqual Seq(
         ComputePartitionProductJob(CandidateSet.from(0, 1), Right(emptyPartition), Right(emptyPartition), store = false),
         ComputePartitionProductJob(CandidateSet.from(0, 2), Right(emptyPartition), Right(emptyPartition), store = false),

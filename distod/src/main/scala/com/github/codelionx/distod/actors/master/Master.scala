@@ -18,6 +18,7 @@ import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.util.Math
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
+import com.github.codelionx.util.GenericLogLevelLogger._
 
 
 object Master {
@@ -42,6 +43,7 @@ object Master {
   // only used inside master
   private final case class WrappedLoadingEvent(dataLoadingEvent: DataLoadingEvent) extends Command
   private final case class WrappedPartitionEvent(e: PartitionManagementProtocol.PartitionEvent) extends Command
+  private case object StatisticsTick extends Command
 
   val MasterServiceKey: ServiceKey[MasterHelper.Command] = ServiceKey("master")
 
@@ -55,8 +57,20 @@ object Master {
   ): Behavior[Command] = Behaviors.setup { context =>
     val settings = Settings(context.system)
     val stashSize = settings.maxWorkers * workerMessageMultiplier * settings.expectedNodeCount
-    Behaviors.withStash(stashSize){ stash =>
-      new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
+
+    Behaviors.withStash(stashSize) { stash =>
+      val masterBehavior =
+        new Master(context, stash, LocalPeers(guardian, dataReader, partitionManager, resultCollector)).start()
+
+      if (context.log.isEnabled(settings.monitoringSettings.statisticsLogLevel)) {
+        Behaviors.withTimers { timers =>
+          val interval = settings.monitoringSettings.statisticsLogInterval
+          timers.startTimerWithFixedDelay("statistics-tick", StatisticsTick, interval)
+          masterBehavior
+        }
+      } else {
+        masterBehavior
+      }
     }
   }
 
@@ -92,7 +106,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     dataReader ! LoadPartitions(loadingEventMapper)
 
     Behaviors.receiveMessagePartial[Command] {
-      case WrappedLoadingEvent(PartitionsLoaded(table@PartitionedTable(name, headers, partitions))) =>
+      case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
 
         // stop data reader to free up resources
@@ -156,8 +170,8 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       timingSpans.start("Master dispatch work")
       val (job, newWorkQueue) = workQueue.dequeue()
       val (id, _) = job
-      pool !  NextJob(job, replyTo)
-      if(context.log.isInfoEnabled && id.size > level) {
+      pool ! NextJob(job, replyTo)
+      if (context.log.isInfoEnabled && id.size > level) {
         context.log.info(
           "Entering next level {}, size = {}",
           id.size,
@@ -216,6 +230,16 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs - job, testedCandidates)
       )
 
+    case StatisticsTick =>
+      context.log.log(settings.monitoringSettings.statisticsLogLevel,
+        "Master statistics: work / pending queue size=({} / {}), pending gen. jobs={}, stashed workers={}",
+        workQueue.sizeWork,
+        workQueue.sizePending,
+        pendingGenerationJobs.size,
+        stash.size
+      )
+      Behaviors.same
+
     case m =>
       context.log.warn("Received unexpected message: {}", m)
       Behaviors.same
@@ -227,6 +251,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     Behaviors.receiveMessage {
       case DequeueNextJob(_) =>
         // can be ignored without issues, because we are out of work
+        Behaviors.same
+      case StatisticsTick =>
+        context.log.log(
+          settings.monitoringSettings.statisticsLogLevel,
+          "Master statistics (algorithm finished): stashed workers={}",
+          stash.size
+        )
         Behaviors.same
       case m =>
         context.log.warn("Ignoring message because we are in shutdown: {}", m)

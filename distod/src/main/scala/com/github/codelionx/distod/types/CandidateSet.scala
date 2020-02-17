@@ -177,11 +177,11 @@ class CandidateSet(private val _underlying: BitSet, private val _size: Int)
     val set2 = cs._underlying.toBitMask
     val len = set1.length max set2.length
     var idx = 0
-    while (idx < len) {
-      if(set1(idx) != set2(idx))
-        return false
+    var equal = true
+    while (equal && idx < len) {
+      equal = set1(idx) == set2(idx)
       idx += 1
     }
-    true
+    equal
   }
 }

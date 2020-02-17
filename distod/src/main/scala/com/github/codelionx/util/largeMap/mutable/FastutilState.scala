@@ -28,8 +28,9 @@ object FastutilState {
     new mutable.GrowableBuilder[(CandidateSet, V), FastutilState[V]](empty[V](nAttributes))
 
   private def expectedSize(n: Long, k: Long): Int = {
+    val maxValue = Int.MaxValue / 2
     val maxLevelSize = Math.binomialCoefficient(n, k)
-    scala.math.min(maxLevelSize, Int.MaxValue).toInt
+    scala.math.min(maxLevelSize, maxValue).toInt
   }
 }
 

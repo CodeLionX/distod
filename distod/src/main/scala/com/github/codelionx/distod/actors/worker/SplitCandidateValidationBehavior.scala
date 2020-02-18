@@ -7,7 +7,6 @@ import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.{ErrorFound, LookupError}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.FoundDependencies
 import com.github.codelionx.distod.types.CandidateSet
-import com.github.codelionx.distod.types.OrderDependency.ConstantOrderDependency
 import com.github.codelionx.util.timing.Timing
 
 
@@ -38,107 +37,40 @@ class SplitCandidateValidationBehavior(
 
   private val timing = Timing(context.system)
   private val spans = timing.createSpans
+  private val job = new CheckSplitJob(candidateId, splitCandidates)
 
   def start(): Behavior[Command] = {
     context.log.trace("Loading partition errors for split checks")
-    partitionManager ! LookupError(candidateId, partitionEventMapper)
-
-    for (c <- splitCandidates) {
-      val fdContext = candidateId - c
-      partitionManager ! LookupError(fdContext, partitionEventMapper)
+    for (c <- job.errorIds) {
+      partitionManager ! LookupError(c, partitionEventMapper)
     }
-
-    collectErrors(Map.empty, splitCandidates)
+    behavior()
   }
 
-  private def collectErrors(errors: Map[CandidateSet, Double], toBeChecked: CandidateSet): Behavior[Command] =
-    Behaviors.receiveMessage {
-      case WrappedPartitionEvent(ErrorFound(`candidateId`, value)) =>
-        context.log.trace("Received partition error value: {}, {}", candidateId, value)
-        changeToChecking(value, errors, toBeChecked)
+  private def behavior(): Behavior[Command] = Behaviors.receiveMessage {
+    case WrappedPartitionEvent(ErrorFound(key, value)) =>
+      context.log.trace("Received partition error value: {}, {}", key, value)
+      job.receivedError(key, value)
 
-      case WrappedPartitionEvent(ErrorFound(key, value)) =>
-        context.log.trace("Received partition error value: {}, {}", key, value)
-        val newErrorMap = errors + (key -> value)
-        collectErrors(newErrorMap, toBeChecked)
+      spans.begin("Split check")
+      val finished = job.performPossibleChecks()
+      spans.end("Split check")
 
-      case m =>
-        stash.stash(m)
-        Behaviors.same
-    }
-
-  private def checking(errorCompare: Double, toBeChecked: CandidateSet, validCandidates: Set[Int]): Behavior[Command] =
-    Behaviors.receiveMessage {
-      case WrappedPartitionEvent(ErrorFound(`candidateId`, _)) =>
-        // ignore, should not happen
-        context.log.error("Received unexpected")
-        Behaviors.same
-
-      case WrappedPartitionEvent(ErrorFound(key, value)) =>
-        context.log.trace("Received partition error value: {}, {}", key, value)
-        spans.begin("Split check")
-        val attributeSet = candidateId diff key
-        attributeSet.headOption match {
-          case Some(attribute) if toBeChecked.contains(attribute) =>
-            val isValid = checkSplitCandidate(value, errorCompare)
-            val newValidCandidates =
-              if (isValid) validCandidates + attribute
-              else validCandidates
-            val remainingCandidates = toBeChecked - attribute
-
-            spans.end("Split check")
-            if (remainingCandidates.isEmpty)
-              processResults(newValidCandidates)
-            else
-              checking(errorCompare, toBeChecked - attribute, newValidCandidates)
-
-          case None =>
-            context.log.warn("Received unnecessary partition with key {}", key)
-            spans.end("Split check")
-            checking(errorCompare, toBeChecked, validCandidates)
+      if (finished) {
+        val (validODs, removedCandidates) = job.results(attributes)
+        if (validODs.nonEmpty) {
+          context.log.trace("Found valid candidates: {}", validODs.mkString(", "))
+          rsProxy ! FoundDependencies(validODs)
+        } else {
+          context.log.trace("No valid constant candidates found")
         }
-
-      case m =>
-        stash.stash(m)
+        next(removedCandidates)
+      } else {
         Behaviors.same
-    }
+      }
 
-  private def changeToChecking(
-      errorCompare: Double, errors: Map[CandidateSet, Double], toBeChecked: CandidateSet
-  ): Behavior[Command] = {
-    spans.begin("Split check")
-    val candidates = for {
-      a <- toBeChecked.unsorted
-      context = candidateId - a
-      errorContext <- errors.get(context)
-    } yield a -> checkSplitCandidate(errorContext, errorCompare)
-
-    val validCandidates = candidates.filter(t => t._2).map(t => t._1)
-    val remainingCandidates = toBeChecked diff candidates.map(t => t._1)
-
-    spans.end("Split check")
-    if (remainingCandidates.isEmpty)
-      processResults(validCandidates)
-    else
-      checking(errorCompare, remainingCandidates, validCandidates)
-  }
-
-  private def processResults(validCandidates: Set[Int]): Behavior[Command] = {
-    if (validCandidates.nonEmpty) {
-      val validODs = validCandidates.map(a => ConstantOrderDependency(candidateId - a, a)).toSeq
-      context.log.trace("Found valid candidates: {}", validODs.mkString(", "))
-      rsProxy ! FoundDependencies(validODs)
-    } else {
-      context.log.trace("No valid constant candidates found")
-    }
-
-    val removedCandidates = {
-      val validCandidateSet = CandidateSet.fromSpecific(validCandidates)
-      if (validCandidateSet.nonEmpty)
-        validCandidateSet union (CandidateSet.fromSpecific(attributes) diff candidateId)
-      else
-        CandidateSet.empty
-    }
-    next(removedCandidates)
+    case m =>
+      stash.stash(m)
+      Behaviors.same
   }
 }

@@ -22,7 +22,8 @@ for (( i=0; i<${#datasets[@]}; ++i )); do
   echo "Running FASTOD on dataset ${dataset} and delimiter ${delimiter}"
 
   # fastod arguments: dataset csv_delimiter has_header
-  /usr/bin/java -Xms60G -Xmx60G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
+  timeout -v --preserve-status --signal=15 24h \
+    /usr/bin/java -Xms60G -Xmx60G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
 
   echo "Gathering results for dataset ${dataset}"
   {

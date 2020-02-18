@@ -28,15 +28,16 @@ for dataset in ${datasets}; do
   t0=$(date +%s)
 
   # start leader
-  java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
-    -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
-    -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
-    -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
-    -Dconfig.file="$(hostname).conf" \
-    -Dlogback.configurationFile=logback.xml \
-    -Ddistod.input.path="../data/${dataset}" \
-    -Ddistod.input.has-header="no" \
-    -jar distod.jar 2>&1 | tee "${logfile}"
+  timeout -v --preserve-status --signal=15 24h \
+    java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+      -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
+      -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
+      -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
+      -Dconfig.file="$(hostname).conf" \
+      -Dlogback.configurationFile=logback.xml \
+      -Ddistod.input.path="../data/${dataset}" \
+      -Ddistod.input.has-header="no" \
+      -jar distod.jar 2>&1 | tee "${logfile}"
 
   t1=$(date +%s)
   duration=$(( t1 - t0 ))

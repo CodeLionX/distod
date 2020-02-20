@@ -43,21 +43,21 @@ class SwapCandidateValidationBehavior(
 
     val singletonPartitionKeys = job.singletonPartitionKeys
     singletonPartitionKeys.foreach(attribute =>
-      partitionManager ! LookupPartition(attribute, partitionEventMapper)
+      partitionManager ! LookupPartition(candidateId, attribute, partitionEventMapper)
     )
     val partitionKeys = job.partitionKeys
     partitionKeys.foreach(candidateContext =>
-      partitionManager ! LookupStrippedPartition(candidateContext, partitionEventMapper)
+      partitionManager ! LookupStrippedPartition(candidateId, candidateContext, partitionEventMapper)
     )
 
     behavior()
   }
 
   private def behavior(): Behavior[Command] = Behaviors.receiveMessage {
-    case WrappedPartitionEvent(PartitionFound(key, value)) =>
+    case WrappedPartitionEvent(PartitionFound(_, key, value)) =>
       receivedPartition(key, value)
 
-    case WrappedPartitionEvent(StrippedPartitionFound(key, value)) =>
+    case WrappedPartitionEvent(StrippedPartitionFound(_, key, value)) =>
       receivedPartition(key, value)
 
     case m =>
@@ -66,7 +66,7 @@ class SwapCandidateValidationBehavior(
   }
 
   private def receivedPartition(key: CandidateSet, value: Partition): Behavior[Command] = {
-    context.log.trace("Received stripped partition {}", key)
+    context.log.trace("Received partition {}", key)
     job.receivedPartition(key, value)
 
     val finished = timing.unsafeTime("Swap check") {

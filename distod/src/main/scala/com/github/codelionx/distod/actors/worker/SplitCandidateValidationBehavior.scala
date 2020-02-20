@@ -42,13 +42,13 @@ class SplitCandidateValidationBehavior(
   def start(): Behavior[Command] = {
     context.log.trace("Loading partition errors for split checks")
     for (c <- job.errorIds) {
-      partitionManager ! LookupError(c, partitionEventMapper)
+      partitionManager ! LookupError(candidateId, c, partitionEventMapper)
     }
     behavior()
   }
 
   private def behavior(): Behavior[Command] = Behaviors.receiveMessage {
-    case WrappedPartitionEvent(ErrorFound(key, value)) =>
+    case WrappedPartitionEvent(ErrorFound(_, key, value)) =>
       context.log.trace("Received partition error value: {}, {}", key, value)
       job.receivedError(key, value)
 

@@ -21,8 +21,11 @@ object PartitionManager {
   private final case class WrappedSystemEvent(event: SystemEvent) extends PartitionCommand
 
   private sealed trait PendingResponse
-  private final case class PendingError(replyTo: ActorRef[ErrorFound]) extends PendingResponse
-  private final case class PendingStrippedPartition(replyTo: ActorRef[StrippedPartitionFound]) extends PendingResponse
+  private final case class PendingError(replyTo: ActorRef[ErrorFound], candidateId: CandidateSet)
+    extends PendingResponse
+  private final case class PendingStrippedPartition(
+      replyTo: ActorRef[StrippedPartitionFound], candidateId: CandidateSet
+  ) extends PendingResponse
 
   val name = "partition-manager"
 
@@ -51,7 +54,6 @@ class PartitionManager(
 
   private val settings = Settings(context.system)
   private val compactionSettings = settings.partitionCompactionSettings
-
   private val generatorPool =
     if (settings.numberOfWorkers > 0)
       Some(context.spawn(
@@ -60,7 +62,6 @@ class PartitionManager(
       ))
     else
       None
-
   private val timings = Timing(context.system)
 
   private var partitions: CompactingPartitionMap = _
@@ -97,7 +98,8 @@ class PartitionManager(
   }
 
   private def nextBehavior(
-      attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
+      attributes: Seq[Int],
+      singletonPartitions: Map[CandidateSet, FullPartition]
   ): Behavior[PartitionCommand] =
     if (attributes.nonEmpty && singletonPartitions.size == attributes.size) {
       context.log.info(
@@ -151,71 +153,71 @@ class PartitionManager(
         Behaviors.same
 
       // single-attr keys
-      case LookupError(key, replyTo) if key.size == 1 =>
+      case LookupError(candidateId, key, replyTo) if key.size == 1 =>
         partitions.getSingletonPartition(key) match {
           case Some(p) =>
-            replyTo ! ErrorFound(key, p.stripped.error)
+            replyTo ! ErrorFound(candidateId, key, p.stripped.error)
             Behaviors.same
           case None =>
-            throw new IllegalAccessException(s"Full partition for key ${key} not found! Can not compute error.")
+            throw new IllegalAccessException(s"Full partition for key $key not found! Can not compute error.")
         }
 
-      case LookupPartition(key, replyTo) if key.size == 1 =>
+      case LookupPartition(candidateId, key, replyTo) if key.size == 1 =>
         partitions.getSingletonPartition(key) match {
           case Some(p) =>
-            replyTo ! PartitionFound(key, p)
+            replyTo ! PartitionFound(candidateId, key, p)
             Behaviors.same
           case None =>
-            throw new IllegalAccessException(s"Full partition for key ${key} not found!")
+            throw new IllegalAccessException(s"Full partition for key $key not found!")
         }
 
-      case LookupStrippedPartition(key, replyTo) if key.size == 1 =>
+      case LookupStrippedPartition(candidateId, key, replyTo) if key.size == 1 =>
         partitions.getSingletonPartition(key) match {
           case Some(p) =>
-            replyTo ! StrippedPartitionFound(key, p.stripped)
+            replyTo ! StrippedPartitionFound(candidateId, key, p.stripped)
             Behaviors.same
           case None =>
-            throw new IllegalAccessException(s"Stripped partition for key ${key} not found!")
+            throw new IllegalAccessException(s"Stripped partition for key $key not found!")
         }
 
       // rest
-      case LookupError(key, replyTo) if key.size != 1 =>
+      case LookupError(candidateId, key, replyTo) if key.size != 1 =>
         partitions.get(key) match {
           case Some(p: StrippedPartition) =>
-            replyTo ! ErrorFound(key, p.error)
+            replyTo ! ErrorFound(candidateId, key, p.error)
             Behaviors.same
           case None if pendingJobs.contains(key) =>
             context.log.trace("Error is being computed, queuing request for key {}", key)
-            next(_pendingJobs = pendingJobs + (key -> PendingError(replyTo)))
+            next(_pendingJobs = pendingJobs + (key -> PendingError(replyTo, candidateId)))
           case None =>
             context.log.debug("Partition to compute error not found. Starting background job to compute {}", key)
             val newJobs = generateStrippedPartitionJobs(
               key,
               pendingJobs,
-              PendingError(replyTo)
+              PendingError(replyTo, candidateId)
             )
             next(_pendingJobs = newJobs)
         }
 
-      case LookupPartition(key, _) if key.size != 1 =>
+      case LookupPartition(_, key, _) if key.size != 1 =>
         throw new IllegalArgumentException(
           s"Only keys of size 1 contain full partitions, but your key has ${key.size} elements!"
         )
 
-      case LookupStrippedPartition(key, replyTo) if key.size != 1 =>
+      case LookupStrippedPartition(candidateId, key, replyTo) if key.size != 1 =>
         partitions.get(key) match {
           case Some(p: StrippedPartition) =>
-            replyTo ! StrippedPartitionFound(key, p)
+            replyTo ! StrippedPartitionFound(candidateId, key, p)
             Behaviors.same
           case None if pendingJobs.contains(key) =>
             context.log.trace("Partition is being computed, queuing request for key {}", key)
-            next(_pendingJobs = pendingJobs + (key -> PendingStrippedPartition(replyTo)))
+            next(_pendingJobs = pendingJobs + (key -> PendingStrippedPartition(replyTo, candidateId)))
           case None =>
             context.log.debug("Partition not found. Starting background job to compute {}", key)
             val newJobs = generateStrippedPartitionJobs(
               key,
               pendingJobs,
-              PendingStrippedPartition(replyTo)
+              PendingStrippedPartition(replyTo, candidateId)
             )
             next(_pendingJobs = newJobs)
         }
@@ -224,10 +226,10 @@ class PartitionManager(
         context.log.trace("Received computed partition for key {}", key)
         pendingJobs.get(key) match {
           case Some(pendingResponses) => pendingResponses.foreach {
-            case PendingStrippedPartition(ref) =>
-              ref ! StrippedPartitionFound(key, partition)
-            case PendingError(ref) =>
-              ref ! ErrorFound(key, partition.error)
+            case PendingStrippedPartition(ref, candidateId) =>
+              ref ! StrippedPartitionFound(candidateId, key, partition)
+            case PendingError(ref, candidateId) =>
+              ref ! ErrorFound(candidateId, key, partition.error)
           }
           case None => // do nothing
         }

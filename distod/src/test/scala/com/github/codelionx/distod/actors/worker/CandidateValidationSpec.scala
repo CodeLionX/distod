@@ -2,7 +2,7 @@ package com.github.codelionx.distod.actors.worker
 
 import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.partitions.{Partition, StrippedPartition}
-import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.types.{CandidateSet, EquivClass}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -46,7 +46,7 @@ class CandidateValidationSpec extends AnyWordSpec with Matchers {
           nTuples = attributes.size,
           numberElements = attributes.size,
           numberClasses = 1,
-          equivClasses = IndexedSeq(attributes.toSet)
+          equivClasses = Array(EquivClass.from(attributes))
         )
       )
       val result = tester.checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
@@ -87,7 +87,7 @@ class CandidateValidationSpec extends AnyWordSpec with Matchers {
           nTuples = attributes.size,
           numberElements = attributes.size,
           numberClasses = 1,
-          equivClasses = IndexedSeq(attributes.toSet)
+          equivClasses = Array(EquivClass.from(attributes))
         )
       )
       val result = tester.checkSwapCandidates(candidate, swapCandidates, singletonPartitions, candidatePartitions)

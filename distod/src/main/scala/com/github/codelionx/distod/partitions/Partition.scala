@@ -2,8 +2,8 @@ package com.github.codelionx.distod.partitions
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.github.codelionx.distod.Serialization.CborSerializable
+import com.github.codelionx.distod.types.{EquivClass, TupleValueMap}
 
-import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 
@@ -25,8 +25,8 @@ sealed trait Partition extends CborSerializable with PartitionOps {
 
   def numberClasses: Int
 
-  @JsonDeserialize(contentAs = classOf[Set[Index]])
-  def equivClasses: IndexedSeq[Set[Index]]
+  @JsonDeserialize(contentAs = classOf[EquivClass.IMPL_TYPE])
+  def equivClasses: IndexedSeq[EquivClass.TYPE]
 
   def error: Double = numberElements - numberClasses
 }
@@ -47,10 +47,10 @@ case class FullPartition private[partitions](
     nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
-    @JsonDeserialize(contentAs = classOf[Set[Index]])
-    equivClasses: IndexedSeq[Set[Index]],
-    @JsonDeserialize(keyAs = classOf[Index], contentAs = classOf[Value])
-    tupleValueMap: Map[Index, Value]
+    @JsonDeserialize(contentAs = classOf[EquivClass.IMPL_TYPE])
+    equivClasses: IndexedSeq[EquivClass.TYPE],
+    @JsonDeserialize(as = classOf[TupleValueMap.IMPL_TYPE])
+    tupleValueMap: TupleValueMap.TYPE
 ) extends Partition {
 
   /**
@@ -78,7 +78,7 @@ case class StrippedPartition private[partitions](
     nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
-    equivClasses: IndexedSeq[Set[Index]]
+    equivClasses: IndexedSeq[EquivClass.TYPE]
 ) extends Partition
 
 
@@ -115,27 +115,32 @@ object Partition {
   def strippedFrom(column: Array[String]): StrippedPartition =
     fullFrom(column).stripped
 
-  private def partitionColumn(column: Array[String]): IndexedSeq[Set[Index]] = {
+  private def partitionColumn(column: Array[String]): IndexedSeq[EquivClass.TYPE] = {
     val tpe = TypeInferrer.inferTypeForColumn(column)
-    val valueMap: mutable.Map[String, mutable.Set[Index]] = mutable.HashMap.empty
+    val valueMap: mutable.Map[String, EquivClass.IMPL_TYPE] = mutable.HashMap.empty
 
     for ((entry, i) <- column.zipWithIndex) {
-      val equivClass = valueMap.getOrElseUpdate(entry, mutable.HashSet.empty)
+      val equivClass = valueMap.getOrElseUpdate(entry, EquivClass(column.length, 1f))
       equivClass.add(i)
     }
 
     val sortedKeys =
       valueMap
-        .keys.toIndexedSeq
+        .keys
+        .toArray
         .sortWith(tpe.valueLt)
-    sortedKeys.map(key => valueMap(key).toSet)
+    sortedKeys.map { key =>
+      val set = valueMap(key)
+      set.trim()
+      set
+    }
   }
 
 
   /**
    * Removes singleton equivalence classes
    */
-  private[partitions] def stripClasses(classes: IndexedSeq[Set[Index]]): IndexedSeq[Set[Index]] =
+  private[partitions] def stripClasses(classes: IndexedSeq[EquivClass.TYPE]): IndexedSeq[EquivClass.TYPE] =
     classes.filterNot { indexSet => indexSet.size <= 1 }
 
   /**
@@ -144,23 +149,27 @@ object Partition {
    *
    * @return Map containing tuple ID to value mapping
    */
-  private[partitions] def convertToTupleValueMap(equivClasses: IndexedSeq[Set[Index]]): Map[Index, Value] =
+  private[partitions] def convertToTupleValueMap(equivClasses: IndexedSeq[EquivClass.TYPE]): TupleValueMap.TYPE =
     fastTupleValueMapper(equivClasses)
 
-  private def functionalTupleValueMapper(equivClasses: IndexedSeq[Set[Index]]): Map[Index, Value] = {
-    val indexedClasses = equivClasses.zipWithIndex
-    indexedClasses.flatMap {
-      case (set, value) => set.map(_ -> value)
-    }.toMap
-  }
+//  private def functionalTupleValueMapper(equivClasses: IndexedSeq[IntSet]): Int2IntMap = {
+//    val indexedClasses = equivClasses.zipWithIndex
+//    indexedClasses.flatMap {
+//      case (set, value) => set.map(_ -> value)
+//    }.toMap
+//  }
 
-  private def fastTupleValueMapper(equivClasses: IndexedSeq[Set[Index]]): Map[Index, Value] = {
-    val builder = HashMap.newBuilder[Index, Value]
-    equivClasses.zipWithIndex.foreach { case (set, value) =>
-      set.foreach(index =>
-        builder.addOne(index, value)
-      )
+  private def fastTupleValueMapper(equivClasses: IndexedSeq[EquivClass.TYPE]): TupleValueMap.TYPE = {
+    val size = equivClasses.map(_.size()).sum
+    val map = TupleValueMap(size, 1f)
+
+    for( (set, value) <- equivClasses.zipWithIndex) {
+      val iter = set.iterator
+      while(iter.hasNext) {
+        map.put(iter.nextInt, value)
+      }
     }
-    builder.result()
+    map.trim()
+    map
   }
 }

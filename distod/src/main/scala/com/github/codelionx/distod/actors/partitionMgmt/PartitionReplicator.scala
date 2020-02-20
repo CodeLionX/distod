@@ -115,7 +115,7 @@ object PartitionReplicator {
         local ! InsertPartition(CandidateSet.empty, value)
         next()
 
-      case StreamComplete=>
+      case StreamComplete =>
         context.log.error("Stream finished too early, still missing partitions.")
         Behaviors.stopped
 

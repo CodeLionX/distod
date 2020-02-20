@@ -17,7 +17,7 @@ for dataset in ${datasets}; do
   echo ""
   echo "Running distributed FASTOD (Spark) on dataset ${dataset}"
 
-  timeout -v --preserve-status --signal=15 24h \
+  timeout --preserve-status --signal=15 24h \
     /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
       --class FastODMain \
       --master spark://odin01:7077 \

@@ -72,7 +72,7 @@ trait PartitionOps { this: Partition =>
       for (tupleId <- remainingIds) {
         val classResult = tempClasses(lut(tupleId))
         if (classResult.size > 1) {
-          resultClasses.append(classResult.clone().trimSelf())
+          resultClasses.append(classResult.copy().trimSelf())
         }
         classResult.clear()
       }

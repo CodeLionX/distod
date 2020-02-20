@@ -3,6 +3,7 @@ package com.github.codelionx.distod.partitions
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.types.{EquivClass, TupleValueMap}
+import EquivClass.Implicits._
 
 import scala.collection.mutable
 
@@ -129,11 +130,7 @@ object Partition {
         .keys
         .toArray
         .sortWith(tpe.valueLt)
-    sortedKeys.map { key =>
-      val set = valueMap(key)
-      set.trim()
-      set
-    }
+    sortedKeys.map(key => valueMap(key).trimSelf())
   }
 
 

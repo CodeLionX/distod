@@ -46,7 +46,7 @@ class CandidateValidationSpec extends AnyWordSpec with Matchers {
           nTuples = attributes.size,
           numberElements = attributes.size,
           numberClasses = 1,
-          equivClasses = IndexedSeq(attributes.toSet)
+          equivClasses = Array(Array.from(attributes))
         )
       )
       val result = tester.checkSwapCandidates(candidateId, swapCandidates, singletonPartitions, candidatePartitions)
@@ -87,7 +87,7 @@ class CandidateValidationSpec extends AnyWordSpec with Matchers {
           nTuples = attributes.size,
           numberElements = attributes.size,
           numberClasses = 1,
-          equivClasses = IndexedSeq(attributes.toSet)
+          equivClasses = Array(Array.from(attributes))
         )
       )
       val result = tester.checkSwapCandidates(candidate, swapCandidates, singletonPartitions, candidatePartitions)

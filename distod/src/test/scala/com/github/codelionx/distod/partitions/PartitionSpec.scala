@@ -21,20 +21,21 @@ class PartitionSpec extends AnyWordSpec with Matchers {
 
     "sort the classes" in {
       partition.equivClasses should contain theSameElementsInOrderAs Seq(
-        Set(0, 2, 4, 8),
-        Set(1, 5),
-        Set(3, 7),
+        Array(0, 2, 4, 8),
+        Array(1, 5),
+        Array(3, 7),
       )
     }
 
-    def makePartition(classes: Set[Index]*) = {
-      val stripped = Partition.stripClasses(classes.toIndexedSeq)
+    def makePartition(sets: Set[Int]*) = {
+      val classes = sets.map(set => Array.from(set)).toArray
+      val stripped = Partition.stripClasses(classes)
       FullPartition(
-        nTuples = classes.map(_.size).sum,
-        numberClasses = stripped.size,
-        numberElements = stripped.map(_.size).sum,
+        nTuples = classes.map(_.length).iterator.sum,
+        numberClasses = stripped.length,
+        numberElements = stripped.map(_.length).sum,
         equivClasses = stripped,
-        tupleValueMap = Partition.convertToTupleValueMap(classes.toIndexedSeq)
+        tupleValueMap = Partition.convertToTupleValueMap(classes)
       )
     }
 
@@ -105,18 +106,20 @@ class PartitionSpec extends AnyWordSpec with Matchers {
 
   "A stripped partition" should {
 
-    def makePartition(classes: Set[Index]*) =
+    def makePartition(sets: Set[Index]*) = {
+      val classes = sets.map(set => Array.from(set)).toArray
       StrippedPartition(
         nTuples = 6,
-        numberClasses = classes.size,
-        numberElements = classes.map(_.size).sum,
-        equivClasses = classes.toIndexedSeq
+        numberClasses = classes.length,
+        numberElements = classes.map(_.length).sum,
+        equivClasses = classes
       )
+    }
 
     "not contain classes with only one element" in {
       val partition = Partition.strippedFrom(column)
       partition.equivClasses.filter { elems =>
-        elems.size == 1
+        elems.length == 1
       } shouldBe empty
     }
 
@@ -166,6 +169,8 @@ class PartitionSpec extends AnyWordSpec with Matchers {
         Set(55, 99), Set(67, 82, 101, 142), Set(61, 149), Set(62, 119), Set(71, 73),
         Set(91, 127), Set(56, 100), Set(72, 146), Set(51, 115), Set(128, 132), Set(104, 116, 147),
         Set(65, 86, 140), Set(77, 145), Set(124, 144), Set(52, 139, 141)
+      ).map(
+        s => Array.from(s)
       )
 
       val part0 = Partition.fullFrom(Array(

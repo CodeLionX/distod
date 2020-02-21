@@ -1,8 +1,8 @@
 package com.github.codelionx.distod.discovery
 
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
-import com.github.codelionx.distod.types.{CandidateSet, OrderDependency, TupleValueMap}
 import com.github.codelionx.distod.types.OrderDependency.{ConstantOrderDependency, EquivalencyOrderDependency}
+import com.github.codelionx.distod.types.{CandidateSet, OrderDependency, TupleValueMap}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.immutable.ArraySeq
@@ -50,7 +50,7 @@ object CandidateValidation {
         val subClazzes = mutable.SortedMap.empty[Int, mutable.Builder[Int, Seq[Int]]]
         val clazzIter = clazz.iterator
         while(clazzIter.hasNext) {
-          val tuple = clazzIter.nextInt
+          val tuple = clazzIter.next
           val index = indexLUT.applyAsInt(tuple)
           val subClazz = subClazzes.getOrElseUpdate(index, Seq.newBuilder[Int])
           subClazz += tuple

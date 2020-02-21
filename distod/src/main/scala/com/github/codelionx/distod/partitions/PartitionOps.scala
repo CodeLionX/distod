@@ -1,9 +1,7 @@
 package com.github.codelionx.distod.partitions
 
-import com.github.codelionx.distod.types.EquivClass
-import com.github.codelionx.distod.types.EquivClass.Implicits._
-
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 
 trait PartitionOps { this: Partition =>
@@ -48,8 +46,8 @@ trait PartitionOps { this: Partition =>
 
   private def fastProduct(partition1: Partition, partition2: Partition): Partition = {
     val nTuples = scala.math.max(partition1.nTuples, partition2.nTuples)
-    val tempClasses = Array.fill(partition1.numberClasses)(EquivClass(nTuples, 1f))
-    val resultClasses = mutable.Buffer.empty[EquivClass.TYPE]
+    val tempClasses = Array.fill(partition1.numberClasses)(ArrayBuffer.empty[Int])
+    val resultClasses = mutable.Buffer.empty[Array[Int]]
     val lut = Array.fill(nTuples)(-1)
 
     // fill lut from first partition
@@ -57,7 +55,7 @@ trait PartitionOps { this: Partition =>
     for ((tupleIdSet, classIndex) <- classes1.zipWithIndex) {
       val iter = tupleIdSet.iterator
       while(iter.hasNext) {
-        val tupleId = iter.nextInt
+        val tupleId = iter.next
         lut(tupleId) = classIndex
       }
     }
@@ -66,13 +64,15 @@ trait PartitionOps { this: Partition =>
     for (tupleIdSet <- classes2) {
       val remainingIds = tupleIdSet.filter(id => lut(id) != -1)
       remainingIds.foreach { id =>
-        tempClasses(lut(id)).add(id)
+        tempClasses(lut(id)).addOne(id)
       }
       // for each set emit a new result set if it contains more than 2 elems
       for (tupleId <- remainingIds) {
         val classResult = tempClasses(lut(tupleId))
         if (classResult.size > 1) {
-          resultClasses.append(classResult.copy().trimSelf())
+          val newClass = Array.ofDim[Int](classResult.size)
+          classResult.copyToArray(newClass)
+          resultClasses.append(newClass)
         }
         classResult.clear()
       }
@@ -80,7 +80,7 @@ trait PartitionOps { this: Partition =>
     val newClasses = resultClasses.toArray
     StrippedPartition(
       nTuples = nTuples,
-      numberElements = newClasses.map(_.size).sum,
+      numberElements = newClasses.map(_.length).sum,
       numberClasses = newClasses.length,
       equivClasses = newClasses
     )

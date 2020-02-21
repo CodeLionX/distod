@@ -20,7 +20,7 @@ class JobChainerSpec extends AnyWordSpec with Matchers {
 
   "The JobChainer" should {
 
-    val emptyFullPartition = FullPartition(0, 0, 0, IndexedSeq.empty, TupleValueMap.empty)
+    val emptyFullPartition = FullPartition(0, 0, 0, Array.empty, TupleValueMap.empty)
     val emptyPartition = emptyFullPartition.stripped
     val singletonPartitions = (0 to 10).map(id => CandidateSet.from(id) -> emptyFullPartition).toMap
 

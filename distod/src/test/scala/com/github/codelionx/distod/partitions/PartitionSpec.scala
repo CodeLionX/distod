@@ -1,7 +1,5 @@
 package com.github.codelionx.distod.partitions
 
-import com.github.codelionx.distod.types.EquivClass
-import com.github.codelionx.distod.types.EquivClass.Implicits._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -23,21 +21,21 @@ class PartitionSpec extends AnyWordSpec with Matchers {
 
     "sort the classes" in {
       partition.equivClasses should contain theSameElementsInOrderAs Seq(
-        Set(0, 2, 4, 8).toEquivClass,
-        Set(1, 5).toEquivClass,
-        Set(3, 7).toEquivClass,
+        Array(0, 2, 4, 8),
+        Array(1, 5),
+        Array(3, 7),
       )
     }
 
     def makePartition(sets: Set[Int]*) = {
-      val classes = sets.map(set => EquivClass.from(set))
-      val stripped = Partition.stripClasses(classes.toIndexedSeq)
+      val classes = sets.map(set => Array.from(set)).toArray
+      val stripped = Partition.stripClasses(classes)
       FullPartition(
-        nTuples = classes.map(_.size).sum,
-        numberClasses = stripped.size,
-        numberElements = stripped.map(_.size).sum,
+        nTuples = classes.map(_.length).iterator.sum,
+        numberClasses = stripped.length,
+        numberElements = stripped.map(_.length).sum,
         equivClasses = stripped,
-        tupleValueMap = Partition.convertToTupleValueMap(classes.toIndexedSeq)
+        tupleValueMap = Partition.convertToTupleValueMap(classes)
       )
     }
 
@@ -109,19 +107,19 @@ class PartitionSpec extends AnyWordSpec with Matchers {
   "A stripped partition" should {
 
     def makePartition(sets: Set[Index]*) = {
-      val classes = sets.map(set => EquivClass.from(set))
+      val classes = sets.map(set => Array.from(set)).toArray
       StrippedPartition(
         nTuples = 6,
-        numberClasses = classes.size,
-        numberElements = classes.map(_.size).sum,
-        equivClasses = classes.toIndexedSeq
+        numberClasses = classes.length,
+        numberElements = classes.map(_.length).sum,
+        equivClasses = classes
       )
     }
 
     "not contain classes with only one element" in {
       val partition = Partition.strippedFrom(column)
       partition.equivClasses.filter { elems =>
-        elems.size == 1
+        elems.length == 1
       } shouldBe empty
     }
 
@@ -172,7 +170,7 @@ class PartitionSpec extends AnyWordSpec with Matchers {
         Set(91, 127), Set(56, 100), Set(72, 146), Set(51, 115), Set(128, 132), Set(104, 116, 147),
         Set(65, 86, 140), Set(77, 145), Set(124, 144), Set(52, 139, 141)
       ).map(
-        s => s.toEquivClass
+        s => Array.from(s)
       )
 
       val part0 = Partition.fullFrom(Array(

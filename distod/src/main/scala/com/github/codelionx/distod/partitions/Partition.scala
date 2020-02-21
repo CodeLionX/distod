@@ -1,11 +1,13 @@
 package com.github.codelionx.distod.partitions
 
+import java.util.Objects
+
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.types.{EquivClass, TupleValueMap}
-import EquivClass.Implicits._
+import com.github.codelionx.distod.types.TupleValueMap
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 
 /**
@@ -26,10 +28,21 @@ sealed trait Partition extends CborSerializable with PartitionOps {
 
   def numberClasses: Int
 
-  @JsonDeserialize(contentAs = classOf[EquivClass.IMPL_TYPE])
-  def equivClasses: IndexedSeq[EquivClass.TYPE]
+  @JsonDeserialize(contentAs = classOf[Array[Int]])
+  def equivClasses: Array[Array[Int]]
 
   def error: Double = numberElements - numberClasses
+
+  override def hashCode(): Value = Objects.hash(nTuples, numberElements, numberClasses, equivClasses)
+
+  override def equals(o: Any): Boolean = o match {
+    case p: Partition =>
+      this.nTuples == p.nTuples &&
+      this.numberClasses == p.numberClasses &&
+      this.numberElements == p.numberElements &&
+      this.equivClasses.flatten.sameElements(p.equivClasses.toIndexedSeq.flatten)
+    case _ => false
+  }
 }
 
 
@@ -48,8 +61,8 @@ case class FullPartition private[partitions](
     nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
-    @JsonDeserialize(contentAs = classOf[EquivClass.IMPL_TYPE])
-    equivClasses: IndexedSeq[EquivClass.TYPE],
+    @JsonDeserialize(contentAs = classOf[Array[Int]])
+    equivClasses: Array[Array[Int]],
     @JsonDeserialize(as = classOf[TupleValueMap.IMPL_TYPE])
     tupleValueMap: TupleValueMap.TYPE
 ) extends Partition {
@@ -64,6 +77,14 @@ case class FullPartition private[partitions](
     numberClasses = numberClasses,
     equivClasses = equivClasses
   )
+
+  override def hashCode(): Value = Objects.hash(nTuples, numberElements, numberClasses, equivClasses, tupleValueMap)
+
+  override def equals(o: Any): Boolean = o match {
+    case p: FullPartition =>
+      super.equals(p) && this.tupleValueMap.equals(p.tupleValueMap)
+    case _ => false
+  }
 }
 
 
@@ -79,7 +100,7 @@ case class StrippedPartition private[partitions](
     nTuples: Int,
     numberElements: Int,
     numberClasses: Int,
-    equivClasses: IndexedSeq[EquivClass.TYPE]
+    equivClasses: Array[Array[Int]]
 ) extends Partition
 
 
@@ -98,8 +119,8 @@ object Partition {
     val strippedClasses = stripClasses(equivalenceClasses)
     FullPartition(
       nTuples = column.length,
-      numberElements = strippedClasses.map(_.size).sum,
-      numberClasses = strippedClasses.size,
+      numberElements = strippedClasses.map(_.length).sum,
+      numberClasses = strippedClasses.length,
       equivClasses = strippedClasses,
       tupleValueMap = convertToTupleValueMap(equivalenceClasses)
     )
@@ -116,13 +137,13 @@ object Partition {
   def strippedFrom(column: Array[String]): StrippedPartition =
     fullFrom(column).stripped
 
-  private def partitionColumn(column: Array[String]): IndexedSeq[EquivClass.TYPE] = {
+  private def partitionColumn(column: Array[String]): Array[Array[Int]] = {
     val tpe = TypeInferrer.inferTypeForColumn(column)
-    val valueMap: mutable.Map[String, EquivClass.IMPL_TYPE] = mutable.HashMap.empty
+    val valueMap: mutable.Map[String, ArrayBuffer[Int]] = mutable.HashMap.empty
 
     for ((entry, i) <- column.zipWithIndex) {
-      val equivClass = valueMap.getOrElseUpdate(entry, EquivClass(column.length, 1f))
-      equivClass.add(i)
+      val equivClass = valueMap.getOrElseUpdate(entry, ArrayBuffer.empty)
+      equivClass.addOne(i)
     }
 
     val sortedKeys =
@@ -130,15 +151,15 @@ object Partition {
         .keys
         .toArray
         .sortWith(tpe.valueLt)
-    sortedKeys.map(key => valueMap(key).trimSelf())
+    sortedKeys.map(key => valueMap(key).toArray)
   }
 
 
   /**
    * Removes singleton equivalence classes
    */
-  private[partitions] def stripClasses(classes: IndexedSeq[EquivClass.TYPE]): IndexedSeq[EquivClass.TYPE] =
-    classes.filterNot { indexSet => indexSet.size <= 1 }
+  private[partitions] def stripClasses(classes: Array[Array[Int]]): Array[Array[Int]] =
+    classes.filterNot { indexSet => indexSet.length <= 1 }
 
   /**
    * Converts the equivalence classes of a full partition to a tuple-value-map, mapping each tuple ID to its value
@@ -146,7 +167,7 @@ object Partition {
    *
    * @return Map containing tuple ID to value mapping
    */
-  private[partitions] def convertToTupleValueMap(equivClasses: IndexedSeq[EquivClass.TYPE]): TupleValueMap.TYPE =
+  private[partitions] def convertToTupleValueMap(equivClasses: Array[Array[Int]]): TupleValueMap.TYPE =
     fastTupleValueMapper(equivClasses)
 
 //  private def functionalTupleValueMapper(equivClasses: IndexedSeq[IntSet]): Int2IntMap = {
@@ -156,14 +177,14 @@ object Partition {
 //    }.toMap
 //  }
 
-  private def fastTupleValueMapper(equivClasses: IndexedSeq[EquivClass.TYPE]): TupleValueMap.TYPE = {
-    val size = equivClasses.map(_.size()).sum
+  private def fastTupleValueMapper(equivClasses: Array[Array[Int]]): TupleValueMap.TYPE = {
+    val size = equivClasses.map(_.length).sum
     val map = TupleValueMap(size, 1f)
 
     for( (set, value) <- equivClasses.zipWithIndex) {
       val iter = set.iterator
       while(iter.hasNext) {
-        map.put(iter.nextInt, value)
+        map.put(iter.next, value)
       }
     }
     map.trim()

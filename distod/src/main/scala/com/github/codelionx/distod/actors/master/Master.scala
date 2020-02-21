@@ -14,7 +14,7 @@ import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, Resul
 import com.github.codelionx.distod.protocols.DataLoadingProtocol._
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultCommand
-import com.github.codelionx.distod.types.{CandidateSet, EquivClass, PartitionedTable}
+import com.github.codelionx.distod.types.{CandidateSet, PartitionedTable}
 import com.github.codelionx.util.Math
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
@@ -130,7 +130,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           nTuples = table.nTuples,
           numberElements = table.nTuples,
           numberClasses = 1,
-          equivClasses = Array(EquivClass.from(0 until table.nTuples))
+          equivClasses = Array(Array.from(0 until table.nTuples))
         ))
 
         // L1: single attribute candidate nodes

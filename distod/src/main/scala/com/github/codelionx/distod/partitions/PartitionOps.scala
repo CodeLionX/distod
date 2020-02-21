@@ -53,9 +53,7 @@ trait PartitionOps { this: Partition =>
     // fill lut from first partition
     val classes1 = partition1.equivClasses
     for ((tupleIdSet, classIndex) <- classes1.zipWithIndex) {
-      val iter = tupleIdSet.iterator
-      while(iter.hasNext) {
-        val tupleId = iter.next
+      for(tupleId <- tupleIdSet)  {
         lut(tupleId) = classIndex
       }
     }

@@ -48,9 +48,7 @@ object CandidateValidation {
       for (i <- classes.indices) {
         val clazz = classes(i)
         val subClazzes = mutable.SortedMap.empty[Int, mutable.Builder[Int, Seq[Int]]]
-        val clazzIter = clazz.iterator
-        while(clazzIter.hasNext) {
-          val tuple = clazzIter.next
+        for(tuple <- clazz) {
           val index = indexLUT.applyAsInt(tuple)
           val subClazz = subClazzes.getOrElseUpdate(index, Seq.newBuilder[Int])
           subClazz += tuple

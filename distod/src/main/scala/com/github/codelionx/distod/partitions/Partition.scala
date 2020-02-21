@@ -181,11 +181,8 @@ object Partition {
     val size = equivClasses.map(_.length).sum
     val map = TupleValueMap(size, 1f)
 
-    for( (set, value) <- equivClasses.zipWithIndex) {
-      val iter = set.iterator
-      while(iter.hasNext) {
-        map.put(iter.next, value)
-      }
+    for( (set, value) <- equivClasses.zipWithIndex; tupleId <- set) {
+      map.put(tupleId, value)
     }
     map.trim()
     map

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.json chess-sub.json letter-sub.json hepatitis-sub.json adult-sub.json fd-reduced-1k-30-sub.json flight_1k_30c-sub.json plista-sub.json ncvoter-1m-19-sub.json"
+datasets="test-sub.json iris-sub.json chess-sub.json abalone-sub.json bridges-sub.json adult-sub.json letter-sub.json hepatitis-sub.json fd-reduced-1k-30-sub.json flight_1k_30c-sub.json horse-sub.json plista-sub.json ncvoter-1m-19-sub.json"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 

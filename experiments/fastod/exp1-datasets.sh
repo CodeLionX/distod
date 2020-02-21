@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-
-declare -a datasets=( "test-sub.csv" "chess-sub.csv" "letter-sub.csv" "hepatitis-sub.csv" "adult-sub.csv" "fd-reduced-1k-30-sub.csv" "flight_1k_30c-sub.csv" "plista-sub.csv" "ncvoter-1m-19-sub.csv" )
-declare -a delimiters=( "," "," "," "," ";" "," ";" ";" "," )
+declare -a datasets=( "iris-sub.csv" "abalone-sub.csv" "bridges-sub.csv" "horse-sub.csv" )
+declare -a delimiters=( "," "," "," ";" )
+# declare -a datasets=( "test-sub.csv" "iris-sub.csv" "chess-sub.csv" "abalone-sub.csv" "bridges-sub.csv" "adult-sub.csv" "letter-sub.csv" "hepatitis-sub.csv" "fd-reduced-1k-30-sub.csv" "flight_1k_30c-sub.csv" "horse-sub.csv" "plista-sub.csv" "ncvoter-1m-19-sub.json" )
+# declare -a delimiters=( "," "," "," "," "," ";" "," "," "," ";" ";" ";" ",")
 
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"

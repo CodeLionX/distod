@@ -130,7 +130,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           nTuples = table.nTuples,
           numberElements = table.nTuples,
           numberClasses = 1,
-          equivClasses = Array(Array.from(0 until table.nTuples))
+          equivClasses = Array(Array.range(0, table.nTuples))
         ))
 
         // L1: single attribute candidate nodes

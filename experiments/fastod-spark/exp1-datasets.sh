@@ -30,13 +30,12 @@ for dataset in ${datasets}; do
 
 
   echo "Gathering results for dataset ${dataset}"
+  fds=$(grep -c "FD" results.txt)
+  ods=$(grep -c "OD" results.txt)
   {
     echo -n "${dataset},"
     grep "==== Total" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-    echo -n ","
-    grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-    echo -n ","
-    grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+    echo -n ",${fds},${ods}"
     # force newline
     echo ""
   } >>"${resultfile}"

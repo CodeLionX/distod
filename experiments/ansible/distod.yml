@@ -40,7 +40,7 @@
         verify_host: yes
     - name: Copy distod test artefacts
       synchronize:
-        src: "{{ src_path }}/exp1-datasets.sh"
+        src: "{{ src_path }}/{{ experiment }}.sh"
         dest: "{{ deployment_path }}/"
         verify_host: yes
     - debug:

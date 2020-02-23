@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.json chess-sub.json letter-sub.json hepatitis-sub.json adult-sub.json fd-reduced-1k-30-sub.json flight_1k_30c-sub.json plista-sub.json ncvoter-1m-19-sub.json"
+datasets="test-sub.json iris-sub.json chess-sub.json abalone-sub.json bridges-sub.json adult-sub.json letter-sub.json hepatitis-sub.json fd-reduced-1k-30-sub.json flight_1k_30c-sub.json horse-sub.json plista-sub.json ncvoter-1m-19-sub.json"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 
@@ -17,7 +17,7 @@ for dataset in ${datasets}; do
   echo ""
   echo "Running distributed FASTOD (Spark) on dataset ${dataset}"
 
-  timeout -v --preserve-status --signal=15 24h \
+  timeout --preserve-status --signal=15 24h \
     /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
       --class FastODMain \
       --master spark://odin01:7077 \
@@ -30,13 +30,12 @@ for dataset in ${datasets}; do
 
 
   echo "Gathering results for dataset ${dataset}"
+  fds=$(grep -c "FD" results.txt)
+  ods=$(grep -c "OD" results.txt)
   {
     echo -n "${dataset},"
     grep "==== Total" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-    echo -n ","
-    grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-    echo -n ","
-    grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+    echo -n ",${fds},${ods}"
     # force newline
     echo ""
   } >>"${resultfile}"

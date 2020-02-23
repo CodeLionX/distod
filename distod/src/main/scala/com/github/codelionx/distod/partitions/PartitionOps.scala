@@ -1,6 +1,7 @@
 package com.github.codelionx.distod.partitions
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 
 trait PartitionOps { this: Partition =>
@@ -27,32 +28,32 @@ trait PartitionOps { this: Partition =>
     case (p1, p2) => fastProduct(p1, p2)
   }
 
-  private def setIntersectionProduct(partition1: Partition, partition2: Partition): Partition = {
-    val newClasses: IndexedSeq[Set[Index]] = for {
-      x <- partition1.equivClasses
-      y <- partition2.equivClasses
-      newClass = x.intersect(y)
-      if newClass.size > 1
-    } yield newClass
-
-    StrippedPartition(
-      nTuples = scala.math.max(partition1.nTuples, partition2.nTuples),
-      numberElements = newClasses.map(_.size).sum,
-      numberClasses = newClasses.size,
-      equivClasses = newClasses
-    )
-  }
+//  private def setIntersectionProduct(partition1: Partition, partition2: Partition): Partition = {
+//    val newClasses: IndexedSeq[Set[Index]] = for {
+//      x <- partition1.equivClasses
+//      y <- partition2.equivClasses
+//      newClass = x.intersect(y)
+//      if newClass.size > 1
+//    } yield newClass
+//
+//    StrippedPartition(
+//      nTuples = scala.math.max(partition1.nTuples, partition2.nTuples),
+//      numberElements = newClasses.map(_.size).sum,
+//      numberClasses = newClasses.size,
+//      equivClasses = newClasses
+//    )
+//  }
 
   private def fastProduct(partition1: Partition, partition2: Partition): Partition = {
     val nTuples = scala.math.max(partition1.nTuples, partition2.nTuples)
-    val tempClasses = Array.fill(partition1.numberClasses)(Set.newBuilder[Int])
-    val resultClasses = mutable.Buffer.empty[Set[Int]]
+    val tempClasses = Array.fill(partition1.numberClasses)(ArrayBuffer.empty[Int])
+    val resultClasses = mutable.Buffer.empty[Array[Int]]
     val lut = Array.fill(nTuples)(-1)
 
     // fill lut from first partition
     val classes1 = partition1.equivClasses
     for ((tupleIdSet, classIndex) <- classes1.zipWithIndex) {
-      for (tupleId <- tupleIdSet) {
+      for(tupleId <- tupleIdSet)  {
         lut(tupleId) = classIndex
       }
     }
@@ -65,19 +66,20 @@ trait PartitionOps { this: Partition =>
       }
       // for each set emit a new result set if it contains more than 2 elems
       for (tupleId <- remainingIds) {
-        val classBuilder = tempClasses(lut(tupleId))
-        val classResult = classBuilder.result()
-        if (classResult.knownSize > 1) {
-          resultClasses.append(classResult)
+        val classResult = tempClasses(lut(tupleId))
+        if (classResult.size > 1) {
+          val newClass = Array.ofDim[Int](classResult.size)
+          classResult.copyToArray(newClass)
+          resultClasses.append(newClass)
         }
-        classBuilder.clear()
+        classResult.clear()
       }
     }
-    val newClasses = resultClasses.toIndexedSeq
+    val newClasses = resultClasses.toArray
     StrippedPartition(
       nTuples = nTuples,
-      numberElements = newClasses.map(_.size).sum,
-      numberClasses = newClasses.size,
+      numberElements = newClasses.map(_.length).sum,
+      numberClasses = newClasses.length,
       equivClasses = newClasses
     )
   }

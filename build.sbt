@@ -5,11 +5,14 @@ lazy val clistVersion = "3.5.1"
 lazy val scala212 = "2.12.10"
 lazy val scala213 = "2.13.1"
 
+enablePlugins(GitVersioning)
+
 ThisBuild / scalaVersion := scala213
 //crossScalaVersions := scala212 :: scala213 :: Nil
 
 ThisBuild / organization := "com.github.codelionx"
-ThisBuild / version := "0.0.1"
+//ThisBuild / version := "0.0.1"
+ThisBuild / git.baseVersion := "0.0.1"
 
 ThisBuild / fork in run := true
 

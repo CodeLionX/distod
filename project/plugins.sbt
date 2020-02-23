@@ -9,3 +9,6 @@ addSbtPlugin("com.codacy" % "sbt-codacy-coverage" % "3.0.3")
 
 // plugin for benchmark generation
 addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.3.7")
+
+// plugin for parsing git info for versioning
+addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.0")

@@ -2,7 +2,7 @@ package com.github.codelionx.distod.actors.partitionMgmt
 
 import com.github.codelionx.distod.Settings.PartitionCompactionSettings
 import com.github.codelionx.distod.partitions.FullPartition
-import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.types.{CandidateSet, TupleValueMap}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -20,7 +20,7 @@ class JobChainerSpec extends AnyWordSpec with Matchers {
 
   "The JobChainer" should {
 
-    val emptyFullPartition = FullPartition(0, 0, 0, IndexedSeq.empty, Map.empty)
+    val emptyFullPartition = FullPartition(0, 0, 0, Array.empty, TupleValueMap.empty)
     val emptyPartition = emptyFullPartition.stripped
     val singletonPartitions = (0 to 10).map(id => CandidateSet.from(id) -> emptyFullPartition).toMap
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.csv chess-sub.csv letter-sub.csv hepatitis-sub.csv adult-sub.csv fd-reduced-1k-30-sub.csv flight_1k_30c-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
+datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv fd-reduced-1k-30-sub.csv flight_1k_30c-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 
@@ -28,7 +28,7 @@ for dataset in ${datasets}; do
   t0=$(date +%s)
 
   # start leader
-  timeout -v --preserve-status --signal=15 24h \
+  timeout --preserve-status --signal=15 24h \
     java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
       -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
       -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
@@ -53,7 +53,7 @@ for dataset in ${datasets}; do
   done
   echo "Checked node status, still running nodes: '${running_nodes}'"
 
-  if [[ $duration < 30 && "${running_nodes}" != "" ]]; then
+  if [[ $duration -lt 30 && "${running_nodes}" != "" ]]; then
     echo "Waiting till followers stopped, before force killing them."
     sleep $(( 30 - duration ))
   fi

@@ -175,6 +175,10 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
       case WrappedPartitionEvent(event) =>
         context.log.debug("Ignored {}", event)
         Behaviors.same
+
+      case Stop =>
+        // is caught by interceptor
+        Behaviors.same
     }
   )
 

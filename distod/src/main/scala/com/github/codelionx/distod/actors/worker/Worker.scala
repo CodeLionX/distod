@@ -45,7 +45,8 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
 
   private val timing = Timing(context.system)
-  private var jobs: Map[CandidateSet, CheckJob] = Map.empty
+  private var splitJobs: Map[CandidateSet, CheckSplitJob] = Map.empty
+  private var swapJobs: Map[CandidateSet, CheckSwapJob] = Map.empty
 
   def start(): Behavior[Command] = initialize()
 
@@ -55,7 +56,9 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
     Behaviors.receiveMessagePartial {
       case WrappedPartitionEvent(AttributesFound(attributes)) =>
         context.log.trace("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
-        master ! DispatchWork(context.self)
+        for (_ <- 0 until 8) {
+          master ! DispatchWork(context.self)
+        }
         behavior(attributes)
 
       case Stop =>
@@ -67,34 +70,54 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
     case CheckSplitCandidates(candidateId, splitCandidates) =>
       context.log.debug("Checking split candidates of node {}", candidateId)
 
-      val job = new CheckSplitJob(candidateId, splitCandidates)
-      context.log.trace("Loading partition errors for split checks")
-      for (c <- job.errorIds) {
-        partitionManager ! LookupError(candidateId, c, partitionEventMapper)
+      if (splitCandidates.nonEmpty) {
+        val job = new CheckSplitJob(candidateId, splitCandidates)
+
+        context.log.trace("Loading partition errors for split checks")
+        for (c <- job.errorIds) {
+          partitionManager ! LookupError(candidateId, c, partitionEventMapper)
+        }
+        splitJobs += candidateId -> job
+        Behaviors.same
+      } else {
+        // notify master of result
+        context.log.debug("Sending results of ({}, Split) to master at {}", candidateId, master)
+        master ! SplitCandidatesChecked(candidateId, CandidateSet.empty)
+
+        // ready to work on next node:
+        next(attributes, stopped)
       }
-      jobs += candidateId -> job
-      Behaviors.same
 
     case CheckSwapCandidates(candidateId, swapCandidates) =>
       context.log.debug("Checking swap candidates of node {}", candidateId)
-      val job = new CheckSwapJob(candidateId, swapCandidates)
 
-      context.log.trace("Loading partitions for swap checks")
-      val singletonPartitionKeys = job.singletonPartitionKeys
-      singletonPartitionKeys.foreach(attribute =>
-        partitionManager ! LookupPartition(candidateId, attribute, partitionEventMapper)
-      )
-      val partitionKeys = job.partitionKeys
-      partitionKeys.foreach(candidateContext =>
-        partitionManager ! LookupStrippedPartition(candidateId, candidateContext, partitionEventMapper)
-      )
-      jobs += candidateId -> job
-      Behaviors.same
+      if (swapCandidates.nonEmpty) {
+        val job = new CheckSwapJob(candidateId, swapCandidates)
+
+        context.log.trace("Loading partitions for swap checks")
+        val singletonPartitionKeys = job.singletonPartitionKeys
+        singletonPartitionKeys.foreach(attribute =>
+          partitionManager ! LookupPartition(candidateId, attribute, partitionEventMapper)
+        )
+        val partitionKeys = job.partitionKeys
+        partitionKeys.foreach(candidateContext =>
+          partitionManager ! LookupStrippedPartition(candidateId, candidateContext, partitionEventMapper)
+        )
+        swapJobs += candidateId -> job
+        Behaviors.same
+      } else {
+        // notify master of result
+        context.log.debug("Sending results of ({}, Swap) to master at {}", candidateId, master)
+        master ! SwapCandidatesChecked(candidateId, Seq.empty)
+
+        // ready to work on next node:
+        next(attributes, stopped)
+      }
 
     case WrappedPartitionEvent(ErrorFound(candidateId, key, value)) =>
       context.log.trace("Received partition error value: {}, {}", key, value)
-      jobs.get(candidateId) match {
-        case Some(job: CheckSplitJob) =>
+      splitJobs.get(candidateId) match {
+        case Some(job) =>
           job.receivedError(key, value)
 
           val finished = timing.unsafeTime("Split check") {
@@ -102,11 +125,12 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
           }
 
           if (finished)
-            processSplitResult(job, attributes, stopped)
+            processSplitResults(job, attributes, stopped)
           else
             Behaviors.same
-        case _ =>
-          context.log.error("Received error value for unknown job {}", candidateId)
+
+        case None =>
+          context.log.error("Received error for unknown job {}", candidateId)
           Behaviors.same
       }
 
@@ -128,9 +152,9 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
   private def receivedPartition(
       candidateId: CandidateSet, key: CandidateSet, value: Partition, attributes: Seq[Int], stopped: Boolean
   ): Behavior[Command] = {
-    context.log.trace("Received partition {}", key)
-    jobs.get(candidateId) match {
-      case Some(job: CheckSwapJob) =>
+    context.log.trace("Received partition {} for {}", key, candidateId)
+    swapJobs.get(candidateId) match {
+      case Some(job) =>
         job.receivedPartition(key, value)
 
         val finished = timing.unsafeTime("Swap check") {
@@ -140,13 +164,14 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
           processSwapResults(job, attributes, stopped)
         else
           Behaviors.same
-      case _ =>
+
+      case None =>
         context.log.error("Received partition for unknown job {}", candidateId)
         Behaviors.same
     }
   }
 
-  private def processSplitResult(job: CheckSplitJob, attributes: Seq[Int], stopped: Boolean): Behavior[Command] = {
+  private def processSplitResults(job: CheckSplitJob, attributes: Seq[Int], stopped: Boolean): Behavior[Command] = {
     val (validODs, removedCandidates) = job.results(attributes)
     val candidateId = job.candidateId
     if (validODs.nonEmpty) {
@@ -155,11 +180,13 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
     } else {
       context.log.trace("No valid constant candidates found")
     }
+
     // notify master of result
     context.log.debug("Sending results of ({}, Split) to master at {}", candidateId, master)
     master ! SplitCandidatesChecked(candidateId, removedCandidates)
-    jobs -= candidateId
+
     // ready to work on next node:
+    splitJobs -= candidateId
     next(attributes, stopped)
   }
 
@@ -175,9 +202,9 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
     // notify master of result
     context.log.debug("Sending results of ({}, Swap) to master at {}", candidateId, master)
     master ! SwapCandidatesChecked(candidateId, removedCandidates)
-    jobs -= candidateId
 
     // ready to work on next node:
+    swapJobs -= candidateId
     next(attributes, stopped)
   }
 

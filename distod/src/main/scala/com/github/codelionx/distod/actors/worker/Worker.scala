@@ -3,8 +3,8 @@ package com.github.codelionx.distod.actors.worker
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.master.MasterHelper
-import com.github.codelionx.distod.actors.master.MasterHelper.{DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
+import com.github.codelionx.distod.actors.master.{JobType, MasterHelper}
+import com.github.codelionx.distod.actors.master.MasterHelper.{CancelWork, DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.Partition
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
@@ -29,16 +29,23 @@ object Worker {
       rsProxy: ActorRef[ResultProxyCommand],
       master: ActorRef[MasterHelper.Command]
   ): Behavior[Command] =
-    Behaviors.setup[Command](context =>
-      Behaviors.withStash[Command](10) { stash =>
-        val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
-        new Worker(WorkerContext(context, stash, master, partitionManager, rsProxy, partitionEventMapper)).start()
+    Behaviors.setup[Command] { context =>
+      val partitionEventMapper = context.messageAdapter(e => WrappedPartitionEvent(e))
+      partitionManager ! LookupAttributes(partitionEventMapper)
+
+      Behaviors.receiveMessagePartial {
+        case WrappedPartitionEvent(AttributesFound(attributes)) =>
+          new Worker(WorkerContext(context, master, partitionManager, rsProxy, partitionEventMapper), attributes)
+            .start()
+
+        case Stop =>
+          Behaviors.stopped
       }
-    )
+    }
 }
 
 
-class Worker(workerContext: WorkerContext) extends CandidateGeneration {
+class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends CandidateGeneration {
 
   import Worker._
   import workerContext._
@@ -48,110 +55,123 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
   private var splitJobs: Map[CandidateSet, CheckSplitJob] = Map.empty
   private var swapJobs: Map[CandidateSet, CheckSwapJob] = Map.empty
 
-  def start(): Behavior[Command] = initialize()
+  private object StopBehaviorInterceptor extends WorkerStopInterceptor {
 
-  private def initialize(): Behavior[Command] = {
-    partitionManager ! LookupAttributes(partitionEventMapper)
+    override def dispatchWorkFromMaster(): Unit =
+      if (!stopped) {
+        master ! DispatchWork(context.self)
+        openDispatches += 1
+      } else {
+        context.log.trace("Preventing the request for more work, because worker is in shut down phase")
+      }
 
-    Behaviors.receiveMessagePartial {
-      case WrappedPartitionEvent(AttributesFound(attributes)) =>
-        context.log.trace("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
-        for (_ <- 0 until 8) {
-          master ! DispatchWork(context.self)
-        }
-        behavior(attributes)
-
-      case Stop =>
-        Behaviors.stopped
+    override protected def cancelAll(): Unit = {
+      for (job <- splitJobs.keys) {
+        master ! CancelWork(job, JobType.Split)
+      }
+      for (job <- swapJobs.keys) {
+        master ! CancelWork(job, JobType.Swap)
+      }
     }
+
+    override protected def cancel(candidateId: CandidateSet, jobType: JobType.JobType): Unit =
+      master ! CancelWork(candidateId, jobType)
   }
 
-  private def behavior(attributes: Seq[Int], stopped: Boolean = false): Behavior[Command] = Behaviors.receiveMessage {
-    case CheckSplitCandidates(candidateId, splitCandidates) =>
-      context.log.debug("Checking split candidates of node {}", candidateId)
+  def start(): Behavior[Command] = {
+    context.log.trace("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
+    for (_ <- 0 until 4) {
+      StopBehaviorInterceptor.dispatchWorkFromMaster()
+    }
+    behavior()
+  }
 
-      if (splitCandidates.nonEmpty) {
-        val job = new CheckSplitJob(candidateId, splitCandidates)
+  private def behavior(): Behavior[Command] = Behaviors.intercept(() => StopBehaviorInterceptor)(
+    Behaviors.receiveMessage {
 
-        context.log.trace("Loading partition errors for split checks")
-        for (c <- job.errorIds) {
-          partitionManager ! LookupError(candidateId, c, partitionEventMapper)
-        }
-        splitJobs += candidateId -> job
-        Behaviors.same
-      } else {
-        // notify master of result
-        context.log.debug("Sending results of ({}, Split) to master at {}", candidateId, master)
-        master ! SplitCandidatesChecked(candidateId, CandidateSet.empty)
+      case CheckSplitCandidates(candidateId, splitCandidates) =>
+        context.log.debug("Checking split candidates of node {}", candidateId)
 
-        // ready to work on next node:
-        next(attributes, stopped)
-      }
+        if (splitCandidates.nonEmpty) {
+          val job = new CheckSplitJob(candidateId, splitCandidates)
 
-    case CheckSwapCandidates(candidateId, swapCandidates) =>
-      context.log.debug("Checking swap candidates of node {}", candidateId)
-
-      if (swapCandidates.nonEmpty) {
-        val job = new CheckSwapJob(candidateId, swapCandidates)
-
-        context.log.trace("Loading partitions for swap checks")
-        val singletonPartitionKeys = job.singletonPartitionKeys
-        singletonPartitionKeys.foreach(attribute =>
-          partitionManager ! LookupPartition(candidateId, attribute, partitionEventMapper)
-        )
-        val partitionKeys = job.partitionKeys
-        partitionKeys.foreach(candidateContext =>
-          partitionManager ! LookupStrippedPartition(candidateId, candidateContext, partitionEventMapper)
-        )
-        swapJobs += candidateId -> job
-        Behaviors.same
-      } else {
-        // notify master of result
-        context.log.debug("Sending results of ({}, Swap) to master at {}", candidateId, master)
-        master ! SwapCandidatesChecked(candidateId, Seq.empty)
-
-        // ready to work on next node:
-        next(attributes, stopped)
-      }
-
-    case WrappedPartitionEvent(ErrorFound(candidateId, key, value)) =>
-      context.log.trace("Received partition error value: {}, {}", key, value)
-      splitJobs.get(candidateId) match {
-        case Some(job) =>
-          job.receivedError(key, value)
-
-          val finished = timing.unsafeTime("Split check") {
-            job.performPossibleChecks()
+          context.log.trace("Loading partition errors for split checks")
+          for (c <- job.errorIds) {
+            partitionManager ! LookupError(candidateId, c, partitionEventMapper)
           }
-
-          if (finished)
-            processSplitResults(job, attributes, stopped)
-          else
-            Behaviors.same
-
-        case None =>
-          context.log.error("Received error for unknown job {}", candidateId)
+          splitJobs += candidateId -> job
           Behaviors.same
-      }
+        } else {
+          // notify master of result
+          context.log.debug("Sending results of ({}, Split) to master at {}", candidateId, master)
+          master ! SplitCandidatesChecked(candidateId, CandidateSet.empty)
 
-    case WrappedPartitionEvent(PartitionFound(candidateId, key, value)) =>
-      receivedPartition(candidateId, key, value, attributes, stopped)
+          // ready to work on next node:
+          StopBehaviorInterceptor.dispatchWorkFromMaster()
+          Behaviors.same
+        }
 
-    case WrappedPartitionEvent(StrippedPartitionFound(candidateId, key, value)) =>
-      receivedPartition(candidateId, key, value, attributes, stopped)
+      case CheckSwapCandidates(candidateId, swapCandidates) =>
+        context.log.debug("Checking swap candidates of node {}", candidateId)
 
-    case Stop =>
-      context.log.info("Finishing last job before stopping")
-      behavior(attributes, stopped = true)
+        if (swapCandidates.nonEmpty) {
+          val job = new CheckSwapJob(candidateId, swapCandidates)
 
-    case WrappedPartitionEvent(event) =>
-      context.log.debug("Ignored {}", event)
-      Behaviors.same
-  }
+          context.log.trace("Loading partitions for swap checks")
+          val singletonPartitionKeys = job.singletonPartitionKeys
+          singletonPartitionKeys.foreach(attribute =>
+            partitionManager ! LookupPartition(candidateId, attribute, partitionEventMapper)
+          )
+          val partitionKeys = job.partitionKeys
+          partitionKeys.foreach(candidateContext =>
+            partitionManager ! LookupStrippedPartition(candidateId, candidateContext, partitionEventMapper)
+          )
+          swapJobs += candidateId -> job
+          Behaviors.same
+        } else {
+          // notify master of result
+          context.log.debug("Sending results of ({}, Swap) to master at {}", candidateId, master)
+          master ! SwapCandidatesChecked(candidateId, Seq.empty)
+
+          // ready to work on next node:
+          StopBehaviorInterceptor.dispatchWorkFromMaster()
+          Behaviors.same
+        }
+
+      case WrappedPartitionEvent(ErrorFound(candidateId, key, value)) =>
+        context.log.trace("Received partition error value: {}, {}", key, value)
+        splitJobs.get(candidateId) match {
+          case Some(job) =>
+            job.receivedError(key, value)
+
+            val finished = timing.unsafeTime("Split check") {
+              job.performPossibleChecks()
+            }
+            if (finished)
+              processSplitResults(job, attributes)
+
+          case None =>
+            context.log.error("Received error for unknown job {}", candidateId)
+        }
+        Behaviors.same
+
+      case WrappedPartitionEvent(PartitionFound(candidateId, key, value)) =>
+        receivedPartition(candidateId, key, value, attributes)
+        Behaviors.same
+
+      case WrappedPartitionEvent(StrippedPartitionFound(candidateId, key, value)) =>
+        receivedPartition(candidateId, key, value, attributes)
+        Behaviors.same
+
+      case WrappedPartitionEvent(event) =>
+        context.log.debug("Ignored {}", event)
+        Behaviors.same
+    }
+  )
 
   private def receivedPartition(
-      candidateId: CandidateSet, key: CandidateSet, value: Partition, attributes: Seq[Int], stopped: Boolean
-  ): Behavior[Command] = {
+      candidateId: CandidateSet, key: CandidateSet, value: Partition, attributes: Seq[Int]
+  ): Unit = {
     context.log.trace("Received partition {} for {}", key, candidateId)
     swapJobs.get(candidateId) match {
       case Some(job) =>
@@ -161,17 +181,14 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
           job.performPossibleChecks()
         }
         if (finished)
-          processSwapResults(job, attributes, stopped)
-        else
-          Behaviors.same
+          processSwapResults(job)
 
       case None =>
         context.log.error("Received partition for unknown job {}", candidateId)
-        Behaviors.same
     }
   }
 
-  private def processSplitResults(job: CheckSplitJob, attributes: Seq[Int], stopped: Boolean): Behavior[Command] = {
+  private def processSplitResults(job: CheckSplitJob, attributes: Seq[Int]): Unit = {
     val (validODs, removedCandidates) = job.results(attributes)
     val candidateId = job.candidateId
     if (validODs.nonEmpty) {
@@ -187,11 +204,11 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
     // ready to work on next node:
     splitJobs -= candidateId
-    next(attributes, stopped)
+    StopBehaviorInterceptor.dispatchWorkFromMaster()
   }
 
-  private def processSwapResults(job: CheckSwapJob, attributes: Seq[Int], stopped: Boolean): Behavior[Command] = {
-    val (validODs, removedCandidates) = job.results(Seq.empty)
+  private def processSwapResults(job: CheckSwapJob): Unit = {
+    val (validODs, removedCandidates) = job.results
     val candidateId = job.candidateId
     if (validODs.nonEmpty) {
       context.log.trace("Found valid candidates: {}", validODs.mkString(", "))
@@ -205,16 +222,6 @@ class Worker(workerContext: WorkerContext) extends CandidateGeneration {
 
     // ready to work on next node:
     swapJobs -= candidateId
-    next(attributes, stopped)
+    StopBehaviorInterceptor.dispatchWorkFromMaster()
   }
-
-  private def next(attributes: Seq[Int], stopped: Boolean): Behavior[Command] =
-    if (!stopped) {
-      master ! DispatchWork(context.self)
-      stash.unstashAll(
-        behavior(attributes)
-      )
-    } else {
-      Behaviors.stopped
-    }
 }

@@ -49,7 +49,9 @@ class CheckSwapJob(
     allChecksFinished
   }
 
-  override def results(attributes: Seq[Int]): (Seq[EquivalencyOrderDependency], Seq[(Int, Int)]) =
+  override def results(attributes: Seq[Int]): (Seq[EquivalencyOrderDependency], Seq[(Int, Int)]) = results
+
+  def results: (Seq[EquivalencyOrderDependency], Seq[(Int, Int)]) =
     if (!allChecksFinished)
       throw new IllegalAccessException("Not all checks have been performed, too early access!")
     else {

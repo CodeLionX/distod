@@ -57,7 +57,8 @@ object Master {
       resultCollector: ActorRef[ResultCommand]
   ): Behavior[Command] = Behaviors.setup { context =>
     val settings = Settings(context.system)
-    val stashSize = settings.maxWorkers * workerMessageMultiplier * settings.expectedNodeCount
+    val stashSize =
+      settings.maxWorkers * settings.concurrentWorkerJobs * workerMessageMultiplier * settings.expectedNodeCount
 
     Behaviors.withStash(stashSize) { stash =>
       val masterBehavior =

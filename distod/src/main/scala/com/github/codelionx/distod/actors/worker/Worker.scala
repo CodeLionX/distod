@@ -10,6 +10,7 @@ import com.github.codelionx.distod.partitions.Partition
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FoundDependencies, ResultProxyCommand}
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.Settings
 import com.github.codelionx.util.timing.Timing
 
 
@@ -52,8 +53,10 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
 
 
   private val timing = Timing(context.system)
+  private val settings = Settings(context.system)
   private var splitJobs: Map[CandidateSet, CheckSplitJob] = Map.empty
   private var swapJobs: Map[CandidateSet, CheckSwapJob] = Map.empty
+
 
   private object StopBehaviorInterceptor extends WorkerStopInterceptor {
 
@@ -78,9 +81,15 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
       master ! CancelWork(candidateId, jobType)
   }
 
+
   def start(): Behavior[Command] = {
-    context.log.trace("Worker ready to process candidates: Master={}, Attributes={}", master, attributes)
-    for (_ <- 0 until 4) {
+    context.log.trace(
+      "Worker ready to process candidates: Master={}, Attributes={}, requesting {} jobs",
+      master,
+      attributes,
+      settings.concurrentWorkerJobs
+    )
+    for (_ <- 0 until settings.concurrentWorkerJobs) {
       StopBehaviorInterceptor.dispatchWorkFromMaster()
     }
     behavior()

@@ -18,8 +18,9 @@ object StreamChannel {
 
     val source = Source
       .queue[DataMessage](10, OverflowStrategy.backpressure)
-      .map(DataMessage.serialize)
-      .map(_ ++ terminationMarker)
+//      .map(DataMessage.serialize)
+//      .map(_ ++ terminationMarker)
+      .via(parallelSerializer(Settings(system).parallelism))
       .flatMapConcat(bytes => Source.fromIterator(() => bytes.grouped(200000)))
     val graph = source.toMat(StreamRefs.sourceRef())(Keep.both)
     graph.run()
@@ -36,6 +37,23 @@ object StreamChannel {
       .via(parallelDeserializer(Settings(system).parallelism))
 //      .map(DataMessage.deserialize)
       .runWith(sink)
+  }
+
+  private def parallelSerializer(parallelism: Int)
+                                (implicit system: ActorSystem[_]): Flow[DataMessage, ByteString, NotUsed] = {
+    import GraphDSL.Implicits._
+
+    val job = Flow.fromFunction(DataMessage.serialize).map(_ ++ terminationMarker)
+
+    Flow.fromGraph(GraphDSL.create() { implicit b =>
+      val balancer = b.add(Balance[DataMessage](parallelism, waitForAllDownstreams = false))
+      val merger = b.add(Merge[ByteString](parallelism))
+
+      for(_ <- 0 until parallelism) {
+        balancer ~> job.async ~> merger
+      }
+      FlowShape(balancer.in, merger.out)
+    })
   }
 
   // see: https://doc.akka.io/docs/akka/current/stream/stream-cookbook.html#cookbook-balance

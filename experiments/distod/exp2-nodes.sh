@@ -79,11 +79,11 @@ for dataset in ${datasets}; do
 
     # collect results
     echo "Collecting results for dataset ${dataset}"
-    mv distod.log "${resultfolder}/${dataset}/distod-odin01.log"
-    mv results.txt "${resultfolder}/${dataset}/"
+    mv distod.log "${resultfolder}/${dataset}-${n}nodes/distod-odin01.log"
+    mv results.txt "${resultfolder}/${dataset}-${n}nodes/"
     for (( i=0; i<n; ++i )); do
       node="${nodes[i]}"
-      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/distod-${node}.log" >/dev/null
+      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}-${n}nodes/distod-${node}.log" >/dev/null
       # intentially put argument in single quotes to let the target shell expand the ~
       ssh "${node}" rm -f '~/distod/distod.log'
     done

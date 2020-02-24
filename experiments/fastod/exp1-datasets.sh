@@ -24,7 +24,7 @@ for (( i=0; i<${#datasets[@]}; ++i )); do
 
   # fastod arguments: dataset csv_delimiter has_header
   timeout --preserve-status --signal=15 24h \
-    /usr/bin/java -Xms60G -Xmx60G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
+    /usr/bin/java -Xms31G -Xmx31G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
 
   echo "Gathering results for dataset ${dataset}"
   {

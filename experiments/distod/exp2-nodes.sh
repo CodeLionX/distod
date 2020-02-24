@@ -32,7 +32,7 @@ for dataset in ${datasets}; do
 
     # start leader
     timeout --preserve-status --signal=15 24h \
-      java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+      java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
         -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
         -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \

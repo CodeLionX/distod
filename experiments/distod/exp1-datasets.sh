@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv fd-reduced-1k-30-sub.csv flight_1k_30c-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
+datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 
@@ -29,7 +29,7 @@ for dataset in ${datasets}; do
 
   # start leader
   timeout --preserve-status --signal=15 24h \
-    java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+    java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
       -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
       -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
       -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \

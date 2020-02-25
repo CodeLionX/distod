@@ -1,15 +1,16 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
 import com.github.codelionx.distod.actors.SystemMonitor
 import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, Register, SystemEvent}
+import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
 import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
-import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
+import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.largeMap.mutable.PendingJobMap
 import com.github.codelionx.util.timing.Timing
 
 
@@ -17,15 +18,19 @@ object PartitionManager {
 
   private[partitionMgmt] case class ProductComputed(key: CandidateSet, partition: StrippedPartition)
     extends PartitionCommand
+
   private case object Cleanup extends PartitionCommand
+
   private final case class WrappedSystemEvent(event: SystemEvent) extends PartitionCommand
 
   private sealed trait PendingResponse
+
   private final case class PendingError(replyTo: ActorRef[ErrorFound], candidateId: CandidateSet)
     extends PendingResponse
+
   private final case class PendingStrippedPartition(
-      replyTo: ActorRef[StrippedPartitionFound], candidateId: CandidateSet
-  ) extends PendingResponse
+                                                     replyTo: ActorRef[StrippedPartitionFound], candidateId: CandidateSet
+                                                   ) extends PendingResponse
 
   val name = "partition-manager"
 
@@ -43,11 +48,11 @@ object PartitionManager {
 
 
 class PartitionManager(
-    context: ActorContext[PartitionCommand],
-    stash: StashBuffer[PartitionCommand],
-    timers: TimerScheduler[PartitionCommand],
-    monitor: ActorRef[SystemMonitor.Command]
-) {
+                        context: ActorContext[PartitionCommand],
+                        stash: StashBuffer[PartitionCommand],
+                        timers: TimerScheduler[PartitionCommand],
+                        monitor: ActorRef[SystemMonitor.Command]
+                      ) {
 
   import PartitionManager._
 
@@ -65,6 +70,7 @@ class PartitionManager(
   private val timings = Timing(context.system)
 
   private var partitions: CompactingPartitionMap = _
+  private var pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = PendingJobMap.empty
 
   def start(): Behavior[PartitionCommand] = {
     if (compactionSettings.enabled)
@@ -75,8 +81,8 @@ class PartitionManager(
   }
 
   private def initialize(
-      attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
-  ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
+                          attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
+                        ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
 
     case SetAttributes(newAttributes) =>
       context.log.debug("Received attributes: {}", newAttributes)
@@ -98,9 +104,9 @@ class PartitionManager(
   }
 
   private def nextBehavior(
-      attributes: Seq[Int],
-      singletonPartitions: Map[CandidateSet, FullPartition]
-  ): Behavior[PartitionCommand] =
+                            attributes: Seq[Int],
+                            singletonPartitions: Map[CandidateSet, FullPartition]
+                          ): Behavior[PartitionCommand] =
     if (attributes.nonEmpty && singletonPartitions.size == attributes.size) {
       context.log.info(
         "Initialization of partition manager finished, received {} attributes and {} partitions",
@@ -109,21 +115,14 @@ class PartitionManager(
       )
       partitions = CompactingPartitionMap(compactionSettings).from(singletonPartitions)
       stash.unstashAll(
-        behavior(attributes, PendingJobMap.empty)
+        behavior(attributes)
       )
     } else {
       initialize(attributes, singletonPartitions)
     }
 
-  private def behavior(
-      attributes: Seq[Int],
-      pendingJobs: PendingJobMap[CandidateSet, PendingResponse]
-  ): Behavior[PartitionCommand] = {
-    def next(
-        _attributes: Seq[Int] = attributes,
-        _pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = pendingJobs,
-    ): Behavior[PartitionCommand] =
-      behavior(_attributes, _pendingJobs)
+  private def behavior(attributes: Seq[Int]): Behavior[PartitionCommand] = {
+    def next(_attributes: Seq[Int] = attributes): Behavior[PartitionCommand] = behavior(_attributes)
 
     Behaviors.receiveMessage {
 
@@ -188,15 +187,12 @@ class PartitionManager(
             Behaviors.same
           case None if pendingJobs.contains(key) =>
             context.log.trace("Error is being computed, queuing request for key {}", key)
-            next(_pendingJobs = pendingJobs + (key -> PendingError(replyTo, candidateId)))
+            pendingJobs + (key -> PendingError(replyTo, candidateId))
+            Behaviors.same
           case None =>
             context.log.debug("Partition to compute error not found. Starting background job to compute {}", key)
-            val newJobs = generateStrippedPartitionJobs(
-              key,
-              pendingJobs,
-              PendingError(replyTo, candidateId)
-            )
-            next(_pendingJobs = newJobs)
+            generateStrippedPartitionJobs(key, PendingError(replyTo, candidateId))
+            Behaviors.same
         }
 
       case LookupPartition(_, key, _) if key.size != 1 =>
@@ -211,15 +207,12 @@ class PartitionManager(
             Behaviors.same
           case None if pendingJobs.contains(key) =>
             context.log.trace("Partition is being computed, queuing request for key {}", key)
-            next(_pendingJobs = pendingJobs + (key -> PendingStrippedPartition(replyTo, candidateId)))
+            pendingJobs + (key -> PendingStrippedPartition(replyTo, candidateId))
+            Behaviors.same
           case None =>
             context.log.debug("Partition not found. Starting background job to compute {}", key)
-            val newJobs = generateStrippedPartitionJobs(
-              key,
-              pendingJobs,
-              PendingStrippedPartition(replyTo, candidateId)
-            )
-            next(_pendingJobs = newJobs)
+            generateStrippedPartitionJobs(key, PendingStrippedPartition(replyTo, candidateId))
+            Behaviors.same
         }
 
       case ProductComputed(key, partition) =>
@@ -235,7 +228,8 @@ class PartitionManager(
         }
         if (settings.cacheEnabled)
           partitions + (key -> partition)
-        next(_pendingJobs = pendingJobs.keyRemoved(key))
+        pendingJobs.removeKey(key)
+        Behaviors.same
 
       case Cleanup =>
         partitions.compact()
@@ -252,18 +246,14 @@ class PartitionManager(
     }
   }
 
-  private def generateStrippedPartitionJobs(
-      key: CandidateSet,
-      pendingJobs: PendingJobMap[CandidateSet, PendingResponse],
-      pendingResponse: PendingResponse
-  ): PendingJobMap[CandidateSet, PendingResponse] = {
+  private def generateStrippedPartitionJobs(key: CandidateSet, pendingResponse: PendingResponse): Unit = {
     timings.time("Partition generation") {
       generatorPool match {
         case Some(pool) =>
           val jobs = JobChainer.calcJobChain(key, partitions)
-          if (jobs.size > 20) {
-            context.log.warn("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
-          }
+//          if (jobs.size > 20) {
+//            context.log.warn("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
+//          }
           pool ! ComputePartitions(jobs, context.self)
           val x = jobs
             .filter(_.store)
@@ -276,7 +266,6 @@ class PartitionManager(
           pendingJobs ++ x
         case None =>
           context.log.error("Could not generate partition, because the partition generator pool is not available (max-workers < 1)")
-          pendingJobs
       }
     }
   }

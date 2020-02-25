@@ -1,5 +1,6 @@
-package com.github.codelionx.distod.types
+package com.github.codelionx.util.largeMap.immutable
 
+import com.github.codelionx.distod.types.CandidateSet
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 

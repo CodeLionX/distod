@@ -7,7 +7,8 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{AckBatch, DependencyBatch, ResultCommand, SetAttributeNames}
 import com.github.codelionx.distod.Settings
-import com.github.codelionx.distod.types.{OrderDependency, PendingJobMap}
+import com.github.codelionx.distod.types.OrderDependency
+import com.github.codelionx.util.largeMap.immutable.PendingJobMap
 
 import scala.collection.immutable.HashSet
 

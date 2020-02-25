@@ -1,4 +1,4 @@
-package com.github.codelionx.distod.types
+package com.github.codelionx.util.largeMap.immutable
 
 import scala.collection.{Iterable, IterableOnce}
 
@@ -158,7 +158,6 @@ class PendingJobMap[K, +V](private val jobMap: Map[K, Seq[V]]) {
       }
       new PendingJobMap(updatedMap.toMap)
     }
-
   }
 
   /**

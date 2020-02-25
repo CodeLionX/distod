@@ -10,7 +10,8 @@ import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
-import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
+import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.largeMap.immutable.PendingJobMap
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
 

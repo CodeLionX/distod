@@ -28,8 +28,10 @@ object PartitionGenerator {
           .withLimit(3, 10 seconds)
       )
     )
-    .withRoundRobinRouting()
-    .withRouteeProps(DispatcherSelector.fromConfig("distod.cpu-bound-tasks-dispatcher"))
+    .withRandomRouting()
+  // this leads to very slow gen-speed (looks like the pool isn't used at all and all messages are processed
+  // in the head actor
+//    .withRouteeProps(DispatcherSelector.fromConfig("distod.cpu-bound-tasks-dispatcher"))
 
   private def apply(): Behavior[ComputePartitions] = Behaviors.setup(context =>
     new PartitionGenerator(context).start()

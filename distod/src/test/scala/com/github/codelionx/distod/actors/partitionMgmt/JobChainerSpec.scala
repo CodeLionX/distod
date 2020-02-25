@@ -27,16 +27,17 @@ class JobChainerSpec extends AnyWordSpec with Matchers {
     "compute a minimal job chain from scratch" in {
       val partitions = CompactingPartitionMap(compactionSettings).from(singletonPartitions)
       val parent = CandidateSet.from(0, 1, 2, 3)
+      val store = (l: Int) => l >= parent.size - JobChainer.storeDepth + 1
 
       val chain = JobChainer.calcJobChain(parent, partitions)
       chain.size shouldBe 6
       chain shouldEqual Seq(
-        ComputePartitionProductJob(CandidateSet.from(0, 1), Right(emptyPartition), Right(emptyPartition), store = false),
-        ComputePartitionProductJob(CandidateSet.from(0, 2), Right(emptyPartition), Right(emptyPartition), store = false),
-        ComputePartitionProductJob(CandidateSet.from(0, 1, 2), Left(CandidateSet.from(0, 1)), Left(CandidateSet.from(0, 2)), store = true),
-        ComputePartitionProductJob(CandidateSet.from(0, 3), Right(emptyPartition), Right(emptyPartition), store = false),
-        ComputePartitionProductJob(CandidateSet.from(0, 1, 3), Left(CandidateSet.from(0, 1)), Left(CandidateSet.from(0, 3)), store = true),
-        ComputePartitionProductJob(CandidateSet.from(0, 1, 2, 3), Left(CandidateSet.from(0, 1, 2)), Left(CandidateSet.from(0, 1, 3)), store = true)
+        ComputePartitionProductJob(CandidateSet.from(0, 1), Right(emptyPartition), Right(emptyPartition), store(2)),
+        ComputePartitionProductJob(CandidateSet.from(0, 2), Right(emptyPartition), Right(emptyPartition), store(2)),
+        ComputePartitionProductJob(CandidateSet.from(0, 1, 2), Left(CandidateSet.from(0, 1)), Left(CandidateSet.from(0, 2)), store(3)),
+        ComputePartitionProductJob(CandidateSet.from(0, 3), Right(emptyPartition), Right(emptyPartition), store(2)),
+        ComputePartitionProductJob(CandidateSet.from(0, 1, 3), Left(CandidateSet.from(0, 1)), Left(CandidateSet.from(0, 3)), store(3)),
+        ComputePartitionProductJob(CandidateSet.from(0, 1, 2, 3), Left(CandidateSet.from(0, 1, 2)), Left(CandidateSet.from(0, 1, 3)), store(4))
       )
     }
 
@@ -45,15 +46,16 @@ class JobChainerSpec extends AnyWordSpec with Matchers {
       partitions + (CandidateSet.from(0, 1, 2), emptyPartition)
       partitions + (CandidateSet.from(0, 1, 2, 3), emptyPartition)
       val parent = CandidateSet.from(0, 1, 2, 3, 4)
+      val store = (l: Int) => l >= parent.size - JobChainer.storeDepth + 1
 
       val chain = JobChainer.calcJobChain(parent, partitions)
       chain.size shouldBe 5
       chain shouldEqual Seq(
-        ComputePartitionProductJob(CandidateSet.from(0, 1), Right(emptyPartition), Right(emptyPartition), store = false),
-        ComputePartitionProductJob(CandidateSet.from(0, 4), Right(emptyPartition), Right(emptyPartition), store = false),
-        ComputePartitionProductJob(CandidateSet.from(0, 1, 4), Left(CandidateSet.from(0, 1)), Left(CandidateSet.from(0, 4)), store = false),
-        ComputePartitionProductJob(CandidateSet.from(0, 1, 2, 4), Right(emptyPartition), Left(CandidateSet.from(0, 1, 4)), store = true),
-        ComputePartitionProductJob(CandidateSet.from(0, 1, 2, 3, 4), Right(emptyPartition), Left(CandidateSet.from(0, 1, 2, 4)), store = true),
+        ComputePartitionProductJob(CandidateSet.from(0, 1), Right(emptyPartition), Right(emptyPartition), store(2)),
+        ComputePartitionProductJob(CandidateSet.from(0, 4), Right(emptyPartition), Right(emptyPartition), store(2)),
+        ComputePartitionProductJob(CandidateSet.from(0, 1, 4), Left(CandidateSet.from(0, 1)), Left(CandidateSet.from(0, 4)), store(3)),
+        ComputePartitionProductJob(CandidateSet.from(0, 1, 2, 4), Right(emptyPartition), Left(CandidateSet.from(0, 1, 4)), store(4)),
+        ComputePartitionProductJob(CandidateSet.from(0, 1, 2, 3, 4), Right(emptyPartition), Left(CandidateSet.from(0, 1, 2, 4)), store(5)),
       )
     }
   }

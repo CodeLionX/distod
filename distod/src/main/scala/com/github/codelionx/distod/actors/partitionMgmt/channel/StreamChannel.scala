@@ -18,9 +18,8 @@ object StreamChannel {
 
     val source = Source
       .queue[DataMessage](10, OverflowStrategy.backpressure)
-//      .map(DataMessage.serialize)
-//      .map(_ ++ terminationMarker)
       .via(parallelSerializer(Settings(system).parallelism))
+      .map(_ ++ terminationMarker)
       .flatMapConcat(bytes => Source.fromIterator(() => bytes.grouped(200000)))
     val graph = source.toMat(StreamRefs.sourceRef())(Keep.both)
     graph.run()
@@ -35,22 +34,22 @@ object StreamChannel {
     sourceRef
       .via(Framing.delimiter(terminationMarker, maximumFrameLength = 200000000, allowTruncation = true))
       .via(parallelDeserializer(Settings(system).parallelism))
-//      .map(DataMessage.deserialize)
       .runWith(sink)
   }
 
+  // see: https://doc.akka.io/docs/akka/current/stream/stream-cookbook.html#cookbook-balance
   private def parallelSerializer(parallelism: Int)
-                                (implicit system: ActorSystem[_]): Flow[DataMessage, ByteString, NotUsed] = {
+    (implicit system: ActorSystem[_]): Flow[DataMessage, ByteString, NotUsed] = {
     import GraphDSL.Implicits._
 
-    val job = Flow.fromFunction(DataMessage.serialize).map(_ ++ terminationMarker)
+    val serialize = Flow.fromFunction(DataMessage.serialize)
 
     Flow.fromGraph(GraphDSL.create() { implicit b =>
       val balancer = b.add(Balance[DataMessage](parallelism, waitForAllDownstreams = false))
       val merger = b.add(Merge[ByteString](parallelism))
 
       for(_ <- 0 until parallelism) {
-        balancer ~> job.async ~> merger
+        balancer ~> serialize.async ~> merger
       }
       FlowShape(balancer.in, merger.out)
     })
@@ -61,14 +60,14 @@ object StreamChannel {
     (implicit system: ActorSystem[_]): Flow[ByteString, DataMessage, NotUsed] = {
     import GraphDSL.Implicits._
 
-    val job = Flow.fromFunction(DataMessage.deserialize)
+    val deserialize = Flow.fromFunction(DataMessage.deserialize)
 
     Flow.fromGraph(GraphDSL.create() { implicit b =>
-      val balancer = b.add(Balance[ByteString](parallelism, waitForAllDownstreams = true))
+      val balancer = b.add(Balance[ByteString](parallelism, waitForAllDownstreams = false))
       val merger = b.add(Merge[DataMessage](parallelism))
 
       for (_ <- 0 until parallelism) {
-        balancer ~> job.async ~> merger
+        balancer ~> deserialize.async ~> merger
       }
 
       FlowShape(balancer.in, merger.out)

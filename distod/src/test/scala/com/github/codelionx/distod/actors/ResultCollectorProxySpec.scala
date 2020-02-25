@@ -40,7 +40,6 @@ class ResultCollectorProxySpec
       // send first batches
       proxy ! FoundDependencies(deps)
       proxy ! FoundDependencies(additionalDeps)
-      Thread.sleep(500)
 
       // now register target
       system.receptionist ! Receptionist.Register(ResultCollector.CollectorServiceKey, targetProbe.ref)

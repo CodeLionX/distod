@@ -32,7 +32,7 @@ for dataset in ${datasets}; do
 
     # start leader
     timeout --preserve-status --signal=15 24h \
-      java -Xms56g -Xmx56g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+      java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
         -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
         -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
@@ -79,11 +79,11 @@ for dataset in ${datasets}; do
 
     # collect results
     echo "Collecting results for dataset ${dataset}"
-    mv distod.log "${resultfolder}/${dataset}/distod-odin01.log"
-    mv results.txt "${resultfolder}/${dataset}/"
+    mv distod.log "${resultfolder}/${dataset}-${n}nodes/distod-odin01.log"
+    mv results.txt "${resultfolder}/${dataset}-${n}nodes/"
     for (( i=0; i<n; ++i )); do
       node="${nodes[i]}"
-      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/distod-${node}.log" >/dev/null
+      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}-${n}nodes/distod-${node}.log" >/dev/null
       # intentially put argument in single quotes to let the target shell expand the ~
       ssh "${node}" rm -f '~/distod/distod.log'
     done

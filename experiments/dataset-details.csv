@@ -7,8 +7,8 @@ bridges-sub.csv,13,108,28
 adult-sub.csv,15,32561,9682
 letter-sub.csv,17,20000,6635
 hepatitis-sub.csv,20,155,61
-fd-reduced-1k-30-sub.csv,30,1000,597
 flight_1k_30c-sub.csv,30,1000,576
+fd-reduced-250k-30-sub.csv,30,250000,149269
 horse-sub.csv,29,300,168
 plista-sub.csv,63,1001,834
 ncvoter-1m-19-sub.csv,19,999999,326519

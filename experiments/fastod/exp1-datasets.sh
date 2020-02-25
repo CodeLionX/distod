@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 
-declare -a datasets=( "test-sub.csv" "iris-sub.csv" "chess-sub.csv" "abalone-sub.csv" "bridges-sub.csv" "adult-sub.csv" "letter-sub.csv" "hepatitis-sub.csv" "fd-reduced-1k-30-sub.csv" "flight_1k_30c-sub.csv" "horse-sub.csv" "plista-sub.csv" "ncvoter-1m-19-sub.json" )
+declare -a datasets=( "test-sub.csv" "iris-sub.csv" "chess-sub.csv" "abalone-sub.csv" "bridges-sub.csv" "adult-sub.csv" "letter-sub.csv" "hepatitis-sub.csv" "flight_1k_30c-sub.csv" "fd-reduced-250k-30-sub.csv" "horse-sub.csv" "plista-sub.csv" "ncvoter-1m-19-sub.json" )
 declare -a delimiters=( "," "," "," "," "," ";" "," "," "," ";" ";" ";" "," )
 
 resultfolder="results"
@@ -24,7 +24,7 @@ for (( i=0; i<${#datasets[@]}; ++i )); do
 
   # fastod arguments: dataset csv_delimiter has_header
   timeout --preserve-status --signal=15 24h \
-    /usr/bin/java -Xms60G -Xmx60G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
+    /usr/bin/java -Xms31G -Xmx31G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
 
   echo "Gathering results for dataset ${dataset}"
   {

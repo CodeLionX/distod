@@ -51,8 +51,7 @@ trait PartitionOps { this: Partition =>
     val lut = Array.fill(nTuples)(-1)
 
     // fill lut from first partition
-    val classes1 = partition1.equivClasses
-    for ((tupleIdSet, classIndex) <- classes1.zipWithIndex) {
+    for ((tupleIdSet, classIndex) <- partition1.equivClasses.zipWithIndex) {
       for(tupleId <- tupleIdSet)  {
         lut(tupleId) = classIndex
       }
@@ -60,19 +59,25 @@ trait PartitionOps { this: Partition =>
     // iterate over second partition and compare to lut
     val classes2 = partition2.equivClasses
     for (tupleIdSet <- classes2) {
-      val remainingIds = tupleIdSet.filter(id => lut(id) != -1)
-      remainingIds.foreach { id =>
-        tempClasses(lut(id)).addOne(id)
+      // only consider matched tupleIds and build equiv classes
+      val tempClassIndices = for {
+        id <- tupleIdSet
+        if lut(id) != -1
+        equivClassName = lut(id)
+      } yield {
+        tempClasses(equivClassName).addOne(id)
+        equivClassName
       }
-      // for each set emit a new result set if it contains more than 2 elems
-      for (tupleId <- remainingIds) {
-        val classResult = tempClasses(lut(tupleId))
-        if (classResult.size > 1) {
-          val newClass = Array.ofDim[Int](classResult.size)
-          classResult.copyToArray(newClass)
+      // for each set emit a new result set if it contains more than 2 elems and clear temp data
+      // no distinct here, because we reset the class and check for size > 1 anyway
+      for(classIndex <- tempClassIndices) {
+        val clazz = tempClasses(classIndex)
+        if(clazz.size > 1) {
+          val newClass = Array.ofDim[Int](clazz.size)
+          clazz.copyToArray(newClass)
           resultClasses.append(newClass)
         }
-        classResult.clear()
+        clazz.clear()
       }
     }
     val newClasses = resultClasses.toArray

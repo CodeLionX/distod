@@ -11,6 +11,10 @@ class PartitionSpec extends AnyWordSpec with Matchers {
   "A full partition" should {
     val partition = Partition.fullFrom(column)
 
+    "have the correct number of tuples" in {
+      partition.nTuples shouldBe column.length
+    }
+
     "contain all values of the column that were not stripped" in {
       partition.numberElements shouldBe 8
     }
@@ -206,6 +210,42 @@ class PartitionSpec extends AnyWordSpec with Matchers {
 
       (part0 * part1).equivClasses should contain theSameElementsAs expectedClasses
       (part0.stripped * part1.stripped).equivClasses should contain theSameElementsAs expectedClasses
+    }
+
+    "have the same result when computed iteratively compared to as a whole" in {
+      def makePartition(sets: Set[Index]*) = {
+        val classes = sets.map(set => Array.from(set)).toArray
+        StrippedPartition(
+          nTuples = 6,
+          numberClasses = classes.length,
+          numberElements = classes.map(_.length).sum,
+          equivClasses = classes
+        )
+      }
+      val partition1 = makePartition(
+        Set(0, 1, 2, 5)
+      )
+      val partition2 = makePartition(
+        Set(2, 5),
+        Set(0, 1),
+        Set(3, 4)
+      )
+      val partition3 = makePartition(
+        Set(0, 3),
+        Set(2, 5)
+      )
+      val expectedResult = makePartition(
+        Set(2, 5)
+      )
+
+      val partition12 = partition1 * partition2
+      val partition23 = partition2 * partition3
+      val partition123iter = partition12 * partition23
+
+      val partition123whole = partition1 * partition2 * partition3
+
+      partition123iter.equivClasses should contain theSameElementsAs expectedResult.equivClasses
+      partition123whole.equivClasses should contain theSameElementsAs expectedResult.equivClasses
     }
   }
 }

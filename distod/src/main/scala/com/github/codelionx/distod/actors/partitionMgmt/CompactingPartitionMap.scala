@@ -110,6 +110,18 @@ class CompactingPartitionMap private(
       singletonPartitions.get(key)
 
   /**
+   * Retrieves the singleton partition which is associated with the given key. This method throws a
+   * `NoSuchElementException` if there is no mapping from the given key to a singleton partition.
+   *
+   * @param  key the candidate
+   */
+  @throws[NoSuchElementException]
+  def singletonPartition(key: CandidateSet): FullPartition = getSingletonPartition(key) match {
+    case None => throw new NoSuchElementException("Singleton candidate key not found " + key)
+    case Some(p) => p
+  }
+
+  /**
    * Optionally returns the stripped partition associated with a key.
    *
    * @param  key the candidate
@@ -211,7 +223,8 @@ class CompactingPartitionMap private(
     // partitions for level 1 (singleton partitions) are stored in another collection, so it's safe to delete level 1 here
     // besides we do not want to delete them ever, but we must skip level == 0
     if(level > 0)
-      levels = levels.updated(level, mutable.Map.empty[CandidateSet, StrippedPartition])
+//      levels = levels.updated(level, mutable.Map.empty[CandidateSet, StrippedPartition])
+      levels.foreach(_.clear())
   }
 
 }

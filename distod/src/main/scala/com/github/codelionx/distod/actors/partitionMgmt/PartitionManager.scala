@@ -250,7 +250,7 @@ class PartitionManager(
     timings.time("Partition generation") {
       generatorPool match {
         case Some(pool) =>
-          val jobs = JobChainer.calcJobChain(key, partitions)
+          val jobs = JobChainer.calcLightJobChain(key, partitions)
 //          if (jobs.size > 20) {
 //            context.log.warn("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
 //          }

@@ -101,7 +101,19 @@ case class StrippedPartition private[partitions](
     numberElements: Int,
     numberClasses: Int,
     equivClasses: Array[Array[Int]]
-) extends Partition
+) extends Partition {
+
+  /**
+   * Alias to [[com.github.codelionx.distod.partitions.StrippedPartition#product]].
+   */
+  @inline def *(other: StrippedPartition): StrippedPartition = product(other)
+
+  /**
+   * Specialization of [[com.github.codelionx.distod.partitions.PartitionOps#product]]
+   */
+  @inline def product(other: StrippedPartition): StrippedPartition =
+    super.product(other).asInstanceOf[StrippedPartition]
+}
 
 
 object Partition {

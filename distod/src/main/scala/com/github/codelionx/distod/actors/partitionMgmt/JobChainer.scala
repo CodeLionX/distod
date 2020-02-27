@@ -1,5 +1,7 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
+import com.github.codelionx.distod.actors.partitionMgmt.ComputePartitionProductJob.{PreviouslyComputedType, StrippedPartitionType}
+import com.github.codelionx.distod.partitions.FullPartition
 import com.github.codelionx.distod.types.CandidateSet
 
 
@@ -29,19 +31,77 @@ object JobChainer {
           case Nil =>
             val nextPred1 :: nextPred2 :: _ = missingKeys
             val updatedJobs = loop(nextPred1, jobs)
-            loop(nextPred2, updatedJobs) :+ ComputePartitionProductJob(subkey, Left(nextPred1), Left(nextPred2), store)
+            loop(nextPred2, updatedJobs) :+ ComputeFromPredecessorsProduct(
+              subkey,
+              PreviouslyComputedType(nextPred1),
+              PreviouslyComputedType(nextPred2),
+              store
+            )
 
           case foundPred :: Nil =>
             val nextPred :: _ = missingKeys
-            loop(nextPred, jobs) :+ ComputePartitionProductJob(subkey, Right(partitions(foundPred)), Left(nextPred), store)
+            loop(nextPred, jobs) :+ ComputeFromPredecessorsProduct(
+              subkey,
+              StrippedPartitionType(partitions(foundPred)),
+              PreviouslyComputedType(nextPred),
+              store
+            )
 
           case _ =>
             val p1 :: p2 :: _ = foundKeys.map(partitions.apply).take(2)
-            jobs :+ ComputePartitionProductJob(subkey, Right(p1), Right(p2), store)
+            jobs :+ ComputeFromPredecessorsProduct(
+              subkey,
+              StrippedPartitionType(p1),
+              StrippedPartitionType(p2),
+              store
+            )
         }
       }
     }
 
     loop(key, Seq.empty)
   }
+
+  def calcLightJobChain(
+      key: CandidateSet,
+      partitions: CompactingPartitionMap
+  ): Seq[ComputePartitionProductJob] = {
+    val predecessorKeys = key.predecessors.toSeq.sortBy(_.sum)
+    val foundKeys = predecessorKeys.filter(partitions.contains)
+    val missingKeys = predecessorKeys.diff(foundKeys)
+    val storePredecessor = storeDepth > 1
+
+    foundKeys match {
+      case Nil =>
+        val singletons = findSingletonPartitions(key, partitions)
+        Seq(ComputeFromSingletonsProduct(key, singletons, store = true))
+
+      case foundPred :: Nil =>
+        val nextPred :: _ = missingKeys
+        val predecessorSingletons = findSingletonPartitions(nextPred, partitions)
+        Seq(
+          ComputeFromSingletonsProduct(nextPred, predecessorSingletons, store = storePredecessor),
+          ComputeFromPredecessorsProduct(
+            key,
+            StrippedPartitionType(partitions(foundPred)),
+            PreviouslyComputedType(nextPred),
+            store = true
+          )
+        )
+
+      case _ =>
+        val p1 :: p2 :: _ = foundKeys.map(partitions.apply).take(2)
+        Seq(
+          ComputeFromPredecessorsProduct(
+            key,
+            StrippedPartitionType(p1),
+            StrippedPartitionType(p2),
+            store = true
+          )
+        )
+    }
+  }
+
+  private def findSingletonPartitions(key: CandidateSet, partitions: CompactingPartitionMap): Seq[FullPartition] =
+    key.toSeq.map(i => partitions.singletonPartition(CandidateSet.from(i)))
 }

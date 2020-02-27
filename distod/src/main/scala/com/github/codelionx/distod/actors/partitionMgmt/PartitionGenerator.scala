@@ -1,7 +1,8 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector, SupervisorStrategy}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
+import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import com.github.codelionx.distod.actors.partitionMgmt.ComputePartitionProductJob.{PreviouslyComputedType, StrippedPartitionType}
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionManager.ProductComputed
 import com.github.codelionx.distod.partitions.StrippedPartition
 import com.github.codelionx.distod.types.CandidateSet
@@ -49,38 +50,46 @@ class PartitionGenerator(context: ActorContext[PartitionGenerator.ComputePartiti
   def start(): Behavior[ComputePartitions] = Behaviors.receiveMessage {
     case ComputePartitions(jobs, replyTo) =>
       timing.unsafeTime("Partition generation") {
-        computePartition { case (key, newPartition) =>
+        computePartitionChain { case (key, newPartition) =>
           replyTo ! ProductComputed(key, newPartition)
         }(Map.empty, jobs)
         Behaviors.same
       }
   }
 
-  private def computePartition(
+  private def computePartitionChain(
       onNewPartition: (CandidateSet, StrippedPartition) => Unit
   ): (Map[CandidateSet, StrippedPartition], Seq[ComputePartitionProductJob]) => Unit = {
     @tailrec
     def loop(partitions: Map[CandidateSet, StrippedPartition], remainingJobs: Seq[ComputePartitionProductJob]): Unit = {
       val job :: newRemainingJobs = remainingJobs
       // only compute product if we did not already compute this partition
-      if(!partitions.contains(job.key)) {
-        val pA = job.partitionA match {
-          case Right(p) => p
-          case Left(candidate) => partitions(candidate)
-        }
-        val pB = job.partitionB match {
-          case Right(p) => p
-          case Left(candidate) => partitions(candidate)
-        }
-        val newPartition = (pA * pB).asInstanceOf[StrippedPartition]
-        if (job.store)
-          onNewPartition(job.key, newPartition)
+      val newPartitions = if(!partitions.contains(job.key)) {
+        job match {
+          case ComputeFromPredecessorsProduct(key, partitionA, partitionB, store) =>
+            val pA = partitionA match {
+              case StrippedPartitionType(p) => p
+              case PreviouslyComputedType(candidate) => partitions(candidate)
+            }
+            val pB = partitionB match {
+              case StrippedPartitionType(p) => p
+              case PreviouslyComputedType(candidate) => partitions(candidate)
+            }
+            val newPartition = pA * pB
+            if (store) onNewPartition(key, newPartition)
+            partitions + (key -> newPartition)
 
-        if (newRemainingJobs != Nil)
-          loop(partitions + (job.key -> newPartition), newRemainingJobs)
+          case ComputeFromSingletonsProduct(key, singletonPartitions, store) =>
+            val newPartition = singletonPartitions.map(_.stripped).reduceLeft(_ * _)
+            if (store) onNewPartition(key, newPartition)
+            partitions + (key -> newPartition)
+
+        }
       } else {
-        loop(partitions, newRemainingJobs)
+        partitions
       }
+      if (newRemainingJobs != Nil)
+        loop(newPartitions, newRemainingJobs)
     }
 
     loop

@@ -5,7 +5,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.SystemMonitor
 import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, Register, SystemEvent}
-import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.ComputePartitions
+import com.github.codelionx.distod.actors.partitionMgmt.PartitionGenerator.{ComputePartition, ComputePartitions}
 import com.github.codelionx.distod.actors.partitionMgmt.channel.PartitionManagerEndpoint
 import com.github.codelionx.distod.partitions.{FullPartition, StrippedPartition}
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
@@ -251,19 +251,25 @@ class PartitionManager(
       generatorPool match {
         case Some(pool) =>
           val jobs = JobChainer.calcJobChain(key, partitions)
-//          if (jobs.size > 20) {
+          if (jobs.size >= 15) {
 //            context.log.warn("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
-//          }
-          pool ! ComputePartitions(jobs, context.self)
-          val x = jobs
-            .filter(_.store)
-            .map { job =>
-              if (job.key == key)
-                job.key -> Seq(pendingResponse)
-              else
-                job.key -> Seq.empty
-            }
-          pendingJobs ++ x
+            context.log.warn("Avoiding generation of expensive job chain of size {} " +
+              "by generating partition for {} directly from singleton partitions", jobs.size, key)
+            val singletonPartitions = key.toSeq.map(i => partitions.getSingletonPartition(CandidateSet.from(i)).get)
+            pool ! ComputePartition(key, singletonPartitions, context.self)
+            pendingJobs + (key, pendingResponse)
+          } else {
+            pool ! ComputePartitions(jobs, context.self)
+            val x = jobs
+              .filter(_.store)
+              .map { job =>
+                if (job.key == key)
+                  job.key -> Seq(pendingResponse)
+                else
+                  job.key -> Seq.empty
+              }
+            pendingJobs ++ x
+          }
         case None =>
           context.log.error("Could not generate partition, because the partition generator pool is not available (max-workers < 1)")
       }

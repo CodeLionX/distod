@@ -109,9 +109,14 @@ class PartitionManager(
                           ): Behavior[PartitionCommand] =
     if (attributes.nonEmpty && singletonPartitions.size == attributes.size) {
       context.log.info(
-        "Initialization of partition manager finished, received {} attributes and {} partitions",
+        "Initialization of partition manager finished, received {} attributes and {} partitions. {}",
         attributes.size,
-        singletonPartitions.size
+        singletonPartitions.size,
+        if(settings.directPartitionProductThreshold > 2)
+          "Partition product of deep partitions is computed directly, when it would take more than " +
+            s"${settings.directPartitionProductThreshold} steps to compute it incrementally."
+        else
+          "Partition product is always computed directly."
       )
       partitions = CompactingPartitionMap(compactionSettings).from(singletonPartitions)
       stash.unstashAll(
@@ -249,7 +254,7 @@ class PartitionManager(
             case 0 | 1 =>
               directProductJob(key, pendingResponse)
             case theta if jobs.size >= theta =>
-              context.log.warn("Avoiding generation of expensive job chain of size {} " +
+              context.log.trace("Avoiding generation of expensive job chain of size {} " +
                 "by generating partition for {} directly from singleton partitions", jobs.size, key)
               directProductJob(key, pendingResponse)
             case _ =>

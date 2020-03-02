@@ -205,7 +205,7 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
       context.log.trace("No valid constant candidates found")
     }
     splitJobs -= candidateId
-    sendResults(candidateId, "Split", SplitCandidatesChecked(candidateId, removedCandidates)
+    sendResults(candidateId, "Split", SplitCandidatesChecked(candidateId, removedCandidates))
   }
 
   private def processSwapResults(job: CheckSwapJob): Unit = {

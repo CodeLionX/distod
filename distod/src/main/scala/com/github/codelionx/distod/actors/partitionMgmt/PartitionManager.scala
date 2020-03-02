@@ -70,7 +70,7 @@ class PartitionManager(
   private val timings = Timing(context.system)
 
   private var partitions: CompactingPartitionMap = _
-  private var pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = PendingJobMap.empty
+  private val pendingJobs: PendingJobMap[CandidateSet, PendingResponse] = PendingJobMap.empty
 
   def start(): Behavior[PartitionCommand] = {
     if (compactionSettings.enabled)
@@ -121,129 +121,123 @@ class PartitionManager(
       initialize(attributes, singletonPartitions)
     }
 
-  private def behavior(attributes: Seq[Int]): Behavior[PartitionCommand] = {
-    def next(_attributes: Seq[Int] = attributes): Behavior[PartitionCommand] = behavior(_attributes)
+  private def behavior(attributes: Seq[Int]): Behavior[PartitionCommand] = Behaviors.receiveMessage {
+    // inserts
+    case SetAttributes(ignored) =>
+      context.log.warn("Attempt to change attributes to {} after initialization step, ignoring!", ignored)
+      Behaviors.same
 
-    Behaviors.receiveMessage {
+    case InsertPartition(key, _: FullPartition) if key.size == 1 =>
+      context.log.warn("Attempt to change initial partitions (key.size == 1) after initialization step, ignoring!")
+      Behaviors.same
 
-      // inserts
-      case SetAttributes(ignored) =>
-        context.log.warn("Attempt to change attributes to {} after initialization step, ignoring!", ignored)
-        Behaviors.same
+    case InsertPartition(key, value: StrippedPartition) =>
+      context.log.debug("Inserting partition for key {}", key)
+      partitions + (key -> value)
+      Behaviors.same
 
-      case InsertPartition(key, _: FullPartition) if key.size == 1 =>
-        context.log.warn("Attempt to change initial partitions (key.size == 1) after initialization step, ignoring!")
-        Behaviors.same
+    // request attributes
+    case LookupAttributes(replyTo) =>
+      replyTo ! AttributesFound(attributes)
+      Behaviors.same
 
-      case InsertPartition(key, value: StrippedPartition) =>
-        context.log.debug("Inserting partition for key {}", key)
-        partitions + (key -> value)
-        Behaviors.same
+    // request from a partition replicator
+    case OpenConnection(replyTo) =>
+      context.log.info("Opening sidechannel to {}", replyTo)
+      context.spawn(PartitionManagerEndpoint(partitions, replyTo, attributes), PartitionManagerEndpoint.name())
+      Behaviors.same
 
-      // request attributes
-      case LookupAttributes(replyTo) =>
-        replyTo ! AttributesFound(attributes)
-        Behaviors.same
+    // single-attr keys
+    case LookupError(candidateId, key, replyTo) if key.size == 1 =>
+      partitions.getSingletonPartition(key) match {
+        case Some(p) =>
+          replyTo ! ErrorFound(candidateId, key, p.stripped.error)
+          Behaviors.same
+        case None =>
+          throw new IllegalAccessException(s"Full partition for key $key not found! Can not compute error.")
+      }
 
-      // request from a partition replicator
-      case OpenConnection(replyTo) =>
-        context.log.info("Opening sidechannel to {}", replyTo)
-        context.spawn(PartitionManagerEndpoint(partitions, replyTo, attributes), PartitionManagerEndpoint.name())
-        Behaviors.same
+    case LookupPartition(candidateId, key, replyTo) if key.size == 1 =>
+      partitions.getSingletonPartition(key) match {
+        case Some(p) =>
+          replyTo ! PartitionFound(candidateId, key, p)
+          Behaviors.same
+        case None =>
+          throw new IllegalAccessException(s"Full partition for key $key not found!")
+      }
 
-      // single-attr keys
-      case LookupError(candidateId, key, replyTo) if key.size == 1 =>
-        partitions.getSingletonPartition(key) match {
-          case Some(p) =>
-            replyTo ! ErrorFound(candidateId, key, p.stripped.error)
-            Behaviors.same
-          case None =>
-            throw new IllegalAccessException(s"Full partition for key $key not found! Can not compute error.")
+    case LookupStrippedPartition(candidateId, key, replyTo) if key.size == 1 =>
+      partitions.getSingletonPartition(key) match {
+        case Some(p) =>
+          replyTo ! StrippedPartitionFound(candidateId, key, p.stripped)
+          Behaviors.same
+        case None =>
+          throw new IllegalAccessException(s"Stripped partition for key $key not found!")
+      }
+
+    // rest
+    case LookupError(candidateId, key, replyTo) if key.size != 1 =>
+      partitions.get(key) match {
+        case Some(p: StrippedPartition) =>
+          replyTo ! ErrorFound(candidateId, key, p.error)
+          Behaviors.same
+        case None if pendingJobs.contains(key) =>
+          context.log.trace("Error is being computed, queuing request for key {}", key)
+          pendingJobs + (key -> PendingError(replyTo, candidateId))
+          Behaviors.same
+        case None =>
+          context.log.debug("Partition to compute error not found. Starting background job to compute {}", key)
+          generateStrippedPartitionJobs(key, PendingError(replyTo, candidateId))
+          Behaviors.same
+      }
+
+    case LookupPartition(_, key, _) if key.size != 1 =>
+      throw new IllegalArgumentException(
+        s"Only keys of size 1 contain full partitions, but your key has ${key.size} elements!"
+      )
+
+    case LookupStrippedPartition(candidateId, key, replyTo) if key.size != 1 =>
+      partitions.get(key) match {
+        case Some(p: StrippedPartition) =>
+          replyTo ! StrippedPartitionFound(candidateId, key, p)
+          Behaviors.same
+        case None if pendingJobs.contains(key) =>
+          context.log.trace("Partition is being computed, queuing request for key {}", key)
+          pendingJobs + (key -> PendingStrippedPartition(replyTo, candidateId))
+          Behaviors.same
+        case None =>
+          context.log.debug("Partition not found. Starting background job to compute {}", key)
+          generateStrippedPartitionJobs(key, PendingStrippedPartition(replyTo, candidateId))
+          Behaviors.same
+      }
+
+    case ProductComputed(key, partition) =>
+      context.log.trace("Received computed partition for key {}", key)
+      pendingJobs.get(key) match {
+        case Some(pendingResponses) => pendingResponses.foreach {
+          case PendingStrippedPartition(ref, candidateId) =>
+            ref ! StrippedPartitionFound(candidateId, key, partition)
+          case PendingError(ref, candidateId) =>
+            ref ! ErrorFound(candidateId, key, partition.error)
         }
+        case None => // do nothing
+      }
+      if (settings.cacheEnabled) partitions + (key -> partition)
+      pendingJobs.removeKey(key)
+      Behaviors.same
 
-      case LookupPartition(candidateId, key, replyTo) if key.size == 1 =>
-        partitions.getSingletonPartition(key) match {
-          case Some(p) =>
-            replyTo ! PartitionFound(candidateId, key, p)
-            Behaviors.same
-          case None =>
-            throw new IllegalAccessException(s"Full partition for key $key not found!")
-        }
+    case Cleanup =>
+      partitions.compact()
+      Behaviors.same
 
-      case LookupStrippedPartition(candidateId, key, replyTo) if key.size == 1 =>
-        partitions.getSingletonPartition(key) match {
-          case Some(p) =>
-            replyTo ! StrippedPartitionFound(candidateId, key, p.stripped)
-            Behaviors.same
-          case None =>
-            throw new IllegalAccessException(s"Stripped partition for key $key not found!")
-        }
+    case WrappedSystemEvent(CriticalHeapUsage) if settings.cacheEnabled =>
+      context.log.warn("Clearing all temporary partitions in consequence of memory shortage")
+      partitions.clear()
+      Behaviors.same
 
-      // rest
-      case LookupError(candidateId, key, replyTo) if key.size != 1 =>
-        partitions.get(key) match {
-          case Some(p: StrippedPartition) =>
-            replyTo ! ErrorFound(candidateId, key, p.error)
-            Behaviors.same
-          case None if pendingJobs.contains(key) =>
-            context.log.trace("Error is being computed, queuing request for key {}", key)
-            pendingJobs + (key -> PendingError(replyTo, candidateId))
-            Behaviors.same
-          case None =>
-            context.log.debug("Partition to compute error not found. Starting background job to compute {}", key)
-            generateStrippedPartitionJobs(key, PendingError(replyTo, candidateId))
-            Behaviors.same
-        }
-
-      case LookupPartition(_, key, _) if key.size != 1 =>
-        throw new IllegalArgumentException(
-          s"Only keys of size 1 contain full partitions, but your key has ${key.size} elements!"
-        )
-
-      case LookupStrippedPartition(candidateId, key, replyTo) if key.size != 1 =>
-        partitions.get(key) match {
-          case Some(p: StrippedPartition) =>
-            replyTo ! StrippedPartitionFound(candidateId, key, p)
-            Behaviors.same
-          case None if pendingJobs.contains(key) =>
-            context.log.trace("Partition is being computed, queuing request for key {}", key)
-            pendingJobs + (key -> PendingStrippedPartition(replyTo, candidateId))
-            Behaviors.same
-          case None =>
-            context.log.debug("Partition not found. Starting background job to compute {}", key)
-            generateStrippedPartitionJobs(key, PendingStrippedPartition(replyTo, candidateId))
-            Behaviors.same
-        }
-
-      case ProductComputed(key, partition) =>
-        context.log.trace("Received computed partition for key {}", key)
-        pendingJobs.get(key) match {
-          case Some(pendingResponses) => pendingResponses.foreach {
-            case PendingStrippedPartition(ref, candidateId) =>
-              ref ! StrippedPartitionFound(candidateId, key, partition)
-            case PendingError(ref, candidateId) =>
-              ref ! ErrorFound(candidateId, key, partition.error)
-          }
-          case None => // do nothing
-        }
-        if (settings.cacheEnabled)
-          partitions + (key -> partition)
-        pendingJobs.removeKey(key)
-        Behaviors.same
-
-      case Cleanup =>
-        partitions.compact()
-        Behaviors.same
-
-      case WrappedSystemEvent(CriticalHeapUsage) if settings.cacheEnabled =>
-        context.log.warn("Clearing all temporary partitions in consequence of memory shortage")
-        partitions.clear()
-        Behaviors.same
-
-      case WrappedSystemEvent(CriticalHeapUsage) if settings.cacheDisabled =>
-        // ignore
-        Behaviors.same
-    }
+    case WrappedSystemEvent(CriticalHeapUsage) if settings.cacheDisabled =>
+      // ignore
+      Behaviors.same
   }
 
   private def generateStrippedPartitionJobs(key: CandidateSet, pendingResponse: PendingResponse): Unit = {
@@ -251,29 +245,42 @@ class PartitionManager(
       generatorPool match {
         case Some(pool) =>
           lazy val jobs = JobChainer.calcJobChain(key, partitions)
-          if (settings.directPartitionProductThreshold <= 1) {
-            pool ! ComputePartition.createFrom(partitions)(key, context.self)
-            pendingJobs + (key, pendingResponse)
-          } else if(jobs.size >= settings.directPartitionProductThreshold) {
-            context.log.warn("Avoiding generation of expensive job chain of size {} " +
-              "by generating partition for {} directly from singleton partitions", jobs.size, key)
-            pool ! ComputePartition.createFrom(partitions)(key, context.self)
-            pendingJobs + (key, pendingResponse)
-          } else {
-            pool ! ComputePartitions(jobs, context.self)
-            val x = jobs
-              .filter(_.store)
-              .map { job =>
-                if (job.key == key)
-                  job.key -> Seq(pendingResponse)
-                else
-                  job.key -> Seq.empty
-              }
-            pendingJobs ++ x
+          val poolJob = settings.directPartitionProductThreshold match {
+            case 0 | 1 =>
+              directProductJob(key, pendingResponse)
+            case theta if jobs.size >= theta =>
+              context.log.warn("Avoiding generation of expensive job chain of size {} " +
+                "by generating partition for {} directly from singleton partitions", jobs.size, key)
+              directProductJob(key, pendingResponse)
+            case _ =>
+              incrementalProductJob(key, pendingResponse, jobs)
           }
+          pool ! poolJob
         case None =>
           context.log.error("Could not generate partition, because the partition generator pool is not available (max-workers < 1)")
       }
     }
+  }
+
+  private def directProductJob(key: CandidateSet, pendingResponse: PendingResponse): PartitionGenerator.Command = {
+    pendingJobs + (key, pendingResponse)
+    ComputePartition.createFrom(partitions)(key, context.self)
+  }
+
+  private def incrementalProductJob(
+      key: CandidateSet,
+      pendingResponse: PendingResponse,
+      jobs: Seq[ComputePartitionProductJob]
+  ): PartitionGenerator.Command = {
+    val additionalPending = jobs
+      .filter(_.store)
+      .map {
+        case job if job.key == key =>
+          job.key -> Seq(pendingResponse)
+        case job =>
+          job.key -> Seq.empty
+      }
+    pendingJobs ++ additionalPending
+    ComputePartitions(jobs, context.self)
   }
 }

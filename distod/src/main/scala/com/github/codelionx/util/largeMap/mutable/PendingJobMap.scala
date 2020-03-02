@@ -33,8 +33,8 @@ object PendingJobMap {
  * @tparam K the type of the keys
  * @tparam V the type of the values that are stored in the `Seq` for each key
  */
-class PendingJobMap[K, V](private val jobMap: Object2ObjectHashMap[K, mutable.ListBuffer[V]])
-  extends IterableOnce[(K, Seq[V])] with mutable.Cloneable[PendingJobMap[K, V]] {
+class PendingJobMap[K, V] private (private val jobMap: Object2ObjectHashMap[K, mutable.ListBuffer[V]])
+  extends IterableOnce[(K, Seq[V])] {
 
   /**
    * Retrieves the values which are associated with the given key. It throws a `NoSuchElementException` if the key
@@ -222,5 +222,5 @@ class PendingJobMap[K, V](private val jobMap: Object2ObjectHashMap[K, mutable.Li
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 
-  override def clone(): PendingJobMap[K, V] = PendingJobMap.from(this)
+  def copy(): PendingJobMap[K, V] = PendingJobMap.from(this)
 }

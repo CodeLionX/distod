@@ -81,31 +81,31 @@ class PendingJobMapSpec extends AnyWordSpec with Matchers {
     }
 
     "remove a key value mapping" in {
-      val newMap = pendingJobMap.clone()
+      val newMap = pendingJobMap.copy()
       newMap.removeKey(existingKey)
       newMap shouldEqual PendingJobMap(existingMapping)
     }
 
     "remove a single value" in {
-      val newMap = pendingJobMap.clone()
+      val newMap = pendingJobMap.copy()
       newMap  - (existingKey -> 9)
       newMap shouldEqual PendingJobMap(existingMapping, existingKey -> Seq.empty)
     }
 
     "add a new value to existing key" in {
-      val newMap = pendingJobMap.clone()
+      val newMap = pendingJobMap.copy()
       newMap + (existingKey -> 1)
       newMap shouldEqual PendingJobMap(existingMapping, existingKey -> existingKeyValues.appendedAll(Seq(1)))
     }
 
     "add a new key and value" in {
-      val newMap = pendingJobMap.clone()
+      val newMap = pendingJobMap.copy()
       newMap + (newKey -> 5)
       newMap shouldEqual PendingJobMap(existingMapping, existingKey -> existingKeyValues, newKey -> Seq(5))
     }
 
     "merge with other iterable" in {
-      val newMap = pendingJobMap.clone()
+      val newMap = pendingJobMap.copy()
       newMap ++ Seq(newKey -> Seq(0))
       newMap shouldEqual PendingJobMap(existingMapping, existingKey -> existingKeyValues, newKey -> Seq(0))
     }
@@ -116,7 +116,7 @@ class PendingJobMapSpec extends AnyWordSpec with Matchers {
         CandidateSet.from(0, 1) -> Seq(12, 578)
       )
       val otherMap: PendingJobMap[CandidateSet, Int] = PendingJobMap.from(otherMappings)
-      val newMap = pendingJobMap.clone()
+      val newMap = pendingJobMap.copy()
       newMap ++ otherMap
       newMap shouldEqual PendingJobMap(
         existingMapping,

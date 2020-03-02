@@ -16,9 +16,22 @@ object PartitionGenerator {
 
   sealed trait Command
 
-  final case class ComputePartitions(jobs: Seq[ComputePartitionProductJob], replyTo: ActorRef[ProductComputed]) extends Command
+  final case class ComputePartitions(jobs: Seq[ComputePartitionProductJob], replyTo: ActorRef[ProductComputed])
+    extends Command
 
-  final case class ComputePartition(key: CandidateSet, singletons: Seq[FullPartition], replyTo: ActorRef[ProductComputed]) extends Command
+  final case class ComputePartition(
+                                     key: CandidateSet,
+                                     singletons: Seq[FullPartition],
+                                     replyTo: ActorRef[ProductComputed]
+                                   ) extends Command
+
+  final object ComputePartition {
+    def createFrom(partitions: CompactingPartitionMap)
+                  (key: CandidateSet, replyTo: ActorRef[ProductComputed]): ComputePartition = {
+      val selectedPartitions = key.toSeq.map(i => partitions.singletonPartition(CandidateSet.from(i)))
+      ComputePartition(key, selectedPartitions, replyTo)
+    }
+  }
 
   val poolName = "partition-generator-pool"
 

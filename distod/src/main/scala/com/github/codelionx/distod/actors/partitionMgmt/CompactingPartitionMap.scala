@@ -110,6 +110,19 @@ class CompactingPartitionMap private(
       singletonPartitions.get(key)
 
   /**
+   * Returns the singleton partition (full partition) associated with a given key. This method throws a
+   * `NoSuchElementException` if there is no mapping from the given key to a partition.
+   *
+   * @param  key the candidate
+   * @return the value associated with the given key
+   */
+  @throws[NoSuchElementException]
+  def singletonPartition(key: CandidateSet): FullPartition = getSingletonPartition(key) match {
+    case None => throw new NoSuchElementException("candidate key not found: " + key)
+    case Some(value) => value
+  }
+
+  /**
    * Optionally returns the stripped partition associated with a key.
    *
    * @param  key the candidate

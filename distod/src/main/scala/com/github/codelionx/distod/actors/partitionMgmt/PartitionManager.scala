@@ -250,13 +250,14 @@ class PartitionManager(
     timings.time("Partition generation") {
       generatorPool match {
         case Some(pool) =>
-          val jobs = JobChainer.calcJobChain(key, partitions)
-          if (jobs.size >= 15) {
-//            context.log.warn("Generating expensive job chain of size {}: {}", jobs.size, jobs.map(_.key.size).sorted)
+          lazy val jobs = JobChainer.calcJobChain(key, partitions)
+          if (settings.directPartitionProductThreshold <= 1) {
+            pool ! ComputePartition.createFrom(partitions)(key, context.self)
+            pendingJobs + (key, pendingResponse)
+          } else if(jobs.size >= settings.directPartitionProductThreshold) {
             context.log.warn("Avoiding generation of expensive job chain of size {} " +
               "by generating partition for {} directly from singleton partitions", jobs.size, key)
-            val singletonPartitions = key.toSeq.map(i => partitions.getSingletonPartition(CandidateSet.from(i)).get)
-            pool ! ComputePartition(key, singletonPartitions, context.self)
+            pool ! ComputePartition.createFrom(partitions)(key, context.self)
             pendingJobs + (key, pendingResponse)
           } else {
             pool ! ComputePartitions(jobs, context.self)

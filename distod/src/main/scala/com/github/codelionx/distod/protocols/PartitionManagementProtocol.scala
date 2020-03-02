@@ -10,10 +10,18 @@ import com.github.codelionx.distod.types.CandidateSet
 object PartitionManagementProtocol {
 
   trait PartitionCommand
-  final case class LookupPartition(key: CandidateSet, replyTo: ActorRef[PartitionFound]) extends PartitionCommand
-  final case class LookupStrippedPartition(key: CandidateSet, replyTo: ActorRef[StrippedPartitionFound])
+  final case class LookupPartition(
+      candidateId: CandidateSet,
+      key: CandidateSet,
+      replyTo: ActorRef[PartitionFound]
+  ) extends PartitionCommand
+  final case class LookupStrippedPartition(
+      candidateId: CandidateSet,
+      key: CandidateSet,
+      replyTo: ActorRef[StrippedPartitionFound]
+  ) extends PartitionCommand
+  final case class LookupError(candidateId: CandidateSet, key: CandidateSet, replyTo: ActorRef[ErrorFound])
     extends PartitionCommand
-  final case class LookupError(key: CandidateSet, replyTo: ActorRef[ErrorFound]) extends PartitionCommand
   final case class LookupAttributes(replyTo: ActorRef[AttributesFound]) extends PartitionCommand
   final case class InsertPartition(key: CandidateSet, value: Partition) extends PartitionCommand
   final case class SetAttributes(attributes: Seq[Int]) extends PartitionCommand
@@ -21,9 +29,17 @@ object PartitionManagementProtocol {
     extends PartitionCommand with CborSerializable
 
   trait PartitionEvent extends CborSerializable
-  final case class PartitionFound(key: CandidateSet, value: FullPartition) extends PartitionEvent
-  final case class StrippedPartitionFound(key: CandidateSet, value: StrippedPartition) extends PartitionEvent
-  final case class ErrorFound(key: CandidateSet, error: Double) extends PartitionEvent
+  final case class PartitionFound(
+      candidateId: CandidateSet,
+      key: CandidateSet,
+      value: FullPartition
+  ) extends PartitionEvent
+  final case class StrippedPartitionFound(
+      candidateId: CandidateSet,
+      key: CandidateSet,
+      value: StrippedPartition
+  ) extends PartitionEvent
+  final case class ErrorFound(candidateId: CandidateSet, key: CandidateSet, error: Double) extends PartitionEvent
   final case class AttributesFound(attributes: Seq[Int]) extends PartitionEvent
 
 //  sealed trait PartitionResultEvent extends PartitionEvent

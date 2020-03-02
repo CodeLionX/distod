@@ -4,13 +4,14 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.CandidateState.{IncPrecondition, Prune}
-import com.github.codelionx.distod.actors.master.Master.{DequeueNextJob, NewCandidatesGenerated, UpdateState}
+import com.github.codelionx.distod.actors.master.Master.{DequeueNextJob, EnqueueCancelledJob, NewCandidatesGenerated, UpdateState}
 import com.github.codelionx.distod.actors.partitionMgmt.PartitionReplicator.PrimaryPartitionManager
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, CheckSwapCandidates}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
-import com.github.codelionx.distod.types.{CandidateSet, PendingJobMap}
+import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.util.largeMap.immutable.PendingJobMap
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
 
@@ -22,6 +23,7 @@ object MasterHelper {
 
   sealed trait Command
   final case class DispatchWork(replyTo: ActorRef[Worker.Command]) extends Command with CborSerializable
+  final case class CancelWork(id: CandidateSet, jobType: JobType.JobType) extends Command with CborSerializable
   final case class SplitCandidatesChecked(id: CandidateSet, removedSplitCandidates: CandidateSet)
     extends Command with CborSerializable
   final case class SwapCandidatesChecked(id: CandidateSet, removedSwapCandidates: Seq[(Int, Int)])
@@ -95,6 +97,10 @@ class MasterHelper(
           replyTo ! CheckSwapCandidates(id, swapCandidates)
       }
       timingSpans.end("Helper dispatch work")
+      Behaviors.same
+
+    case CancelWork(id, jobType) =>
+      master ! EnqueueCancelledJob(id, jobType)
       Behaviors.same
 
     case SplitCandidatesChecked(id, removedSplitCandidates) =>

@@ -103,7 +103,11 @@ class Settings private(config: Config) extends Extension {
 
   val numberOfWorkers: Int = Seq(maxWorkers, maxParallelism, cores).min
 
+  val concurrentWorkerJobs: Int = config.getInt(s"$namespace.concurrent-worker-jobs")
+
   val expectedNodeCount: Int = config.getInt(s"$namespace.expected-node-count")
+
+  val directPartitionProductThreshold: Int = config.getInt(s"$namespace.direct-partition-product-threshold")
 
   val cpuBoundTaskDispatcher: DispatcherSelector =
     DispatcherSelector.fromConfig(s"$namespace.cpu-bound-tasks-dispatcher")

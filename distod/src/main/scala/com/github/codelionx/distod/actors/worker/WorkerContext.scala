@@ -9,7 +9,6 @@ import com.github.codelionx.distod.protocols.ResultCollectionProtocol.ResultProx
 
 case class WorkerContext(
     context: ActorContext[Worker.Command],
-    stash: StashBuffer[Worker.Command],
     master: ActorRef[MasterHelper.Command],
     partitionManager: ActorRef[PartitionCommand],
     rsProxy: ActorRef[ResultProxyCommand],

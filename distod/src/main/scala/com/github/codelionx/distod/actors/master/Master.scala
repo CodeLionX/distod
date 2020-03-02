@@ -28,6 +28,7 @@ object Master {
   sealed trait Command
   // only used from master helpers
   private[master] final case class DequeueNextJob(replyTo: ActorRef[Worker.Command]) extends Command
+  private[master] final case class EnqueueCancelledJob(id: CandidateSet, jobType: JobType.JobType) extends Command
   private[master] final case class UpdateState(
       job: (CandidateSet, JobType.JobType),
       stateUpdates: Map[CandidateSet, Set[CandidateState.Delta]],
@@ -56,7 +57,8 @@ object Master {
       resultCollector: ActorRef[ResultCommand]
   ): Behavior[Command] = Behaviors.setup { context =>
     val settings = Settings(context.system)
-    val stashSize = settings.maxWorkers * workerMessageMultiplier * settings.expectedNodeCount
+    val stashSize =
+      settings.maxWorkers * settings.concurrentWorkerJobs * workerMessageMultiplier * settings.expectedNodeCount
 
     Behaviors.withStash(stashSize) { stash =>
       val masterBehavior =
@@ -186,6 +188,12 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       context.log.trace("Stashing request for work from {}", m.replyTo)
       stash.stash(m)
       Behaviors.same
+
+    case EnqueueCancelledJob(id, jobType) =>
+      val job = id -> jobType
+      context.log.info("Re-enqueueing cancelled job {}", job)
+      val newQueue = workQueue.removePending(job).enqueue(job)
+      behavior(pool, attributes, newQueue, pendingGenerationJobs, testedCandidates)
 
     case UpdateState(job, stateUpdates, prunedCandidates) =>
       context.log.debug("Updating state for job {}: pruned candidates: {}", job, prunedCandidates.size)

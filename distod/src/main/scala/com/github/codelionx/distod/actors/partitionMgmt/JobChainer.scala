@@ -5,6 +5,12 @@ import com.github.codelionx.distod.types.CandidateSet
 
 object JobChainer {
 
+  // 1 = store only the requested partition
+  // 2 = store requested partition and its predecessors
+  // 3 = store requested partition, its predecessors, and their predecessors
+  // ...
+  val storeDepth = 2
+
   def calcJobChain(
       key: CandidateSet,
       partitions: CompactingPartitionMap
@@ -17,7 +23,7 @@ object JobChainer {
         val predecessorKeys = subkey.predecessors.toSeq.sortBy(_.sum)
         val foundKeys = predecessorKeys.filter(partitions.contains)
         val missingKeys = predecessorKeys.diff(foundKeys)
-        val store = subkey.size >= key.size - 1 // store the requested partition and its predecessors (discard others)
+        val store = subkey.size >= key.size - storeDepth + 1
 
         foundKeys match {
           case Nil =>

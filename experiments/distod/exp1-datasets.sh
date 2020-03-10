@@ -3,6 +3,7 @@
 datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
+N=5
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
 
@@ -10,92 +11,102 @@ nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odi
 touch /var/lock/distod-exp1-datasets.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Runtime (ms),#FDs,#ODs" >"${resultfile}"
+echo "Dataset,Run,Runtime (ms),#FDs,#ODs" >"${resultfile}"
 
 for dataset in ${datasets}; do
-  mkdir -p "${resultfolder}/${dataset}"
-  logfile="${resultfolder}/${dataset}/out.log"
-
   echo ""
   echo ""
   echo "Running DISTOD on dataset ${dataset}"
 
-  # start followers
-  for node in ${nodes}; do
-    ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
-  done
+  for (( n=0; n<N; ++n )); do
+    mkdir -p "${resultfolder}/${dataset}/${n}"
+    logfile="${resultfolder}/${dataset}/${n}/out.log"
+    echo ""
+    echo "Run ${n}"
 
-  t0=$(date +%s)
+    # start followers
+    for node in ${nodes}; do
+      ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
+    done
 
-  # start leader
-  timeout --preserve-status --signal=15 24h \
-    java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
-      -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
-      -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
-      -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
-      -Dconfig.file="$(hostname).conf" \
-      -Dlogback.configurationFile=logback.xml \
-      -Ddistod.input.path="../data/${dataset}" \
-      -Ddistod.input.has-header="no" \
-      -jar distod.jar 2>&1 | tee "${logfile}"
+    t0=$(date +%s)
 
-  t1=$(date +%s)
-  duration=$(( t1 - t0 ))
-  echo "Duration: ${duration} s"
+    # start leader
+    timeout --preserve-status --signal=15 24h \
+      java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+        -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
+        -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
+        -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
+        -Dconfig.file="$(hostname).conf" \
+        -Dlogback.configurationFile=logback.xml \
+        -Ddistod.input.path="../data/${dataset}" \
+        -Ddistod.input.has-header="no" \
+        -jar distod.jar 2>&1 | tee "${logfile}"
+    was_killed=$(( $? == 143 ))
 
-  # wait for followers to stop (we need the resources, e.g. NIC, RAM, ...)
-  running_nodes=""
-  for node in ${nodes}; do
-    ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
-    if [ $? == 0 ]; then
-      running_nodes="${running_nodes}${node} "
-    fi
-  done
-  echo "Checked node status, still running nodes: '${running_nodes}'"
+    t1=$(date +%s)
+    duration=$(( t1 - t0 ))
+    echo "Duration: ${duration} s"
 
-  if [[ $duration -lt 30 && "${running_nodes}" != "" ]]; then
-    echo "Waiting till followers stopped, before force killing them."
-    sleep $(( 30 - duration ))
-  fi
-
-  while [[ "${running_nodes}" != "" ]]; do
-    echo "Still waiting for nodes: '${running_nodes}'"
-    for node in ${running_nodes}; do
-      ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
-      # still running --> kill follower
-      if [ $? == 0 ]; then
-        echo "Killing follower on node ${node}"
-        ssh "${node}" screen -S distod-exp1-datasets -X quit
-      else
-        # remove node from running set
-        running_nodes=$( echo "${running_nodes}" | sed -s "s/${node} //" )
+    # wait for followers to stop (we need the resources, e.g. NIC, RAM, ...)
+    running_nodes=""
+    for node in ${nodes}; do
+      if ssh "${node}" screen -ls distod-exp1-datasets >/dev/null; then
+        running_nodes="${running_nodes}${node} "
       fi
     done
+    echo "Checked node status, still running nodes: '${running_nodes}'"
+
+    if [[ $duration -lt 30 && "${running_nodes}" != "" ]]; then
+      echo "Waiting till followers stopped, before force killing them."
+      sleep $(( 30 - duration ))
+    fi
+
+    while [[ "${running_nodes}" != "" ]]; do
+      echo "Still waiting for nodes: '${running_nodes}'"
+      for node in ${running_nodes}; do
+        # still running --> kill follower
+        if ssh "${node}" screen -ls distod-exp1-datasets >/dev/null; then
+          echo "Killing follower on node ${node}"
+          ssh "${node}" screen -S distod-exp1-datasets -X quit
+        else
+          # remove node from running set
+          running_nodes=$( echo "${running_nodes}" | sed -s "s/${node} //" )
+        fi
+      done
+    done
+
+    # collect results
+    echo "Collecting results for dataset ${dataset} run ${n}"
+    mv distod.log "${resultfolder}/${dataset}/${n}/distod-odin01.log"
+    mv results.txt "${resultfolder}/${dataset}/${n}/"
+    for node in ${nodes}; do
+      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/${n}/distod-${node}.log" >/dev/null
+      # intentially put argument in single quotes to let the target shell expand the ~
+      ssh "${node}" rm -f '~/distod/distod.log'
+    done
+
+    {
+      echo -n "${dataset},${n}"
+      grep "TIME Overall runtime" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
+      echo -n ","
+      grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      echo -n ","
+      grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      # force newline
+      echo ""
+    } >>"${resultfile}"
+
+    # do not perform other runs if it hit the timelimit
+    if (( was_killed )); then
+      echo "Run exceeded timelimit, continuing with next dataset..."
+      break
+    fi
   done
 
-  # collect results
-  echo "Collecting results for dataset ${dataset}"
-  mv distod.log "${resultfolder}/${dataset}/distod-odin01.log"
-  mv results.txt "${resultfolder}/${dataset}/"
-  for node in ${nodes}; do
-    scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/distod-${node}.log" >/dev/null
-    # intentially put argument in single quotes to let the target shell expand the ~
-    ssh "${node}" rm -f '~/distod/distod.log'
-  done
-
-  {
-    echo -n "${dataset},"
-    grep "TIME Overall runtime" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-    echo -n ","
-    grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-    echo -n ","
-    grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-    # force newline
-    echo ""
-  } >>"${resultfile}"
-
-  # wait a bit
-  sleep 2
+  # calculate min for the runtime
+  min_runtime=$( grep "${dataset}" "${resultfile}" | cut -d ',' -f3 | sort -n | head -n 1 )
+  echo "${dataset},ALL,${min_runtime},," >>"${resultfile}"
 done
 
 # release lock file

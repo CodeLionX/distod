@@ -6,37 +6,53 @@ declare -a delimiters=( "," "," "," "," "," ";" "," "," "," ";" ";" ";" "," )
 
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
+N=5
 
 # write lock file
 touch /var/lock/fastod-exp1-datasets.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Runtime (ms),#FDs,#ODs (misses double ODs!)" >"${resultfile}"
+echo "Dataset,Run,Runtime (ms),#FDs,#ODs (misses double ODs!)" >"${resultfile}"
 
 for (( i=0; i<${#datasets[@]}; ++i )); do
   dataset="${datasets[i]}"
   delimiter="${delimiters[i]}"
-  logfile="${resultfolder}/${dataset}.log"
-
   echo ""
   echo ""
   echo "Running FASTOD on dataset ${dataset} and delimiter ${delimiter}"
 
-  # fastod arguments: dataset csv_delimiter has_header
-  timeout --preserve-status --signal=15 24h \
-    /usr/bin/java -Xms31G -Xmx31G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
-
-  echo "Gathering results for dataset ${dataset}"
-  {
-    echo -n "${dataset},"
-    grep "Run Time (ms)" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-    echo -n ","
-    grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-    echo -n ","
-    grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-    # force newline
+  for (( n=0; n<N; ++n )); do
+    logfile="${resultfolder}/${dataset}-${n}.log"
     echo ""
-  } >>"${resultfile}"
+    echo "Run ${n}"
+
+    # fastod arguments: dataset csv_delimiter has_header
+    timeout --preserve-status --signal=15 24h \
+      /usr/bin/java -Xms31G -Xmx31G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
+    was_killed=$(( $? == 143 ))
+
+    echo "Gathering results for dataset ${dataset}"
+    {
+      echo -n "${dataset},${n},"
+      grep "Run Time (ms)" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
+      echo -n ","
+      grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      echo -n ","
+      grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      # force newline
+      echo ""
+    } >>"${resultfile}"
+
+    # do not perform other runs if it hit the timelimit
+    if (( was_killed )); then
+      echo "Run exceeded timelimit, continuing with next dataset..."
+      break
+    fi
+  done
+
+  # calculate min for the runtime
+  min_runtime=$( grep "${dataset}" "${resultfile}" | cut -d ',' -f3 | sort -n | head -n 1 )
+  echo "${dataset},ALL,${min_runtime},," >>"${resultfile}"
 done
 
 # release lock file

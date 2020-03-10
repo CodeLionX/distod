@@ -211,13 +211,12 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         }
       }
       // only generate next candidates if size limit is not reached
-      if(settings.pruning.odSizeLimit.exists(limit => id.size < limit)) {
+      if(settings.pruning.odSizeLimit.forall(limit => id.size < limit)) {
         // get successor states for candidate generation
         val successorStates = id.successors(attributes).map { successor =>
           state.getOrElse(successor, CandidateState(successor))
         }
         pool ! GenerateCandidates(id, jobType, successorStates)
-        pendingGenerationJobs + job
         timingSpans.end("State integration")
         behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
       } else {

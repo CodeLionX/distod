@@ -46,50 +46,8 @@ object CandidateState {
     }
   }
 
-  def initForL2(id: CandidateSet): CandidateState = L2CandidateState(id)
-
   // predecessors (L1) do not perform swap checks, so the preconditions for the L2 swap checks are already met
-  case class L2CandidateState private(
-      id: CandidateSet,
-      _splitCandidates: CandidateSet = CandidateSet.empty,
-      _swapCandidates: Seq[(Int, Int)] = Seq.empty,
-      private val splitPreconditions: Int = 0
-  ) extends CandidateState {
-
-    override val isPruned: Boolean = false
-    override val splitChecked: Boolean = false
-    override val swapChecked: Boolean = false
-
-    override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
-      case JobType.Split => id.size == splitPreconditions
-      case JobType.Swap => id.size == splitPreconditions
-    }
-
-    override def updated(delta: Delta): CandidateState = delta match {
-      case Prune() =>
-        this.prune
-      case IncPrecondition(JobType.Split) =>
-        this.copy(
-        splitPreconditions = this.splitPreconditions + 1
-      )
-      case IncPrecondition(JobType.Swap) =>
-        this
-      case NewSplitCandidates(splitCandidates) if isReadyToCheck(JobType.Split)  =>
-        SplitReadyCandidateState(
-          id = this.id,
-          splitCandidates = splitCandidates,
-          swapPreconditions = this.id.size
-        )
-      case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) =>
-        SwapReadyCandidateState(
-          id = this.id,
-          swapCandidates = swapCandidates
-        )
-      case SwapChecked(_) =>
-        throw new UnsupportedOperationException("L2CandidateState can not update the swap candidates")
-      case m => throw new UnsupportedOperationException(s"L2CandidateState can not be updated by $m: $this")
-    }
-  }
+  def initForL2(id: CandidateSet): CandidateState = InitialCandidateState(id, swapPreconditions = id.size)
 
   def pruned(id: CandidateSet): CandidateState = PrunedCandidateState(id)
 

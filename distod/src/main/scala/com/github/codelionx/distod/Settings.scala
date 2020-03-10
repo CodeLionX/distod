@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.typed.{ActorSystem, DispatcherSelector, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
-import com.github.codelionx.distod.Settings.{InputParsingSettings, MonitoringSettings, PartitionCompactionSettings}
+import com.github.codelionx.distod.Settings.{InputParsingSettings, MonitoringSettings, PartitionCompactionSettings, PruningSettings}
 import com.typesafe.config.{Config, ConfigException}
 
 import scala.concurrent.duration.FiniteDuration
@@ -47,6 +47,18 @@ object Settings extends ExtensionId[Settings] {
 
     def statisticsLogLevel: String
   }
+
+  trait PruningSettings {
+
+    def odSizeLimit: Option[Int]
+
+    def interestingnessThreshold: Option[Int]
+
+    def pruneOdSize: Boolean = odSizeLimit.isDefined
+
+    def pruneInterestingness: Boolean = interestingnessThreshold.isDefined
+  }
+
 }
 
 
@@ -174,6 +186,29 @@ class Settings private(config: Config) extends Extension {
       finiteDurationOnlySeconds + finiteDurationOnlyNanos
     }
 
-    override def statisticsLogLevel: String = config.getString(s"$subnamespace.statistics-log-level")
+    override val statisticsLogLevel: String = config.getString(s"$subnamespace.statistics-log-level")
+  }
+
+  val pruning: PruningSettings = new PruningSettings {
+
+    private val subnamespace = s"$namespace.pruning"
+
+    override val odSizeLimit: Option[Int] =
+      if (config.hasPath(s"$subnamespace.od-size-limit"))
+        config.getInt(s"$subnamespace.od-size-limit") match {
+          case i if i < 1 => throw new ConfigException.BadValue(
+            s"$subnamespace.od-size-limit",
+            s"limit must be greater than 0"
+          )
+          case i => Some(i)
+        }
+      else
+        None
+
+    override val interestingnessThreshold: Option[Int] =
+      if (config.hasPath(s"$subnamespace.interestingness-threshold"))
+        Some(config.getInt(s"$subnamespace.interestingness-threshold"))
+      else
+        None
   }
 }

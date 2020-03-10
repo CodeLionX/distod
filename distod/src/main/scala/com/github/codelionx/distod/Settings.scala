@@ -152,14 +152,14 @@ class Settings private(config: Config) extends Extension {
 
     private val subnamespace = s"$namespace.monitoring"
 
-    override def interval: FiniteDuration = {
+    override val interval: FiniteDuration = {
       val duration = config.getDuration(s"$subnamespace.interval")
       val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
       val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)
       finiteDurationOnlySeconds + finiteDurationOnlyNanos
     }
 
-    override def heapEvictionThreshold: Double = config.getInt(s"$subnamespace.heap-eviction-threshold") match {
+    override val heapEvictionThreshold: Double = config.getInt(s"$subnamespace.heap-eviction-threshold") match {
       case i if i <= 0 || i > 100 => throw new ConfigException.BadValue(
         s"$subnamespace.heap-eviction-threshold",
         s"threshold must be between [excluding] 0 and [including] 100 (percent value)"
@@ -167,7 +167,7 @@ class Settings private(config: Config) extends Extension {
       case i => i / 100.0
     }
 
-    override def statisticsLogInterval: FiniteDuration = {
+    override val statisticsLogInterval: FiniteDuration = {
       val duration = config.getDuration(s"$subnamespace.statistics-log-interval")
       val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
       val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)

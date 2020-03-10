@@ -52,7 +52,7 @@ object Settings extends ExtensionId[Settings] {
 
     def odSizeLimit: Option[Int]
 
-    def interestingnessThreshold: Option[Int]
+    def interestingnessThreshold: Option[Long]
 
     def pruneOdSize: Boolean = odSizeLimit.isDefined
 
@@ -205,9 +205,9 @@ class Settings private(config: Config) extends Extension {
       else
         None
 
-    override val interestingnessThreshold: Option[Int] =
+    override val interestingnessThreshold: Option[Long] =
       if (config.hasPath(s"$subnamespace.interestingness-threshold"))
-        Some(config.getInt(s"$subnamespace.interestingness-threshold"))
+        Some(config.getLong(s"$subnamespace.interestingness-threshold"))
       else
         None
   }

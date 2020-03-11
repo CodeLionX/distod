@@ -1,17 +1,19 @@
 package com.github.codelionx.distod.actors.worker
 
-import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
 import com.github.codelionx.distod.Serialization.CborSerializable
-import com.github.codelionx.distod.actors.master.{JobType, MasterHelper}
+import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.master.MasterHelper.{CancelWork, DispatchWork, SplitCandidatesChecked, SwapCandidatesChecked}
+import com.github.codelionx.distod.actors.master.{JobType, MasterHelper}
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.Partition
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol._
 import com.github.codelionx.distod.protocols.ResultCollectionProtocol.{FoundDependencies, ResultProxyCommand}
 import com.github.codelionx.distod.types.CandidateSet
-import com.github.codelionx.distod.Settings
 import com.github.codelionx.util.timing.Timing
+
+import scala.collection.mutable
 
 
 object Worker {
@@ -56,6 +58,7 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
   private val settings = Settings(context.system)
   private var splitJobs: Map[CandidateSet, CheckSplitJob] = Map.empty
   private var swapJobs: Map[CandidateSet, CheckSwapJob] = Map.empty
+  private val partitionIdsForSplitJobs: mutable.Queue[(CandidateSet, CandidateSet)] = mutable.Queue.empty
 
 
   private object StopBehaviorInterceptor extends WorkerStopInterceptor {
@@ -118,11 +121,16 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
         Behaviors.same
 
       case WrappedPartitionEvent(PartitionFound(candidateId, key, value)) =>
-        receivedPartition(candidateId, key, value, attributes)
+        receivedPartitionForSwap(candidateId, key, value)
+        Behaviors.same
+
+      case WrappedPartitionEvent(StrippedPartitionFound(candidateId, key, value))
+        if partitionIdsForSplitJobs.contains(candidateId -> key) =>
+        receivedPartitionForSplit(candidateId, key, value)
         Behaviors.same
 
       case WrappedPartitionEvent(StrippedPartitionFound(candidateId, key, value)) =>
-        receivedPartition(candidateId, key, value, attributes)
+        receivedPartitionForSwap(candidateId, key, value)
         Behaviors.same
 
       case WrappedPartitionEvent(event) =>
@@ -135,9 +143,13 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
   )
 
   private def startSplitCheck(candidateId: CandidateSet, splitCandidates: CandidateSet): Unit = {
-    val job = new CheckSplitJob(candidateId, splitCandidates)
+    val job = new CheckSplitJob(candidateId, splitCandidates, settings.pruning.interestingnessThreshold)
     context.log.trace("Loading partition errors for split checks")
 
+    for (partitionId <- job.partitionIds) {
+      partitionManager ! LookupStrippedPartition(candidateId, partitionId, partitionEventMapper)
+      partitionIdsForSplitJobs.enqueue(candidateId -> partitionId)
+    }
     for (c <- job.errorIds) {
       partitionManager ! LookupError(candidateId, c, partitionEventMapper)
     }
@@ -145,17 +157,17 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
   }
 
   private def startSwapCheck(candidateId: CandidateSet, swapCandidates: Seq[(Int, Int)]): Unit = {
-    val job = new CheckSwapJob(candidateId, swapCandidates)
+    val job = new CheckSwapJob(candidateId, swapCandidates, settings.pruning.interestingnessThreshold)
     context.log.trace("Loading partitions for swap checks")
 
     val singletonPartitionKeys = job.singletonPartitionKeys
-    singletonPartitionKeys.foreach(attribute =>
+    for(attribute <- singletonPartitionKeys) {
       partitionManager ! LookupPartition(candidateId, attribute, partitionEventMapper)
-    )
+    }
     val partitionKeys = job.partitionKeys
-    partitionKeys.foreach(candidateContext =>
+    for (candidateContext <- partitionKeys) {
       partitionManager ! LookupStrippedPartition(candidateId, candidateContext, partitionEventMapper)
-    )
+    }
     swapJobs += candidateId -> job
   }
 
@@ -176,22 +188,45 @@ class Worker(workerContext: WorkerContext, attributes: Seq[Int]) extends Candida
     }
   }
 
-  private def receivedPartition(
-      candidateId: CandidateSet, key: CandidateSet, value: Partition, attributes: Seq[Int]
+  private def receivedPartitionForSplit(
+      candidateId: CandidateSet,
+      key: CandidateSet,
+      value: Partition
+  ): Unit = {
+    splitJobs.get(candidateId) match {
+      case Some(splitJob) =>
+        partitionIdsForSplitJobs.dequeueFirst(_ == candidateId -> key)
+        splitJob.receivedPartition(key, value)
+
+        val finished = timing.unsafeTime("Split check") {
+          splitJob.performPossibleChecks()
+        }
+        if (finished)
+          processSplitResults(splitJob, attributes)
+
+      case None =>
+        context.log.error("Received partition for unknown split job {}", candidateId)
+    }
+  }
+
+  private def receivedPartitionForSwap(
+    candidateId: CandidateSet,
+    key: CandidateSet,
+    value: Partition
   ): Unit = {
     context.log.trace("Received partition {} for {}", key, candidateId)
     swapJobs.get(candidateId) match {
-      case Some(job) =>
-        job.receivedPartition(key, value)
+      case Some(swapJob) =>
+        swapJob.receivedPartition(key, value)
 
         val finished = timing.unsafeTime("Swap check") {
-          job.performPossibleChecks()
+          swapJob.performPossibleChecks()
         }
         if (finished)
-          processSwapResults(job)
+          processSwapResults(swapJob)
 
       case None =>
-        context.log.error("Received partition for unknown job {}", candidateId)
+        context.log.error("Received partition for unknown swap job {}", candidateId)
     }
   }
 

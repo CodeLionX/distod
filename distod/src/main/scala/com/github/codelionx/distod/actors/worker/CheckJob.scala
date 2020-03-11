@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.actors.worker
 
+import com.github.codelionx.distod.partitions.Partition
 import com.github.codelionx.distod.types.{CandidateSet, OrderDependency}
 
 
@@ -14,4 +15,6 @@ trait CheckJob {
   def performPossibleChecks(): Boolean
 
   def results(attributes: Seq[Int]): (Seq[OrderDependency], T)
+
+  def receivedPartition(key: CandidateSet, partition: Partition): Unit
 }

@@ -10,38 +10,39 @@ import scala.collection.MapView
 
 trait CandidateGeneration {
 
-  def generateNewCandidates(
-      attributes: Seq[Int],
-      state: Map[CandidateSet, CandidateState],
-      currentWorkQueue: WorkQueue,
-      updatedCandidate: CandidateSet
-  ): (Iterable[(CandidateSet, JobType.JobType)], Iterable[(CandidateSet, CandidateState.Delta)]) = {
-
-    val currentNodeState = state(updatedCandidate)
-    // node pruning (again), see master
-    if (currentNodeState.splitCandidates.isEmpty && currentNodeState.swapCandidates.isEmpty) {
-      // no valid descending candidates!
-      (Seq.empty, Map.empty)
-    } else {
-      val potentialNewNodes = updatedCandidate.successors(attributes.toSet)
-
-      // filtered candidates --> computable nodes
-      val nodeFilter = NodeStateFilter.createWithState(state, currentWorkQueue)
-      val newSplitNodes = nodeFilter.computableSplitNodes(potentialNewNodes)
-      val newSwapNodes = nodeFilter.computableSwapNodes(potentialNewNodes)
-
-      // state updates
-      val splitUpdates = updateStateForSplitNodes(newSplitNodes, state)
-      val swapUpdates = updateStateForSwapNodes(newSwapNodes, state)
-
-      val newJobs = (
-        newSplitNodes.map(id => id -> JobType.Split)
-          ++ newSwapNodes.map(id => id -> JobType.Swap)
-        )
-      val updates = splitUpdates ++ swapUpdates
-      (newJobs, updates)
-    }
-  }
+//  @deprecated(message = "is now part of the MasterHelper")
+//  def generateNewCandidates(
+//      attributes: Seq[Int],
+//      state: Map[CandidateSet, CandidateState],
+//      currentWorkQueue: WorkQueue,
+//      updatedCandidate: CandidateSet
+//  ): (Iterable[(CandidateSet, JobType.JobType)], Iterable[(CandidateSet, CandidateState.Delta)]) = {
+//
+//    val currentNodeState = state(updatedCandidate)
+//    // node pruning (again), see master
+//    if (currentNodeState.splitCandidates.isEmpty && currentNodeState.swapCandidates.isEmpty) {
+//      // no valid descending candidates!
+//      (Seq.empty, Map.empty)
+//    } else {
+//      val potentialNewNodes = updatedCandidate.successors(attributes.toSet)
+//
+//      // filtered candidates --> computable nodes
+//      val nodeFilter = NodeStateFilter.createWithState(state, currentWorkQueue)
+//      val newSplitNodes = nodeFilter.computableSplitNodes(potentialNewNodes)
+//      val newSwapNodes = nodeFilter.computableSwapNodes(potentialNewNodes)
+//
+//      // state updates
+//      val splitUpdates = updateStateForSplitNodes(newSplitNodes, state)
+//      val swapUpdates = updateStateForSwapNodes(newSwapNodes, state)
+//
+//      val newJobs = (
+//        newSplitNodes.map(id => id -> JobType.Split)
+//          ++ newSwapNodes.map(id => id -> JobType.Swap)
+//        )
+//      val updates = splitUpdates ++ swapUpdates
+//      (newJobs, updates)
+//    }
+//  }
 
   def generateSplitCandidates(id: CandidateSet, state: MapView[CandidateSet, CandidateState]): CandidateSet = {
     val predecessorSplitCandidates = id.predecessors.map(state(_).splitCandidates)
@@ -75,22 +76,22 @@ trait CandidateGeneration {
     }
   }
 
-  private def updateStateForSplitNodes(
-      newNodes: Iterable[CandidateSet], state: Map[CandidateSet, CandidateState]
-  ): Iterable[(CandidateSet, CandidateState.Delta)] =
-    newNodes.map { id =>
-      val newSplitCandidates = generateSplitCandidates(id, state.view)
-      id -> CandidateState.NewSplitCandidates(newSplitCandidates)
-    }
-
-  private def updateStateForSwapNodes(
-      newNodes: Iterable[CandidateSet],
-      state: Map[CandidateSet, CandidateState]
-  ): Iterable[(CandidateSet, CandidateState.Delta)] =
-    newNodes.map { id =>
-      val newSwapCandidates = generateSwapCandidates(id, state.view)
-      id -> CandidateState.NewSwapCandidates(newSwapCandidates)
-    }
+//  private def updateStateForSplitNodes(
+//      newNodes: Iterable[CandidateSet], state: Map[CandidateSet, CandidateState]
+//  ): Iterable[(CandidateSet, CandidateState.Delta)] =
+//    newNodes.map { id =>
+//      val newSplitCandidates = generateSplitCandidates(id, state.view)
+//      id -> CandidateState.NewSplitCandidates(newSplitCandidates)
+//    }
+//
+//  private def updateStateForSwapNodes(
+//      newNodes: Iterable[CandidateSet],
+//      state: Map[CandidateSet, CandidateState]
+//  ): Iterable[(CandidateSet, CandidateState.Delta)] =
+//    newNodes.map { id =>
+//      val newSwapCandidates = generateSwapCandidates(id, state.view)
+//      id -> CandidateState.NewSwapCandidates(newSwapCandidates)
+//    }
 
 
   def generateLevel0(attributes: Set[Int], nTuples: Int): Map[CandidateSet, CandidateState] =

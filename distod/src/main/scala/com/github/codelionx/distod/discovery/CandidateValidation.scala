@@ -194,24 +194,24 @@ trait CandidateValidation {
     )
   }
 
-  private def findSwap(rightTupleValueMapping: Map[Int, Int])(sortedClass: IndexedSeq[Seq[Int]]): (Boolean, Boolean) = {
-    val default = false -> false
-    if (sortedClass.size < 2) {
-      default
-    } else {
-      val combinations = sortedClass.sliding(2)
-      combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
-        val list1 = lists(0)
-        val list2 = lists(1)
-
-        val rightValues1 = list1.map(rightTupleValueMapping)
-        val rightValues2 = list2.map(rightTupleValueMapping)
-        val isSwap = rightValues1.max > rightValues2.min
-        val isReverseSwap = rightValues2.max > rightValues1.min
-        (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
-      }
-    }
-  }
+//  private def findSwap(rightTupleValueMapping: Map[Int, Int])(sortedClass: IndexedSeq[Seq[Int]]): (Boolean, Boolean) = {
+//    val default = false -> false
+//    if (sortedClass.size < 2) {
+//      default
+//    } else {
+//      val combinations = sortedClass.sliding(2)
+//      combinations.foldLeft(default) { case ((formerSwap, formerReverseSwap), lists) =>
+//        val list1 = lists(0)
+//        val list2 = lists(1)
+//
+//        val rightValues1 = list1.map(rightTupleValueMapping)
+//        val rightValues2 = list2.map(rightTupleValueMapping)
+//        val isSwap = rightValues1.max > rightValues2.min
+//        val isReverseSwap = rightValues2.max > rightValues1.min
+//        (formerSwap || isSwap) -> (formerReverseSwap || isReverseSwap)
+//      }
+//    }
+//  }
 
   private def findSwapFast(
       rightTupleValueMapping: TupleValueMap.TYPE
@@ -232,6 +232,17 @@ trait CandidateValidation {
         isReverseSwap = isReverseSwap || rightValues2.max > rightValues1.min
       }
       (isSwap, isReverseSwap)
+    }
+  }
+
+  def calculateInterestingnessScore(id: CandidateSet, partition: StrippedPartition): Long = {
+    if(id.isEmpty) {
+      Long.MaxValue
+    } else {
+      // size of singleton classes is 1. Squaring does not change it, so we can just sum them up
+      val singletonClasses = partition.nTuples - partition.numberElements
+      val score = partition.equivClasses.map(_.length.toLong).map(s => s * s).sum
+      score + singletonClasses
     }
   }
 }

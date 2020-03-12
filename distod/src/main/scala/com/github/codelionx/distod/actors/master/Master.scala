@@ -210,13 +210,21 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
           case Some(s) => Some(s.updatedAll(updates))
         }
       }
-      // get successor states
-      val successorStates = id.successors(attributes).map { successor =>
-        state.getOrElse(successor, CandidateState(successor))
+      // only generate next candidates if size limit is not reached
+      if(settings.pruning.odSizeLimit.forall(limit => id.size < limit)) {
+        // get successor states for candidate generation
+        val successorStates = id.successors(attributes).map { successor =>
+          state.getOrElse(successor, CandidateState(successor))
+        }
+        pool ! GenerateCandidates(id, jobType, successorStates)
+        timingSpans.end("State integration")
+        behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
+      } else {
+        timingSpans.end("State integration")
+        stash.unstashAll(
+          behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs, testedCandidates + 1)
+        )
       }
-      pool ! GenerateCandidates(id, jobType, successorStates)
-      timingSpans.end("State integration")
-      behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
 
     case NewCandidatesGenerated(id, jobType, newJobs, stateUpdates) =>
       timingSpans.start("State integration")

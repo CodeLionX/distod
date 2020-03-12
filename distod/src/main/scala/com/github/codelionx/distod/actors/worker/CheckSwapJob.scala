@@ -1,14 +1,25 @@
 package com.github.codelionx.distod.actors.worker
 
+import com.github.codelionx.distod.actors.worker.CheckSwapJob.CheckResult
 import com.github.codelionx.distod.discovery.CandidateValidation
 import com.github.codelionx.distod.partitions.{FullPartition, Partition, StrippedPartition}
 import com.github.codelionx.distod.types.CandidateSet
 import com.github.codelionx.distod.types.OrderDependency.EquivalencyOrderDependency
 
 
+object CheckSwapJob {
+  private[CheckSwapJob] final case class CheckResult(
+    id: CandidateSet,
+    ods: Seq[EquivalencyOrderDependency],
+    isPruned: Boolean = false
+  )
+}
+
+
 class CheckSwapJob(
     override val candidateId: CandidateSet,
-    override val candidates: Seq[(Int, Int)]
+    override val candidates: Seq[(Int, Int)],
+    private val interestingnessThreshold: Option[Long]
 ) extends CheckJob with CandidateValidation {
 
   override type T = Seq[(Int, Int)]
@@ -41,11 +52,17 @@ class CheckSwapJob(
       contextPartition <- candidatePartitions.get(context)
       aPartition <- singletonPartitions.get(CandidateSet.from(a))
       bPartition <- singletonPartitions.get(CandidateSet.from(b))
-    } yield context -> checkSwapCandidate(context, a, b, contextPartition, aPartition, bPartition)
+      isPruned = interestingnessThreshold.map(t => calculateInterestingnessScore(context, contextPartition) <= t)
+    } yield {
+      if(isPruned.exists(identity))
+        CheckResult(context, Seq.empty, isPruned = true)
+      else
+        CheckResult(context, checkSwapCandidate(context, a, b, contextPartition, aPartition, bPartition))
+    }
 
-    uncheckedCandidates --= results.keys
-    candidatePartitions --= results.keys
-    validODs ++= results.values.flatten
+    uncheckedCandidates --= results.map(_.id)
+    candidatePartitions --= results.map(_.id)
+    validODs ++= results.flatMap(_.ods)
     allChecksFinished
   }
 

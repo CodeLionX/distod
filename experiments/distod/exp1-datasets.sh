@@ -3,7 +3,7 @@
 datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=5
+N=3
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
 

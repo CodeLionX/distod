@@ -3,13 +3,13 @@
 datasets="test-sub.json iris-sub.json chess-sub.json abalone-sub.json bridges-sub.json adult-sub.json letter-sub.json hepatitis-sub.json flight_1k_30c-sub.json fd-reduced-250k-30-sub.json horse-sub.json plista-sub.json ncvoter-1m-19-sub.json"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=5
+N=3
 
 # write lock file
 touch /var/lock/fastod-spark-exp1-datasets.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Run,Runtime (s),#FDs,#ODs" >"${resultfile}"
+echo "Dataset,Run,Runtime (s),#FDs,#ODs  (misses double ODs!)" >"${resultfile}"
 
 for dataset in ${datasets}; do
   echo ""
@@ -40,7 +40,10 @@ for dataset in ${datasets}; do
     {
       echo -n "${dataset},${n},"
       grep "==== Total" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-      echo -n ",${fds},${ods}"
+      echo -n ","
+      grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      echo -n ","
+      grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
       # force newline
       echo ""
     } >>"${resultfile}"

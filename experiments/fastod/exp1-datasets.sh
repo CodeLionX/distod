@@ -5,13 +5,13 @@ declare -a delimiters=( "," "," "," "," "," ";" "," "," ";" "," ";" ";" "," )
 
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=5
+N=3
 
 # write lock file
 touch /var/lock/fastod-exp1-datasets.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Run,Runtime (ms),#FDs,#ODs (misses double ODs!)" >"${resultfile}"
+echo "Dataset,Run,Runtime (ms),#FDs,#ODs" >"${resultfile}"
 
 for (( i=0; i<${#datasets[@]}; ++i )); do
   dataset="${datasets[i]}"
@@ -31,13 +31,12 @@ for (( i=0; i<${#datasets[@]}; ++i )); do
     was_killed=$(( $? == 143 ))
 
     echo "Gathering results for dataset ${dataset}"
+    fds=$(grep -c "FD" results.txt)
+    ods=$(grep -c "OD" results.txt)
     {
       echo -n "${dataset},${n},"
       grep "Run Time (ms)" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-      echo -n ","
-      grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-      echo -n ","
-      grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      echo -n ",${fds},${ods}"
       # force newline
       echo ""
     } >>"${resultfile}"

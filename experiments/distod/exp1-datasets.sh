@@ -87,7 +87,7 @@ for dataset in ${datasets}; do
     done
 
     {
-      echo -n "${dataset},${n}"
+      echo -n "${dataset},${n},"
       grep "TIME Overall runtime" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
       echo -n ","
       grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'

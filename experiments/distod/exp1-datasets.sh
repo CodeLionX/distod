@@ -5,7 +5,7 @@ resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 N=3
 
-nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
+nodes="thor01 thor02 thor03 thor04 odin01 odin03 odin04 odin05 odin06 odin07 odin08"
 
 # write lock file
 touch /var/lock/distod-exp1-datasets.lock

@@ -26,9 +26,9 @@ for (( i=0; i<${#datasets[@]}; ++i )); do
     echo "Run ${n}"
 
     # fastod arguments: dataset csv_delimiter has_header
-    timeout --preserve-status --signal=15 24h \
+    timeout --signal=15 24h \
       /usr/bin/java -Xms31G -Xmx31G -jar fastod.jar "../data/${dataset}" "${delimiter}" "false" 2>&1 | tee "${logfile}"
-    was_killed=$(( $? == 143 ))
+    was_killed=$(( $? == 124 ))
 
     echo "Gathering results for dataset ${dataset}"
     fds=$(grep -c "FD" results.txt)

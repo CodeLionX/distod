@@ -32,7 +32,7 @@ for dataset in ${datasets}; do
     t0=$(date +%s)
 
     # start leader
-    timeout --preserve-status --signal=15 24h \
+    timeout --signal=15 24h \
       java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
         -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
@@ -42,7 +42,7 @@ for dataset in ${datasets}; do
         -Ddistod.input.path="../data/${dataset}" \
         -Ddistod.input.has-header="no" \
         -jar distod.jar 2>&1 | tee "${logfile}"
-    was_killed=$(( $? == 143 ))
+    was_killed=$(( $? == 124 ))
 
     t1=$(date +%s)
     duration=$(( t1 - t0 ))

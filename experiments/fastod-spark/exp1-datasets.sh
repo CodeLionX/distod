@@ -21,7 +21,7 @@ for dataset in ${datasets}; do
     echo ""
     echo "Run ${n}"
 
-    timeout --preserve-status --signal=15 24h \
+    timeout --signal=15 24h \
       /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
         --class FastODMain \
         --master spark://odin01:7077 \
@@ -31,12 +31,10 @@ for dataset in ${datasets}; do
         --executor-cores 20 \
         --total-executor-cores 220 \
         distributed-fastod.jar "file:$(pwd)/data/${dataset}" "100" 2>&1 | tee "${logfile}"
-    was_killed=$(( $? == 143 ))
+    was_killed=$(( $? == 124 ))
 
 
     echo "Gathering results for dataset ${dataset}"
-    fds=$(grep -c "FD" results.txt)
-    ods=$(grep -c "OD" results.txt)
     {
       echo -n "${dataset},${n},"
       grep "==== Total" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'

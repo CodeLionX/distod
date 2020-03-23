@@ -23,7 +23,7 @@ import com.github.codelionx.util.GenericLogLevelLogger._
 
 object Master {
 
-  private final val workerMessageMultiplier = 5
+  private[master] final val workerMessageMultiplier = 5
 
   sealed trait Command
   // only used from master helpers
@@ -57,8 +57,12 @@ object Master {
       resultCollector: ActorRef[ResultCommand]
   ): Behavior[Command] = Behaviors.setup { context =>
     val settings = Settings(context.system)
-    val stashSize =
-      settings.maxWorkers * settings.concurrentWorkerJobs * workerMessageMultiplier * settings.expectedNodeCount
+    val stashSize = (
+      scala.math.max(settings.maxWorkers, 10)
+        * settings.concurrentWorkerJobs
+        * workerMessageMultiplier
+        * settings.expectedNodeCount
+      )
 
     Behaviors.withStash(stashSize) { stash =>
       val masterBehavior =

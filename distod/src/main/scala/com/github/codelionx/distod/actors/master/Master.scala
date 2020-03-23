@@ -6,7 +6,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
-import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateCandidates, NextJob}
+import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateCandidates, InitWithAttributes, NextJob}
 import com.github.codelionx.distod.actors.worker.Worker
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.StrippedPartition
@@ -102,9 +102,15 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   def start(): Behavior[Command] = initialize()
 
   private def initialize(): Behavior[Command] = Behaviors.setup { context =>
-    // register message adapters
-    val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
+    // create helper pool and register it at the receptionist
+    val pool = context.spawn(
+      MasterHelper.createPool(settings.parallelism)(state, context.self, partitionManager),
+      name = MasterHelper.poolName
+    )
+    context.system.receptionist ! Receptionist.Register(MasterServiceKey, pool)
 
+    // load data
+    val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
     dataReader ! LoadPartitions(loadingEventMapper)
 
     Behaviors.receiveMessagePartial[Command] {
@@ -118,13 +124,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         val attributeSet = attributes.toSet
         partitionManager ! PartitionManagementProtocol.SetAttributes(attributes)
         resultCollector ! ResultCollectionProtocol.SetAttributeNames(headers.toIndexedSeq)
-
-        // create helper pool and register it at the receptionist
-        val pool = context.spawn(
-          MasterHelper.createPool(settings.parallelism)(state, context.self, partitionManager, attributeSet),
-          name = MasterHelper.poolName
-        )
-        context.system.receptionist ! Receptionist.Register(MasterServiceKey, pool)
+        pool ! InitWithAttributes(attributeSet)
 
         // L0: root candidate node
         val rootCandidateState = generateLevel0(attributeSet, table.nTuples)

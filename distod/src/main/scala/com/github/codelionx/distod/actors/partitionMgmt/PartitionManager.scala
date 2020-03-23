@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.partitionMgmt
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer, TimerScheduler}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.actors.SystemMonitor
 import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, Register, SystemEvent}
@@ -18,19 +18,14 @@ object PartitionManager {
 
   private[partitionMgmt] case class ProductComputed(key: CandidateSet, partition: StrippedPartition)
     extends PartitionCommand
-
   private case object Cleanup extends PartitionCommand
-
   private final case class WrappedSystemEvent(event: SystemEvent) extends PartitionCommand
-
   private sealed trait PendingResponse
-
   private final case class PendingError(replyTo: ActorRef[ErrorFound], candidateId: CandidateSet)
     extends PendingResponse
-
   private final case class PendingStrippedPartition(
-                                                     replyTo: ActorRef[StrippedPartitionFound], candidateId: CandidateSet
-                                                   ) extends PendingResponse
+      replyTo: ActorRef[StrippedPartitionFound], candidateId: CandidateSet
+  ) extends PendingResponse
 
   val name = "partition-manager"
 
@@ -48,11 +43,11 @@ object PartitionManager {
 
 
 class PartitionManager(
-                        context: ActorContext[PartitionCommand],
-                        stash: StashBuffer[PartitionCommand],
-                        timers: TimerScheduler[PartitionCommand],
-                        monitor: ActorRef[SystemMonitor.Command]
-                      ) {
+    context: ActorContext[PartitionCommand],
+    stash: StashBuffer[PartitionCommand],
+    timers: TimerScheduler[PartitionCommand],
+    monitor: ActorRef[SystemMonitor.Command]
+) {
 
   import PartitionManager._
 
@@ -81,8 +76,8 @@ class PartitionManager(
   }
 
   private def initialize(
-                          attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
-                        ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
+      attributes: Seq[Int], singletonPartitions: Map[CandidateSet, FullPartition]
+  ): Behavior[PartitionCommand] = Behaviors.receiveMessage {
 
     case SetAttributes(newAttributes) =>
       context.log.debug("Received attributes: {}", newAttributes)
@@ -104,15 +99,15 @@ class PartitionManager(
   }
 
   private def nextBehavior(
-                            attributes: Seq[Int],
-                            singletonPartitions: Map[CandidateSet, FullPartition]
-                          ): Behavior[PartitionCommand] =
+      attributes: Seq[Int],
+      singletonPartitions: Map[CandidateSet, FullPartition]
+  ): Behavior[PartitionCommand] =
     if (attributes.nonEmpty && singletonPartitions.size == attributes.size) {
       context.log.info(
         "Initialization of partition manager finished, received {} attributes and {} partitions. {}",
         attributes.size,
         singletonPartitions.size,
-        if(settings.directPartitionProductThreshold > 2)
+        if (settings.directPartitionProductThreshold > 2)
           "Partition product of deep partitions is computed directly, when it would take more than " +
             s"${settings.directPartitionProductThreshold} steps to compute it incrementally."
         else

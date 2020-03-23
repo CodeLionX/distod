@@ -78,7 +78,7 @@ for dataset in ${datasets}; do
 
     # collect results
     echo "Collecting results for dataset ${dataset} run ${n}"
-    mv distod.log "${resultfolder}/${dataset}/${n}/distod-odin01.log"
+    mv distod.log "${resultfolder}/${dataset}/${n}/distod-$(hostname).log"
     mv results.txt "${resultfolder}/${dataset}/${n}/"
     for node in ${nodes}; do
       scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/${n}/distod-${node}.log" >/dev/null

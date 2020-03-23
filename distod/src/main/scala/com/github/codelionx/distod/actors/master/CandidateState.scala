@@ -25,9 +25,10 @@ object CandidateState {
 
     override val splitChecked: Boolean = false
     override val swapChecked: Boolean = true
+    override val isFullyGenerated: Boolean = true
     override val swapCandidates: Seq[(Int, Int)] = Seq.empty
 
-    override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+    override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
       case JobType.Split => true
       case JobType.Swap => false
     }
@@ -116,12 +117,14 @@ sealed trait CandidateState {
 
   def swapCandidates: Seq[(Int, Int)] = throw new IllegalAccessException("Swap candidates are not yet ready!")
 
+  def isFullyGenerated: Boolean
+
   def splitChecked: Boolean
 
   def swapChecked: Boolean
 
   // state transitions
-  def isReadyToCheck(jobType: JobType.JobType): Boolean
+  def isReadyToGenerate(jobType: JobType.JobType): Boolean
 
   def updated(delta: CandidateState.Delta): CandidateState
 
@@ -133,7 +136,7 @@ sealed trait CandidateState {
 
   def isNotPruned: Boolean = !isPruned
 
-  def notReadyToCheck(jobType: JobType.JobType): Boolean = !isReadyToCheck(jobType)
+  def notReadyToCheck(jobType: JobType.JobType): Boolean = !isReadyToGenerate(jobType)
 
   def shouldBePruned: Boolean = isFullyChecked && splitCandidates.isEmpty && swapCandidates.isEmpty
 
@@ -159,12 +162,13 @@ case class PrunedCandidateState(id: CandidateSet) extends CandidateState {
   override val splitChecked: Boolean = true
   override val swapChecked: Boolean = true
   override val isPruned: Boolean = true
+  override val isFullyGenerated: Boolean = true
   override val splitCandidates: CandidateSet = CandidateSet.empty
   override val swapCandidates: Seq[(Int, Int)] = Seq.empty
 
   override def prune: CandidateState = this
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = false
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = false
 
   override def updated(delta: CandidateState.Delta): CandidateState =
     // silently ignore updates
@@ -179,8 +183,9 @@ case class InitialCandidateState(
 
   override val splitChecked: Boolean = false
   override val swapChecked: Boolean = false
+  override val isFullyGenerated: Boolean = false
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => id.size == splitPreconditions
     case JobType.Swap => id.size == splitPreconditions && id.size == swapPreconditions
   }
@@ -192,13 +197,13 @@ case class InitialCandidateState(
       this.copy(splitPreconditions = this.splitPreconditions + 1)
     case IncPrecondition(JobType.Swap) =>
       this.copy(swapPreconditions = this.swapPreconditions + 1)
-    case NewSplitCandidates(splitCandidates) if isReadyToCheck(JobType.Split) =>
+    case NewSplitCandidates(splitCandidates) if isReadyToGenerate(JobType.Split) =>
       SplitReadyCandidateState(
         id = id,
         splitCandidates = splitCandidates,
         swapPreconditions = swapPreconditions
       )
-    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) =>
+    case NewSwapCandidates(swapCandidates) if isReadyToGenerate(JobType.Swap) =>
       SwapReadyCandidateState(
         id = id,
         swapCandidates = swapCandidates
@@ -215,8 +220,9 @@ case class SplitReadyCandidateState(
 ) extends CandidateState {
 
   override val swapChecked: Boolean = false
+  override val isFullyGenerated: Boolean = false
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => !splitChecked
     case JobType.Swap => id.size == swapPreconditions
   }
@@ -228,13 +234,13 @@ case class SplitReadyCandidateState(
       this
     case IncPrecondition(JobType.Swap) =>
       this.copy(swapPreconditions = this.swapPreconditions + 1)
-    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && this.splitChecked =>
+    case NewSwapCandidates(swapCandidates) if isReadyToGenerate(JobType.Swap) && this.splitChecked =>
       SplitCheckedCandidateState(
         id = id,
         splitCandidates = this.splitCandidates,
         swapCandidates = swapCandidates
       )
-    case NewSwapCandidates(swapCandidates) if isReadyToCheck(JobType.Swap) && !this.splitChecked =>
+    case NewSwapCandidates(swapCandidates) if isReadyToGenerate(JobType.Swap) && !this.splitChecked =>
       ReadyCandidateState(
         id = id,
         splitCandidates = this.splitCandidates,
@@ -257,8 +263,9 @@ case class SwapReadyCandidateState(
 ) extends CandidateState {
 
   override val splitChecked: Boolean = false
+  override val isFullyGenerated: Boolean = false
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => true
     case JobType.Swap => !swapChecked
   }
@@ -298,8 +305,9 @@ case class ReadyCandidateState(
 
   override val splitChecked: Boolean = false
   override val swapChecked: Boolean = false
+  override val isFullyGenerated: Boolean = true
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => !splitChecked
     case JobType.Swap => !swapChecked
   }
@@ -331,8 +339,9 @@ case class SplitCheckedCandidateState(
 
   override val splitChecked: Boolean = true
   override val swapChecked: Boolean = false
+  override val isFullyGenerated: Boolean = true
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => false
     case JobType.Swap => true
   }
@@ -359,8 +368,9 @@ case class SwapCheckedCandidateState(
 
   override val splitChecked: Boolean = false
   override val swapChecked: Boolean = true
+  override val isFullyGenerated: Boolean = true
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = jobType match {
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = jobType match {
     case JobType.Split => true
     case JobType.Swap => false
   }
@@ -387,8 +397,9 @@ case class FullyCheckedCandidateState(
 
   override val splitChecked: Boolean = true
   override val swapChecked: Boolean = true
+  override val isFullyGenerated: Boolean = true
 
-  override def isReadyToCheck(jobType: JobType.JobType): Boolean = false
+  override def isReadyToGenerate(jobType: JobType.JobType): Boolean = false
 
   override def updated(delta: CandidateState.Delta): CandidateState = delta match {
     case Prune() => this.prune

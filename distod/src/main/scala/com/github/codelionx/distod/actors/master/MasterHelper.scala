@@ -1,7 +1,7 @@
 package com.github.codelionx.distod.actors.master
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, PoolRouter, Routers}
 import com.github.codelionx.distod.Serialization.CborSerializable
 import com.github.codelionx.distod.actors.master.CandidateState.{IncPrecondition, Prune}
 import com.github.codelionx.distod.actors.master.Master.{DequeueNextJob, EnqueueCancelledJob, NewCandidatesGenerated, UpdateState}
@@ -11,6 +11,7 @@ import com.github.codelionx.distod.actors.worker.Worker.{CheckSplitCandidates, C
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.protocols.PartitionManagementProtocol.PartitionCommand
 import com.github.codelionx.distod.types.CandidateSet
+import com.github.codelionx.distod.Settings
 import com.github.codelionx.util.largeMap.immutable.PendingJobMap
 import com.github.codelionx.util.largeMap.mutable.FastutilState
 import com.github.codelionx.util.timing.Timing
@@ -31,15 +32,46 @@ object MasterHelper {
   final case class GetPrimaryPartitionManager(replyTo: ActorRef[PrimaryPartitionManager])
     extends Command with CborSerializable
 
-  private[master] final case class NextJob(job: (CandidateSet, JobType.JobType), replyTo: ActorRef[Worker.Command]) extends Command
-  private[master] final case class GenerateCandidates(id: CandidateSet, jobType: JobType.JobType, successorStates: Set[CandidateState])
+  private[master] final case class NextJob(job: (CandidateSet, JobType.JobType), replyTo: ActorRef[Worker.Command])
     extends Command
+  private[master] final case class GenerateCandidates(
+      id: CandidateSet, jobType: JobType.JobType, successorStates: Set[CandidateState]
+  ) extends Command
+  private[master] final case class InitWithAttributes(attributes: Set[Int]) extends Command
 
   val poolName = "master-helper-pool"
 
   def name(n: Int): String = s"master-helper-$n"
 
   def createPool(n: Int)(
+      state: FastutilState[CandidateState],
+      master: ActorRef[Master.Command],
+      partitionManager: ActorRef[PartitionCommand]
+  ): Behavior[Command] = Behaviors.setup { context =>
+    val settings = Settings(context.system)
+    val stashSize = (
+      scala.math.max(settings.maxWorkers, 10)
+        * settings.concurrentWorkerJobs
+        * Master.workerMessageMultiplier
+        * settings.expectedNodeCount
+      )
+
+    // lazy initialization of master helper pool to make attributes available for all routees during creation
+    Behaviors.withStash(stashSize)(stash =>
+      Behaviors.receiveMessage {
+        case InitWithAttributes(attributes) =>
+          stash.unstashAll(
+            createConfiguredPool(n, state, master, partitionManager, attributes)
+          )
+        case m =>
+          stash.stash(m)
+          Behaviors.same
+      }
+    )
+  }
+
+  private def createConfiguredPool(
+      n: Int,
       state: FastutilState[CandidateState],
       master: ActorRef[Master.Command],
       partitionManager: ActorRef[PartitionCommand],
@@ -72,9 +104,10 @@ class MasterHelper(
 
   import MasterHelper._
 
+
   private val timingSpans = Timing(context.system).createSpans
 
-  def start(): Behavior[Command] = Behaviors.receiveMessage{
+  def start(): Behavior[Command] = Behaviors.receiveMessage {
     case GetPrimaryPartitionManager(replyTo) =>
       replyTo ! PrimaryPartitionManager(partitionManager)
       Behaviors.same
@@ -120,9 +153,14 @@ class MasterHelper(
       master ! NewCandidatesGenerated(id, jobType, newJobs, newStateUpdates)
       timingSpans.end("Candidate generation")
       Behaviors.same
+
+    case InitWithAttributes(_) => // ignore
+      Behaviors.same
   }
 
-  private def updateState(job: (CandidateSet, JobType.JobType), stateUpdate: CandidateState.Delta): Behavior[Command] = {
+  private def updateState(
+      job: (CandidateSet, JobType.JobType), stateUpdate: CandidateState.Delta
+  ): Behavior[Command] = {
     context.log.debug("Received results for {}", job)
     timingSpans.begin("Result state update")
     val (id, jobType) = job
@@ -135,7 +173,7 @@ class MasterHelper(
       case Some(s) =>
         stateUpdates += id -> stateUpdate
         val updated = s.updated(stateUpdate)
-        if(updated.shouldBePruned) {
+        if (updated.shouldBePruned) {
           stateUpdates += id -> Prune()
           Some(updated.updated(Prune()))
         } else {
@@ -162,7 +200,7 @@ class MasterHelper(
       )
     }
 
-    val distinctStateUpdates = stateUpdates.toMap.map{
+    val distinctStateUpdates = stateUpdates.toMap.map {
       case (key, value) => key -> value.toSet
     }
     master ! UpdateState(job, distinctStateUpdates, removePruned)
@@ -193,7 +231,7 @@ class MasterHelper(
     // group state updates
     val stateUpdates = (splitStateUpdates ++ swapStateUpdates)
       .groupBy { case (id, _) => id }
-      .map { case (key, value) => key -> value.map{ case (_, delta) => delta } }
+      .map { case (key, value) => key -> value.map { case (_, delta) => delta } }
 
     val newJobs: Set[(CandidateSet, JobType.JobType)] = newSplitJobs ++ newSwapJobs
     newJobs -> stateUpdates

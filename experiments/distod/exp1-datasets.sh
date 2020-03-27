@@ -32,8 +32,12 @@ for dataset in ${datasets}; do
     t0=$(date +%s)
 
     # start leader
+    heap_size=31g
+#    if [[ "${dataset}" == "horse-sub.csv" || "${dataset}" == "plista-sub.csv" || "${dataset}" == "ncvoter-1m-19-sub.csv" ]]; then
+#      heap_size=58g
+#    fi
     timeout --signal=15 24h \
-      java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
+      java "-Xms${heap_size}" "-Xmx${heap_size}" -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
         -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
         -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \

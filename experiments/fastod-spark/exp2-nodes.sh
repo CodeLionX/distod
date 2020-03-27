@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="letter-sub.json"
+datasets="adult-sub.json"
 nodes="1 2 3 4 5 6 7 8 9 10 11"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"

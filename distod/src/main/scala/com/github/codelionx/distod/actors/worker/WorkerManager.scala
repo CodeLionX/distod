@@ -107,12 +107,16 @@ class WorkerManager(
       case Stop(reason) =>
         def stopWorkers(reason: Option[CoordinatedShutdown.Reason]): Behavior[Command] = {
           context.log.error("Shutting down unexpectedly, because {}", reason)
-          context.children.foreach { child =>
-            val worker = child.asInstanceOf[ActorRef[Worker.Command]]
-            worker ! Worker.Stop
+          if(context.children.isEmpty) {
+            Behaviors.stopped
+          } else {
+            context.children.foreach { child =>
+              val worker = child.asInstanceOf[ActorRef[Worker.Command]]
+              worker ! Worker.Stop
+            }
+            // we must wait for the workers to finish processing!
+            awaitShutdown()
           }
-          // we must wait for the workers to finish processing!
-          awaitShutdown()
         }
 
         if(reason.isEmpty) {

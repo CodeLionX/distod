@@ -10,7 +10,8 @@ import com.github.codelionx.distod.Settings
 
 object StreamChannel {
 
-  private val terminationMarker = ByteString(Seq(0, 0, 0, 0, 1, 1, 1, 1).map(_.toByte))
+  private val terminationMarker = ByteString(Seq(0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1).map(_.toByte))
+  private val frameLength = 200000
 
   def prepareSourceRef(system: ActorSystem[_]): (SourceQueueWithComplete[DataMessage], SourceRef[ByteString]) = {
     implicit val _system: ActorSystem[_] = system
@@ -19,8 +20,12 @@ object StreamChannel {
     val source = Source
       .queue[DataMessage](10, OverflowStrategy.backpressure)
       .via(parallelSerializer(Settings(system).parallelism))
-      .map(_ ++ terminationMarker)
-      .flatMapConcat(bytes => Source.fromIterator(() => bytes.grouped(200000)))
+      .flatMapConcat(bytes => Source.fromIterator(() =>
+        if(bytes.nonEmpty)
+          bytes.grouped(frameLength) ++ (terminationMarker :: Nil)
+        else
+          Iterator.empty
+      )).named("frame")
     val graph = source.toMat(StreamRefs.sourceRef())(Keep.both)
     graph.run()
   }
@@ -32,7 +37,20 @@ object StreamChannel {
     implicit val mat: Materializer = SystemMaterializer(system).materializer
 
     sourceRef
-      .via(Framing.delimiter(terminationMarker, maximumFrameLength = 200000000, allowTruncation = true))
+      .statefulMapConcat{() =>
+        var buffer = ByteString.empty
+
+        { bytes =>
+          if(bytes == terminationMarker && buffer.nonEmpty) {
+            val message = ByteString(buffer)
+            buffer = ByteString.empty
+            message :: Nil
+          } else {
+            buffer ++= bytes
+            Nil
+          }
+        }
+      }.named("collectFrames")
       .via(parallelDeserializer(Settings(system).parallelism))
       .runWith(sink)
   }
@@ -42,7 +60,7 @@ object StreamChannel {
     (implicit system: ActorSystem[_]): Flow[DataMessage, ByteString, NotUsed] = {
     import GraphDSL.Implicits._
 
-    val serialize = Flow.fromFunction(DataMessage.serialize)
+    val serialize = Flow.fromFunction(DataMessage.serialize).named("serialize")
 
     Flow.fromGraph(GraphDSL.create() { implicit b =>
       val balancer = b.add(Balance[DataMessage](parallelism, waitForAllDownstreams = false))
@@ -60,7 +78,7 @@ object StreamChannel {
     (implicit system: ActorSystem[_]): Flow[ByteString, DataMessage, NotUsed] = {
     import GraphDSL.Implicits._
 
-    val deserialize = Flow.fromFunction(DataMessage.deserialize)
+    val deserialize = Flow.fromFunction(DataMessage.deserialize).named("deserialize")
 
     Flow.fromGraph(GraphDSL.create() { implicit b =>
       val balancer = b.add(Balance[ByteString](parallelism, waitForAllDownstreams = false))

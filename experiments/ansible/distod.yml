@@ -23,7 +23,7 @@
         - start.sh
         - "{{ inventory_hostname }}.conf"
 
-- hosts: odin02
+- hosts: leader
   gather_facts: no
   vars_files:
     - vars/distod.yml

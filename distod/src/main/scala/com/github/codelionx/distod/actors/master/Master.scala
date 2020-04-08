@@ -8,6 +8,8 @@ import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateCandidates, InitWithAttributes, NextJob}
 import com.github.codelionx.distod.actors.worker.Worker
+import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, SystemEvent}
+import com.github.codelionx.distod.actors.master.StateGC.Start
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.StrippedPartition
 import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
@@ -117,6 +119,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
     dataReader ! LoadPartitions(loadingEventMapper)
 
+    // create state GC
+    val stateGc = context.spawn(
+      StateGC(state, context.self),
+      StateGC.name,
+      DispatcherSelector.fromConfig(s"distod.background-dispatcher")
+    )
+
     Behaviors.receiveMessagePartial[Command] {
       case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
@@ -154,12 +163,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
 
         val initialQueue = l1candidates.map(key => key -> JobType.Split)
 
-        // start state GC
-        context.spawn(
-          StateGC(state, attributeSet, context.self),
-          StateGC.name,
-          DispatcherSelector.fromConfig(s"distod.background-dispatcher")
-        )
+        // start StateGC
+        if(settings.stateGc.enabled) {
+          stateGc ! Start(attributeSet)
+        }
 
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         context.log.trace("Initial state:\n{}", state.mkString("\n"))

@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.typed.{ActorSystem, DispatcherSelector, Extension, ExtensionId}
 import com.github.codelionx.distod.ActorSystem.{FOLLOWER, LEADER, Role}
-import com.github.codelionx.distod.Settings.{InputParsingSettings, MonitoringSettings, PartitionCompactionSettings, PruningSettings}
+import com.github.codelionx.distod.Settings.{InputParsingSettings, MonitoringSettings, PartitionCompactionSettings, PruningSettings, StateGCSettings}
 import com.typesafe.config.{Config, ConfigException}
 
 import scala.concurrent.duration.FiniteDuration
@@ -59,6 +59,14 @@ object Settings extends ExtensionId[Settings] {
     def pruneInterestingness: Boolean = interestingnessThreshold.isDefined
   }
 
+  trait StateGCSettings {
+    def enabled: Boolean
+
+    def interval: FiniteDuration
+
+    def timeLimit: FiniteDuration
+  }
+
 }
 
 
@@ -75,6 +83,12 @@ class Settings private(config: Config) extends Extension {
   private val namespace = "distod"
 
   def rawConfig: Config = config
+
+  private def toFiniteDuration(d: java.time.Duration): FiniteDuration = {
+    val finiteDurationOnlySeconds = FiniteDuration(d.getSeconds, TimeUnit.SECONDS)
+    val finiteDurationOnlyNanos = FiniteDuration(d.getNano, TimeUnit.NANOSECONDS)
+    finiteDurationOnlySeconds + finiteDurationOnlyNanos
+  }
 
   val actorSystemName: String = config.getString(s"$namespace.system-name")
 
@@ -164,12 +178,7 @@ class Settings private(config: Config) extends Extension {
 
     private val subnamespace = s"$namespace.monitoring"
 
-    override val interval: FiniteDuration = {
-      val duration = config.getDuration(s"$subnamespace.interval")
-      val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
-      val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)
-      finiteDurationOnlySeconds + finiteDurationOnlyNanos
-    }
+    override val interval: FiniteDuration = toFiniteDuration(config.getDuration(s"$subnamespace.interval"))
 
     override val heapEvictionThreshold: Double = config.getInt(s"$subnamespace.heap-eviction-threshold") match {
       case i if i <= 0 || i > 100 => throw new ConfigException.BadValue(
@@ -179,12 +188,9 @@ class Settings private(config: Config) extends Extension {
       case i => i / 100.0
     }
 
-    override val statisticsLogInterval: FiniteDuration = {
-      val duration = config.getDuration(s"$subnamespace.statistics-log-interval")
-      val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
-      val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)
-      finiteDurationOnlySeconds + finiteDurationOnlyNanos
-    }
+    override val statisticsLogInterval: FiniteDuration = toFiniteDuration(
+      config.getDuration(s"$subnamespace.statistics-log-interval")
+    )
 
     override val statisticsLogLevel: String = config.getString(s"$subnamespace.statistics-log-level")
   }
@@ -210,5 +216,20 @@ class Settings private(config: Config) extends Extension {
         Some(config.getLong(s"$subnamespace.interestingness-threshold"))
       else
         None
+  }
+
+  val stateGc: StateGCSettings = new StateGCSettings {
+
+    private val subnamespace = s"$namespace.candidate-state-gc"
+
+    override def enabled: Boolean = config.getBoolean(s"$subnamespace.enabled")
+
+    override def interval: FiniteDuration = toFiniteDuration(
+      config.getDuration(s"$subnamespace.interval")
+    )
+
+    override def timeLimit: FiniteDuration = toFiniteDuration(
+      config.getDuration(s"$subnamespace.time-limit")
+    )
   }
 }

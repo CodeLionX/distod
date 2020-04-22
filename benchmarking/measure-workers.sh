@@ -12,6 +12,7 @@ for workers in ${worker_configurations}; do
         -Dconfig.file=bench.conf \
         -Dlogback.configurationFile=logback.xml \
         -Ddistod.max-workers="${workers}" \
+        -Dfile.encoding=UTF-8 \
         -jar distod.jar
     )
 

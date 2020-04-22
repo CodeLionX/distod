@@ -33,6 +33,7 @@ for dataset in ${datasets}; do
         -Ddistod.input.path="../data/${dataset}" \
         -Ddistod.input.has-header="no" \
         -Ddistod.max-parallelism="${n}" \
+        -Dfile.encoding=UTF-8 \
         -jar distod.jar 2>&1 | tee "${logfile}"
 
     t1=$(date +%s)

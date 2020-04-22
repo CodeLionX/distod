@@ -55,6 +55,7 @@ for dataset in ${datasets}; do
         -Ddistod.input.path="../data/${dataset}" \
         -Ddistod.input.has-header="no" \
         -Ddistod.input.max-rows="${n}" \
+        -Dfile.encoding=UTF-8 \
         -jar distod.jar 2>&1 | tee "${logfile}"
     was_killed=$(( $? != 0 ))
 

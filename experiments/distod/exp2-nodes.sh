@@ -40,6 +40,7 @@ for dataset in ${datasets}; do
         -Dlogback.configurationFile=logback.xml \
         -Ddistod.input.path="../data/${dataset}" \
         -Ddistod.input.has-header="no" \
+        -Dfile.encoding=UTF-8 \
         -jar distod.jar 2>&1 | tee "${logfile}"
 
     t1=$(date +%s)

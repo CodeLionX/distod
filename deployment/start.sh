@@ -10,4 +10,5 @@ java -Xms28g -Xmx28g -XX:+UseG1GC -XX:G1ReservePercent=10 \
   -Dcom.sun.management.jmxremote.port=9010 -Dcom.sun.management.jmxremote.rmi.port=9010 -Djava.rmi.server.hostname="$(hostname)" \
   -Dconfig.file="$(hostname).conf" \
   -Dlogback.configurationFile=logback.xml \
+  -Dfile.encoding=UTF-8 \
   -jar distod.jar

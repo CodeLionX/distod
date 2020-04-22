@@ -52,9 +52,8 @@ class FastutilState[V] private(
    */
   def reshapeMaps(size: Int): FastutilState.this.type = {
     nAttributes = size
-    val reshapedMaps = levels.zipWithIndex.map { case (hashMap, levelIndex) =>
-      val expectedSize = FastutilState.expectedSize(nAttributes, levelIndex)
-      val updatedMap = new Object2ObjectOpenHashMap[CandidateSet, V](expectedSize, 1)
+    val reshapedMaps = levels.map { hashMap =>
+      val updatedMap = new Object2ObjectOpenHashMap[CandidateSet, V]()
       updatedMap.putAll(hashMap)
       updatedMap
     }
@@ -102,8 +101,7 @@ class FastutilState[V] private(
   override def addOne(elem: (CandidateSet, V)): FastutilState.this.type = {
     val (key, value) = elem
     while (levels.size <= key.size) {
-      val expectedSize = FastutilState.expectedSize(nAttributes, levels.size)
-      levels :+= new Object2ObjectOpenHashMap(expectedSize, 1)
+      levels :+= new Object2ObjectOpenHashMap()
     }
     levels(key.size).put(key, value)
     this

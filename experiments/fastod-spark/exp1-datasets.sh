@@ -3,42 +3,59 @@
 datasets="test-sub.json iris-sub.json chess-sub.json abalone-sub.json bridges-sub.json adult-sub.json letter-sub.json hepatitis-sub.json flight_1k_30c-sub.json fd-reduced-250k-30-sub.json horse-sub.json plista-sub.json ncvoter-1m-19-sub.json"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
+N=3
 
 # write lock file
 touch /var/lock/fastod-spark-exp1-datasets.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Runtime (s),#FDs,#ODs" >"${resultfile}"
+echo "Dataset,Run,Runtime (s),#FDs,#ODs  (misses double ODs!)" >"${resultfile}"
 
 for dataset in ${datasets}; do
-  logfile="${resultfolder}/${dataset}.log"
-
   echo ""
   echo ""
   echo "Running distributed FASTOD (Spark) on dataset ${dataset}"
 
-  timeout --preserve-status --signal=15 24h \
-    /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
-      --class FastODMain \
-      --master spark://odin01:7077 \
-      --driver-memory 31G \
-      --executor-memory 28G \
-      --num-executors 11 \
-      --executor-cores 20 \
-      --total-executor-cores 220 \
-      distributed-fastod.jar "file:$(pwd)/data/${dataset}" "100" 2>&1 | tee "${logfile}"
-
-
-  echo "Gathering results for dataset ${dataset}"
-  fds=$(grep -c "FD" results.txt)
-  ods=$(grep -c "OD" results.txt)
-  {
-    echo -n "${dataset},"
-    grep "==== Total" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-    echo -n ",${fds},${ods}"
-    # force newline
+  for (( n=0; n<N; ++n )); do
+    logfile="${resultfolder}/${dataset}-${n}.log"
     echo ""
-  } >>"${resultfile}"
+    echo "Run ${n}"
+
+    timeout --signal=15 24h \
+      /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
+        --class FastODMain \
+        --master spark://odin01:7077 \
+        --driver-memory 31G \
+        --executor-memory 28G \
+        --num-executors 11 \
+        --executor-cores 20 \
+        --total-executor-cores 220 \
+        distributed-fastod.jar "file:$(pwd)/data/${dataset}" "100" 2>&1 | tee "${logfile}"
+    was_killed=$(( $? == 124 ))
+
+
+    echo "Gathering results for dataset ${dataset}"
+    {
+      echo -n "${dataset},${n},"
+      grep "==== Total" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
+      echo -n ","
+      grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      echo -n ","
+      grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
+      # force newline
+      echo ""
+    } >>"${resultfile}"
+
+    # do not perform other runs if it hit the timelimit
+    if (( was_killed )); then
+      echo "Run exceeded timelimit, continuing with next dataset..."
+      break
+    fi
+  done
+
+  # calculate min for the runtime
+  min_runtime=$( grep "${dataset}" "${resultfile}" | cut -d ',' -f3 | sort -n | head -n 1 )
+  echo "${dataset},ALL,${min_runtime},," >>"${resultfile}"
 done
 
 # release lock file

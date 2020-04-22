@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="letter-sub.csv"
+datasets="adult-sub.csv"
 number_nodes="1 2 3 4 5 6 7 8 9 10 11"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
@@ -31,7 +31,7 @@ for dataset in ${datasets}; do
     t0=$(date +%s)
 
     # start leader
-    timeout --preserve-status --signal=15 24h \
+    timeout --signal=15 24h \
       java -Xms31g -Xmx31g -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
         -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \
@@ -40,6 +40,7 @@ for dataset in ${datasets}; do
         -Dlogback.configurationFile=logback.xml \
         -Ddistod.input.path="../data/${dataset}" \
         -Ddistod.input.has-header="no" \
+        -Dfile.encoding=UTF-8 \
         -jar distod.jar 2>&1 | tee "${logfile}"
 
     t1=$(date +%s)
@@ -79,7 +80,7 @@ for dataset in ${datasets}; do
 
     # collect results
     echo "Collecting results for dataset ${dataset}"
-    mv distod.log "${resultfolder}/${dataset}-${n}nodes/distod-odin01.log"
+    mv distod.log "${resultfolder}/${dataset}-${n}nodes/distod-$(hostname).log"
     mv results.txt "${resultfolder}/${dataset}-${n}nodes/"
     for (( i=0; i<n; ++i )); do
       node="${nodes[i]}"

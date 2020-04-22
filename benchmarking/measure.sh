@@ -18,6 +18,7 @@ for i in {1..20}; do
         -Dconfig.file="${config}" \
         -Dlogback.configurationFile=logback.xml \
         -Ddistod.max-workers="${i}" \
+        -Dfile.encoding=UTF-8 \
         -jar "${jar}"
     )
 

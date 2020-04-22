@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-datasets="letter-sub.json"
+datasets="adult-sub.json"
 nodes="1 2 3 4 5 6 7 8 9 10 11"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
@@ -21,11 +21,11 @@ for dataset in ${datasets}; do
 
     e_cores=20
     total_e_cores=$(( n * e_cores ))
-    timeout --preserve-status --signal=15 24h \
+    timeout --signal=15 24h \
       /opt/spark/2.4.4/bin/spark-submit --jars libs/fastutil-6.1.0.jar,libs/lucene-core-4.5.1.jar \
         --class FastODMain \
         --master spark://odin01:7077 \
-        --driver-memory 60G \
+        --driver-memory 31G \
         --executor-memory 28G \
         --num-executors "${n}" \
         --executor-cores "${e_cores}" \

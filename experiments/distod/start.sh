@@ -8,4 +8,5 @@ java -Xms28g -Xmx28g -XX:+UseG1GC -XX:G1ReservePercent=10 \
   -XX:G1MixedGCCountTarget=10 -XX:G1OldCSetRegionThresholdPercent=20 \
   -Dconfig.file="$(hostname).conf" \
   -Dlogback.configurationFile=logback.xml \
+  -Dfile.encoding=UTF-8 \
   -jar distod.jar

@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 
-datasets="ncvoter-1m-19-sub.csv"
+declare -a datasets=( "adult-sub.csv" "flight-500k.csv" "ncvoter-1m-19-sub.csv" )
+declare -a row_limits=( 33000 500000 1000000 )
+
 steps=10
-row_limit=1000000
-
-#datasets="adult-sub.csv"
-#steps=10
-#row_limit=33000
-
-row_step=$(( row_limit / steps ))
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 
@@ -20,8 +15,11 @@ touch /var/lock/distod-exp4-rows.lock
 mkdir -p "${resultfolder}"
 echo "Dataset,#Rows,Runtime (ms)" >"${resultfile}"
 
+for (( i=0; i<${#datasets[@]}; ++i )); do
+  dataset="${datasets[i]}"
+  row_limit="${row_limits[i]}"
+  row_step=$(( row_limit / steps ))
 
-for dataset in ${datasets}; do
   echo "==================================================="
   echo "Starting experiment exp4-rows on dataset ${dataset}"
   echo "Rows from: ${row_step}"

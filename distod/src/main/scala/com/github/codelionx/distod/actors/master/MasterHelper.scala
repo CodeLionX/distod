@@ -215,7 +215,7 @@ class MasterHelper(
     val splitReadySuccessors = successorStates.filter(successorState =>
       // only check split readiness if we changed the split preconditions (otherwise swap updates would also trigger
       // the new generation of split candidates)
-      if (jobType == JobType.Split) successorState.isReadyToCheck(JobType.Split)
+      if (jobType == JobType.Split) successorState.isReadyToGenerate(JobType.Split)
       else false
     )
     val newSplitJobs = splitReadySuccessors.map(s => s.id -> JobType.Split)
@@ -223,7 +223,7 @@ class MasterHelper(
 
     // generate successor's swaps candidates
     val swapReadySuccessors = successorStates.filter(successorState =>
-      successorState.isReadyToCheck(JobType.Swap)
+      successorState.isReadyToGenerate(JobType.Swap)
     )
     val newSwapJobs = swapReadySuccessors.map(s => s.id -> JobType.Swap)
     val swapStateUpdates = swapReadySuccessors.map(performSwapGeneration)

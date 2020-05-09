@@ -28,21 +28,21 @@ class CandidateStateSpec extends AnyWordSpec with Matchers {
     }
 
     "not be ready" in {
-      initialState.isReadyToCheck(JobType.Split) shouldBe false
-      initialState.isReadyToCheck(JobType.Swap) shouldBe false
+      initialState.isReadyToGenerate(JobType.Split) shouldBe false
+      initialState.isReadyToGenerate(JobType.Swap) shouldBe false
     }
 
     "be ready after preconditions are met" in {
       val swapNotReady = initialState.updated(IncPrecondition(JobType.Swap))
-      swapNotReady.isReadyToCheck(JobType.Swap) shouldBe false
+      swapNotReady.isReadyToGenerate(JobType.Swap) shouldBe false
 
       val splitReady = initialState.updated(IncPrecondition(JobType.Split))
-      splitReady.isReadyToCheck(JobType.Split) shouldBe true
-      splitReady.isReadyToCheck(JobType.Swap) shouldBe false
+      splitReady.isReadyToGenerate(JobType.Split) shouldBe true
+      splitReady.isReadyToGenerate(JobType.Swap) shouldBe false
 
       val splitAndSwapReady = splitReady.updated(IncPrecondition(JobType.Swap))
-      splitAndSwapReady.isReadyToCheck(JobType.Split) shouldBe true
-      splitAndSwapReady.isReadyToCheck(JobType.Swap) shouldBe true
+      splitAndSwapReady.isReadyToGenerate(JobType.Split) shouldBe true
+      splitAndSwapReady.isReadyToGenerate(JobType.Swap) shouldBe true
     }
 
     "reject state updates" in {
@@ -59,13 +59,13 @@ class CandidateStateSpec extends AnyWordSpec with Matchers {
       val splitReadyCandidate = candidateState.updatedAll(Seq(IncPrecondition(JobType.Split), IncPrecondition(JobType.Split)))
       val swapReadyCandidate = splitReadyCandidate.updatedAll(Seq(IncPrecondition(JobType.Swap), IncPrecondition(JobType.Swap)))
 
-      candidateState.isReadyToCheck(JobType.Split) shouldBe false
-      candidateState.isReadyToCheck(JobType.Swap) shouldBe false
+      candidateState.isReadyToGenerate(JobType.Split) shouldBe false
+      candidateState.isReadyToGenerate(JobType.Swap) shouldBe false
 
-      splitReadyCandidate.isReadyToCheck(JobType.Split) shouldBe true
-      splitReadyCandidate.isReadyToCheck(JobType.Swap) shouldBe false
+      splitReadyCandidate.isReadyToGenerate(JobType.Split) shouldBe true
+      splitReadyCandidate.isReadyToGenerate(JobType.Swap) shouldBe false
 
-      swapReadyCandidate.isReadyToCheck(JobType.Swap) shouldBe true
+      swapReadyCandidate.isReadyToGenerate(JobType.Swap) shouldBe true
     }
 
     "transition to ready state when candidates are added" in {

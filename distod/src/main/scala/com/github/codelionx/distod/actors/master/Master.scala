@@ -1,6 +1,6 @@
 package com.github.codelionx.distod.actors.master
 
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, Behavior, DispatcherSelector}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
@@ -8,6 +8,8 @@ import com.github.codelionx.distod.actors.LeaderGuardian
 import com.github.codelionx.distod.actors.master.Master.{Command, LocalPeers}
 import com.github.codelionx.distod.actors.master.MasterHelper.{GenerateCandidates, InitWithAttributes, NextJob}
 import com.github.codelionx.distod.actors.worker.Worker
+import com.github.codelionx.distod.actors.SystemMonitor.{CriticalHeapUsage, SystemEvent}
+import com.github.codelionx.distod.actors.master.StateGC.Start
 import com.github.codelionx.distod.discovery.CandidateGeneration
 import com.github.codelionx.distod.partitions.StrippedPartition
 import com.github.codelionx.distod.protocols.{PartitionManagementProtocol, ResultCollectionProtocol}
@@ -117,6 +119,13 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     val loadingEventMapper = context.messageAdapter(e => WrappedLoadingEvent(e))
     dataReader ! LoadPartitions(loadingEventMapper)
 
+    // create state GC
+    val stateGc = context.spawn(
+      StateGC(state, context.self),
+      StateGC.name,
+      DispatcherSelector.fromConfig(s"distod.background-dispatcher")
+    )
+
     Behaviors.receiveMessagePartial[Command] {
       case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
@@ -153,6 +162,12 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         state.addAll(rootCandidateState ++ l1candidateState ++ L2candidateState)
 
         val initialQueue = l1candidates.map(key => key -> JobType.Split)
+
+        // start StateGC
+        if(settings.stateGc.enabled) {
+          stateGc ! Start(attributeSet)
+        }
+
         context.log.info("Master ready, initial work queue: {}", initialQueue)
         context.log.trace("Initial state:\n{}", state.mkString("\n"))
         stash.unstashAll(
@@ -215,11 +230,9 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         }
       }
       // only generate next candidates if size limit is not reached
-      if(settings.pruning.odSizeLimit.forall(limit => id.size < limit)) {
+      if (settings.pruning.odSizeLimit.forall(limit => id.size < limit)) {
         // get successor states for candidate generation
-        val successorStates = id.successors(attributes).map { successor =>
-          state.getOrElse(successor, CandidateState(successor))
-        }
+        val successorStates = id.successors(attributes).flatMap(state.get)
         pool ! GenerateCandidates(id, jobType, successorStates)
         timingSpans.end("State integration")
         behavior(pool, attributes, updatedWorkQueue, pendingGenerationJobs + job, testedCandidates + 1)
@@ -268,6 +281,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
   private def finished(testedCandidates: Int): Behavior[Command] = {
     println(s"Tested candidates: $testedCandidates")
     guardian ! LeaderGuardian.AlgorithmFinished
+    context.log.info("State status: {}", state.status)
     Behaviors.receiveMessage {
       case DequeueNextJob(_) =>
         // can be ignored without issues, because we are out of work

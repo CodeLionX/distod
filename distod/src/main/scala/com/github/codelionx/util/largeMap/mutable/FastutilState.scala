@@ -61,6 +61,44 @@ class FastutilState[V] private(
     this
   }
 
+  def sizeLevels: Int = levels.size
+
+  def clearLevel(l: Int): FastutilState.this.type = {
+    if (l < levels.size) {
+      levels = levels.updated(l, new Object2ObjectOpenHashMap(0, 1))
+    }
+    this
+  }
+
+  def forallInLevel(l: Int, p: (CandidateSet, V) => Boolean): Boolean = {
+    if (l >= levels.size) {
+      false
+    } else {
+      val currentLevel = levels(l)
+      var res = true
+      val it = currentLevel.object2ObjectEntrySet().fastIterator()
+      while (res && it.hasNext) {
+        val entry = it.next()
+        res = p(entry.getKey, entry.getValue)
+      }
+      res
+    }
+  }
+
+  def filterInLevel(l: Int, pred: ((CandidateSet, V)) => Boolean): Seq[(CandidateSet, V)] = if (l >= levels.size) {
+    Seq.empty
+  } else {
+    val currentLevel = levels(l)
+    currentLevel.object2ObjectEntrySet().fastIterator().asScala.map(entry => entry.getKey -> entry.getValue).filter(pred).toSeq
+  }
+
+  def status: String = s"$size entries. By-level" +
+    levels.zipWithIndex.map { case (v, i) =>
+      val levelSize = v.size()
+      val maxLevelSize = Math.binomialCoefficient(nAttributes, i)
+      s"level $i: $levelSize elems (max=$maxLevelSize)"
+    }.mkString("[\n  ", "\n  ", "\n]")
+
   private def factory: FastutilState.type = FastutilState
 
   override def fromSpecific(coll: IterableOnce[(CandidateSet, V)]): FastutilState[V] =
@@ -70,6 +108,8 @@ class FastutilState[V] private(
     factory.newBuilder(nAttributes)
 
   override def empty: FastutilState[V] = factory.empty(nAttributes)
+
+  override def size: Int = levels.map(_.size()).sum
 
   override def apply(key: CandidateSet): V =
     if (key.size >= levels.size)
@@ -107,10 +147,31 @@ class FastutilState[V] private(
     this
   }
 
+  def addAll(xs: Seq[(CandidateSet, V)]): FastutilState.this.type = addAll(xs.toMap)
+
+  def addAll(xs: Map[CandidateSet, V]): FastutilState.this.type = if (xs.nonEmpty) {
+    val maxKeySize = xs.map(_._1.size).max
+    while (levels.size <= maxKeySize) {
+      val expectedSize = FastutilState.expectedSize(nAttributes, levels.size)
+      levels :+= new Object2ObjectOpenHashMap(expectedSize, 1)
+    }
+    for ((l, elems) <- xs.groupBy(_._1.size)) {
+      levels(l).putAll(elems.asJava)
+    }
+    this
+  } else {
+    this
+  }
+
   override def iterator: Iterator[(CandidateSet, V)] = levels.iterator
     .flatMap(
-      _.entrySet()
+      _.object2ObjectEntrySet().fastIterator()
         .asScala
         .map(entry => entry.getKey -> entry.getValue)
+    )
+
+  override def keysIterator: Iterator[CandidateSet] = levels.iterator
+    .flatMap(
+      _.keySet().asScala
     )
 }

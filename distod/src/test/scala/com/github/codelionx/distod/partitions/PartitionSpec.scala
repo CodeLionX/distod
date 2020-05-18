@@ -1,5 +1,6 @@
 package com.github.codelionx.distod.partitions
 
+import com.github.codelionx.distod.types.TupleValueMap
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -29,12 +30,8 @@ class PartitionSpec extends AnyWordSpec with Matchers {
 
     def makePartition(sets: Set[Int]*) = {
       val classes = sets.map(set => Array.from(set)).toArray
-      val stripped = Partition.stripClasses(classes)
       FullPartition(
         nTuples = classes.map(_.length).iterator.sum,
-        numberClasses = stripped.length,
-        numberElements = stripped.map(_.length).sum,
-        equivClasses = stripped,
         tupleValueMap = Partition.convertToTupleValueMap(classes)
       )
     }
@@ -206,6 +203,34 @@ class PartitionSpec extends AnyWordSpec with Matchers {
 
       (part0 * part1).equivClasses should contain theSameElementsAs expectedClasses
       (part0.stripped * part1.stripped).equivClasses should contain theSameElementsAs expectedClasses
+    }
+  }
+
+  "Partition inversion" should {
+    val sets = Seq(
+      Set(0, 1),
+      Set(2),
+      Set(3),
+      Set(4, 5)
+    )
+    val equivClasses = sets.map(set => Array.from(set)).toArray
+    val tupleValueMap = TupleValueMap(6, 1f)
+    tupleValueMap.put(0, 0)
+    tupleValueMap.put(1, 0)
+    tupleValueMap.put(2, 1)
+    tupleValueMap.put(3, 2)
+    tupleValueMap.put(4, 3)
+    tupleValueMap.put(5, 3)
+    tupleValueMap.trim()
+
+    "convert from classes to tupleValueMap" in {
+      val map = Partition.convertToTupleValueMap(equivClasses)
+      map shouldEqual tupleValueMap
+    }
+
+    "convert from tupleValueMap to classes" in {
+      val classes = Partition.convertFromTupleValueMap(tupleValueMap)
+      classes shouldEqual equivClasses
     }
   }
 }

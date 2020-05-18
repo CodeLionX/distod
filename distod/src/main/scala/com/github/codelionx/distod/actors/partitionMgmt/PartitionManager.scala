@@ -84,7 +84,9 @@ class PartitionManager(
       nextBehavior(newAttributes, singletonPartitions)
 
     case InsertPartition(key, value: FullPartition) if key.size == 1 =>
-      context.log.debug("Inserting full partition for key {}", key)
+      // materialize stripped equivalence classes of full partition by accessing them
+      val size = value.numberElements
+      context.log.debug("Inserting full partition for key {} with {} tuples", key, size)
       val newSingletonPartitions = singletonPartitions + (key -> value)
       nextBehavior(attributes, newSingletonPartitions)
 

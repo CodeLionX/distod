@@ -51,21 +51,25 @@ sealed trait Partition extends CborSerializable with PartitionOps {
  * classes (= classes of size one removed).
  *
  * @param nTuples        original number of tuples of the dataset
- * @param numberElements number of all elements in all remaining equivalence classes
- * @param numberClasses  number of remaining equivalence classes
- * @param equivClasses   sorted stripped equivalence classes
  * @param tupleValueMap  map from tuple ID to its value equivalent (position of the corresponding equivalence class
  *                       in the sorted partition)
  */
 case class FullPartition private[partitions](
     nTuples: Int,
-    numberElements: Int,
-    numberClasses: Int,
-    @JsonDeserialize(contentAs = classOf[Array[Int]])
-    equivClasses: Array[Array[Int]],
     @JsonDeserialize(as = classOf[TupleValueMap.IMPL_TYPE])
     tupleValueMap: TupleValueMap.TYPE
 ) extends Partition {
+
+  @transient
+  lazy val equivClasses: Array[Array[Int]] = Partition.stripClasses(
+    Partition.convertFromTupleValueMap(tupleValueMap)
+  )
+
+  @transient
+  def numberElements: Int = equivClasses.map(_.length).sum
+
+  @transient
+  def numberClasses: Int = equivClasses.length
 
   /**
    * Converts this `FullPartition` to a [[com.github.codelionx.distod.partitions.StrippedPartition]] by removing the
@@ -128,12 +132,8 @@ object Partition {
    */
   def fullFrom(column: Array[String]): FullPartition = {
     val equivalenceClasses = partitionColumn(column)
-    val strippedClasses = stripClasses(equivalenceClasses)
     FullPartition(
       nTuples = column.length,
-      numberElements = strippedClasses.map(_.length).sum,
-      numberClasses = strippedClasses.length,
-      equivClasses = strippedClasses,
       tupleValueMap = convertToTupleValueMap(equivalenceClasses)
     )
   }
@@ -198,5 +198,22 @@ object Partition {
     }
     map.trim()
     map
+  }
+
+  /**
+   * Converts the tuple value map of a full partition back to equivalence classes.
+   *
+   * @return list of equivalence classes
+   */
+  private[partitions] def convertFromTupleValueMap(map: TupleValueMap.TYPE): Array[Array[Int]] = {
+    val classMap = mutable.HashMap.empty[Int, ArrayBuffer[Int]]
+    val entries = map.int2IntEntrySet().iterator()
+
+    while (entries.hasNext) {
+      val entry = entries.next()
+      val clazz = classMap.getOrElseUpdate(entry.getIntValue, ArrayBuffer.empty)
+      clazz.addOne(entry.getIntKey)
+    }
+    classMap.values.map(_.sorted.toArray).toArray
   }
 }

@@ -105,13 +105,13 @@ object PartitionReplicator {
 
       case WrappedDataMessage(ackTo, FullPartitionData(id, partition)) =>
         ackTo ! StreamAck
-        context.log.debug("Received full partition for key {}: {}", id, partition.equivClasses.size)
+        context.log.debug("Received full partition for key {}: {}", id, partition.equivClasses.length)
         local ! InsertPartition(id, partition)
         next()
 
       case WrappedDataMessage(ackTo, EmptyPartitionData(value)) =>
         ackTo ! StreamAck
-        context.log.debug("Received empty partition: {}", value.equivClasses.size)
+        context.log.debug("Received empty partition: {}", value.equivClasses.length)
         local ! InsertPartition(CandidateSet.empty, value)
         next()
 

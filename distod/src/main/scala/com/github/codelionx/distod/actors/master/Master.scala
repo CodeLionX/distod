@@ -148,8 +148,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // L2: two attribute candidate nodes (initialized states)
         val L2candidateState = generateLevel2(attributeSet, l1candidates)
 
-        // first reshape and then add elements to prevent copy operation
-        state.reshapeMaps(attributes.size)
         state.addAll(rootCandidateState ++ l1candidateState ++ L2candidateState)
 
         val initialQueue = l1candidates.map(key => key -> JobType.Split)

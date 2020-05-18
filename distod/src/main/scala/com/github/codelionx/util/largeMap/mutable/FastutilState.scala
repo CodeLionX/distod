@@ -26,40 +26,15 @@ object FastutilState {
 
   def newBuilder[V](nAttributes: Int): mutable.Builder[(CandidateSet, V), FastutilState[V]] =
     new mutable.GrowableBuilder[(CandidateSet, V), FastutilState[V]](empty[V](nAttributes))
-
-  private def expectedSize(n: Long, k: Long): Int = {
-    val maxValue = Int.MaxValue / 2
-    val maxLevelSize = Math.binomialCoefficient(n, k)
-    scala.math.min(maxLevelSize, maxValue).toInt
-  }
 }
 
 
 class FastutilState[V] private(
     private var nAttributes: Int,
-    private var levels: IndexedSeq[Object2ObjectOpenHashMap[CandidateSet, V]]
+    private var levels: IndexedSeq[java.util.Map[CandidateSet, V]]
 )
   extends mutable.AbstractMap[CandidateSet, V]
     with StrictOptimizedIterableOps[(CandidateSet, V), mutable.Iterable, FastutilState[V]] {
-
-  /**
-   * Adjusts the array sizes of the internal maps to offer the best performance considering the expected number of
-   * elements per level. The expected number of elements is calculated from the level index and the supplied `size`.
-   * This method rebuilds all internal data structures (full copy) and therefore has a considerably performance hit.
-   * Use it sparsely.
-   *
-   * @param size number of attributes which form the candidate space
-   */
-  def reshapeMaps(size: Int): FastutilState.this.type = {
-    nAttributes = size
-    val reshapedMaps = levels.map { hashMap =>
-      val updatedMap = new Object2ObjectOpenHashMap[CandidateSet, V]()
-      updatedMap.putAll(hashMap)
-      updatedMap
-    }
-    levels = reshapedMaps
-    this
-  }
 
   private def factory: FastutilState.type = FastutilState
 
@@ -101,7 +76,8 @@ class FastutilState[V] private(
   override def addOne(elem: (CandidateSet, V)): FastutilState.this.type = {
     val (key, value) = elem
     while (levels.size <= key.size) {
-      levels :+= new Object2ObjectOpenHashMap()
+      levels :+= new java.util.concurrent.ConcurrentHashMap()
+//      levels :+= new Object2ObjectOpenHashMap()
     }
     levels(key.size).put(key, value)
     this

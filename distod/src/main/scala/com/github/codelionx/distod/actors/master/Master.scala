@@ -32,7 +32,8 @@ object Master {
   private[master] final case class UpdateState(
       job: (CandidateSet, JobType.JobType),
       stateUpdates: Map[CandidateSet, Set[CandidateState.Delta]],
-      prunedCandidates: Set[CandidateSet]
+      prunedCandidates: Set[CandidateSet],
+      nodeIsPruned: Boolean
   ) extends Command
   private[master] final case class NewCandidatesGenerated(
       id: CandidateSet,
@@ -148,8 +149,6 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         // L2: two attribute candidate nodes (initialized states)
         val L2candidateState = generateLevel2(attributeSet, l1candidates)
 
-        // first reshape and then add elements to prevent copy operation
-        state.reshapeMaps(attributes.size)
         state.addAll(rootCandidateState ++ l1candidateState ++ L2candidateState)
 
         val initialQueue = l1candidates.map(key => key -> JobType.Split)
@@ -199,7 +198,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
       val newQueue = workQueue.removePending(job).enqueue(job)
       behavior(pool, attributes, newQueue, pendingGenerationJobs, testedCandidates)
 
-    case UpdateState(job, stateUpdates, prunedCandidates) =>
+    case UpdateState(job, stateUpdates, prunedCandidates, nodeIsPruned) =>
       context.log.debug("Updating state for job {}: pruned candidates: {}", job, prunedCandidates.size)
       timingSpans.start("State integration")
       val (id, jobType) = job
@@ -215,7 +214,7 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
         }
       }
       // only generate next candidates if size limit is not reached
-      if(settings.pruning.odSizeLimit.forall(limit => id.size < limit)) {
+      if(!nodeIsPruned && settings.pruning.odSizeLimit.forall(limit => id.size < limit)) {
         // get successor states for candidate generation
         val successorStates = id.successors(attributes).map { successor =>
           state.getOrElse(successor, CandidateState(successor))

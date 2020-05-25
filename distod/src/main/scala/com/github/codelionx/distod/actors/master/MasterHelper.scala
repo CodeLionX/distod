@@ -203,7 +203,7 @@ class MasterHelper(
     val distinctStateUpdates = stateUpdates.toMap.map {
       case (key, value) => key -> value.toSet
     }
-    master ! UpdateState(job, distinctStateUpdates, removePruned)
+    master ! UpdateState(job, distinctStateUpdates, removePruned, nodeIsPruned)
     timingSpans.end("Result state update")
     Behaviors.same
   }

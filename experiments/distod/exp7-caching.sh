@@ -1,32 +1,36 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv flight-500k-sub.csv"
+datasets="iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv flight-500k.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=3
+cachings="on off"
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
 
 # write lock file
-touch /var/lock/distod-exp1-datasets.lock
+touch /var/lock/distod-exp7-caching.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Run,Runtime (ms),#FDs,#ODs" >"${resultfile}"
+echo "Dataset,Partition Caching,Runtime (ms),#FDs,#ODs" >"${resultfile}"
 
 for dataset in ${datasets}; do
-  echo ""
-  echo ""
-  echo "Running DISTOD on dataset ${dataset}"
 
-  for (( n=0; n<N; ++n )); do
-    mkdir -p "${resultfolder}/${dataset}/${n}"
-    logfile="${resultfolder}/${dataset}/${n}/out.log"
+  for caching in ${cachings}; do
+    mkdir -p "${resultfolder}/${dataset}/${caching}"
+    logfile="${resultfolder}/${dataset}/${caching}/out.log"
     echo ""
-    echo "Run ${n}"
+    echo ""
+    echo "Running DISTOD on dataset ${dataset} with partition caching ${caching}"
+
+    if [[ "${caching}" = "off" ]]; then
+      threshold=1
+    else
+      threshold=15
+    fi
 
     # start followers
     for node in ${nodes}; do
-      ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
+      ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp7-caching\" -m ./start.sh -Ddistod.enable-partition-cache=\"${caching}\" -Ddistod.direct-partition-product-threshold=\"${threshold}\""
     done
 
     t0=$(date +%s)
@@ -45,6 +49,8 @@ for dataset in ${datasets}; do
         -Dlogback.configurationFile=logback.xml \
         -Ddistod.input.path="../data/${dataset}" \
         -Ddistod.input.has-header="no" \
+        -Ddistod.enable-partition-cache="${caching}" \
+        -Ddistod.direct-partition-product-threshold="${threshold}" \
         -Dfile.encoding=UTF-8 \
         -jar distod.jar 2>&1 | tee "${logfile}"
     was_killed=$(( $? == 124 ))
@@ -56,7 +62,7 @@ for dataset in ${datasets}; do
     # wait for followers to stop (we need the resources, e.g. NIC, RAM, ...)
     running_nodes=""
     for node in ${nodes}; do
-      if ssh "${node}" screen -ls distod-exp1-datasets >/dev/null; then
+      if ssh "${node}" screen -ls distod-exp7-caching >/dev/null; then
         running_nodes="${running_nodes}${node} "
       fi
     done
@@ -71,9 +77,9 @@ for dataset in ${datasets}; do
       echo "Still waiting for nodes: '${running_nodes}'"
       for node in ${running_nodes}; do
         # still running --> kill follower
-        if ssh "${node}" screen -ls distod-exp1-datasets >/dev/null; then
+        if ssh "${node}" screen -ls distod-exp7-caching >/dev/null; then
           echo "Killing follower on node ${node}"
-          ssh "${node}" screen -S distod-exp1-datasets -X quit
+          ssh "${node}" screen -S distod-exp7-caching -X quit
         else
           # remove node from running set
           running_nodes=$( echo "${running_nodes}" | sed -s "s/${node} //" )
@@ -82,17 +88,17 @@ for dataset in ${datasets}; do
     done
 
     # collect results
-    echo "Collecting results for dataset ${dataset} run ${n}"
-    mv distod.log "${resultfolder}/${dataset}/${n}/distod-$(hostname).log"
-    mv results.txt "${resultfolder}/${dataset}/${n}/"
+    echo "Collecting results for dataset ${dataset} run with partition caching ${caching}"
+    mv distod.log "${resultfolder}/${dataset}/${caching}/distod-$(hostname).log"
+    mv results.txt "${resultfolder}/${dataset}/${caching}/"
     for node in ${nodes}; do
-      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/${n}/distod-${node}.log" >/dev/null
+      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/${caching}/distod-${node}.log" >/dev/null
       # intentially put argument in single quotes to let the target shell expand the ~
       ssh "${node}" rm -f '~/distod/distod.log'
     done
 
     {
-      echo -n "${dataset},${n},"
+      echo -n "${dataset},${caching},"
       grep "TIME Overall runtime" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
       echo -n ","
       grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
@@ -108,11 +114,7 @@ for dataset in ${datasets}; do
       break
     fi
   done
-
-  # calculate min for the runtime
-  min_runtime=$( grep "${dataset}" "${resultfile}" | cut -d ',' -f3 | sort -n | head -n 1 )
-  echo "${dataset},ALL,${min_runtime},," >>"${resultfile}"
 done
 
 # release lock file
-rm -f /var/lock/distod-exp1-datasets.lock
+rm -f /var/lock/distod-exp7-caching.lock

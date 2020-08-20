@@ -12,7 +12,7 @@ ThisBuild / scalaVersion := scala213
 
 ThisBuild / organization := "com.github.codelionx"
 //ThisBuild / version := "0.0.1"
-ThisBuild / git.baseVersion := "1.0.5"
+ThisBuild / git.baseVersion := "1.0.6"
 
 ThisBuild / fork in run := true
 

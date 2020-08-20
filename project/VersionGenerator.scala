@@ -2,6 +2,12 @@ import com.typesafe.sbt.GitPlugin.autoImport.git
 import sbt.{Def, _}
 import sbt.Keys._
 
+
+/**
+ * Generates a Version.scala file to be used in DISTOD to print the version information during startup.
+ *
+ * Adapted from the Akka project (https://github.com/akka/akka/blob/master/project/VersionGenerator.scala).
+ */
 object VersionGenerator {
 
   val settings: Seq[Setting[_]] = inConfig(Compile)(Seq(

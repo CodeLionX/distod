@@ -74,6 +74,7 @@ lazy val distod = (project in file("distod"))
         oldStrategy(x)
     },
   )
+  .settings(VersionGenerator.settings)
 
 // documentation at https://github.com/ktoso/sbt-jmh
 lazy val benchmarking = (project in file("benchmarking"))

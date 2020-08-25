@@ -7,6 +7,6 @@
   vars:
     - experiment: exp1-datasets
   vars_files:
-    - vars/fastod-spark.yml
+    - vars/distod.yml
   tasks:
     - import_tasks: common_tasks/collect-results.yml

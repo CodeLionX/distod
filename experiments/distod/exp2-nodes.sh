@@ -25,7 +25,7 @@ for dataset in ${datasets}; do
     # start followers
     for (( i=0; i<n; ++i )); do
       node="${nodes[i]}"
-      ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
+      ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp2-nodes\" -m ./start.sh"
     done
 
     t0=$(date +%s)
@@ -51,7 +51,7 @@ for dataset in ${datasets}; do
     running_nodes=""
     for (( i=0; i<n; ++i )); do
       node="${nodes[i]}"
-      ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
+      ssh "${node}" screen -ls distod-exp2-nodes >/dev/null
       if [ $? == 0 ]; then
         running_nodes="${running_nodes}${node} "
       fi
@@ -66,11 +66,11 @@ for dataset in ${datasets}; do
     while [[ "${running_nodes}" != "" ]]; do
       echo "Still waiting for nodes: '${running_nodes}'"
       for node in ${running_nodes}; do
-        ssh "${node}" screen -ls distod-exp1-datasets >/dev/null
+        ssh "${node}" screen -ls distod-exp2-nodes >/dev/null
         # still running --> kill follower
         if [ $? == 0 ]; then
           echo "Killing follower on node ${node}"
-          ssh "${node}" screen -S distod-exp1-datasets -X quit
+          ssh "${node}" screen -S distod-exp2-nodes -X quit
         else
           # remove node from running set
           running_nodes=$( echo "${running_nodes}" | sed -s "s/${node} //" )

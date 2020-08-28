@@ -2,12 +2,12 @@ package com.github.codelionx.distod
 
 import java.util
 
-import com.github.codelionx.distod.actors.LeaderGuardian
+import com.typesafe.config.ConfigFactory
+import de.metanome.algorithm_integration.AlgorithmConfigurationException
 import de.metanome.algorithm_integration.algorithm_types.{FunctionalDependencyAlgorithm, RelationalInputParameterAlgorithm}
 import de.metanome.algorithm_integration.configuration.{ConfigurationRequirement, ConfigurationRequirementRelationalInput}
 import de.metanome.algorithm_integration.input.RelationalInputGenerator
 import de.metanome.algorithm_integration.result_receiver.FunctionalDependencyResultReceiver
-import de.metanome.algorithm_integration.{Algorithm, AlgorithmConfigurationException}
 
 import scala.jdk.CollectionConverters._
 
@@ -17,7 +17,10 @@ object DistodAlgorithm {
 }
 
 
-class DistodAlgorithm extends FunctionalDependencyAlgorithm with RelationalInputParameterAlgorithm {
+class DistodAlgorithm
+  extends FunctionalDependencyAlgorithm
+    with RelationalInputParameterAlgorithm
+    with DistodAlgorithmConfiguration {
 
   import DistodAlgorithm._
 
@@ -37,15 +40,19 @@ class DistodAlgorithm extends FunctionalDependencyAlgorithm with RelationalInput
     inputGenerator = values.headOption
   }
 
-  override def getConfigurationRequirements: util.ArrayList[ConfigurationRequirement[_]] =
-    new util.ArrayList(
-      Seq(
-        new ConfigurationRequirementRelationalInput(inputGeneratorIdentifier)
-      ).asJava
-    )
+  override def getConfigurationRequirements: util.ArrayList[ConfigurationRequirement[_]] = {
+    val reqs = Seq(new ConfigurationRequirementRelationalInput(inputGeneratorIdentifier)) ++ configurationRequirements
+    new util.ArrayList(reqs.asJava)
+  }
 
   override def execute(): Unit = {
-    ActorSystem.create(LeaderGuardian())
+    val distodConfig = ConfigFactory.parseString(ApplicationConf.conf)
+    val referenceConfig = ConfigFactory.parseString(ReferenceConf.conf)
+    val config = parseConfig
+      .withFallback(distodConfig)
+      .withFallback(referenceConfig)
+    println(s"Config: $config")
+    //        ActorSystem.create("metanome-distod", config, LeaderGuardian())
     println("Test completed")
   }
 

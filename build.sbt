@@ -113,3 +113,13 @@ lazy val metanomeIntegration = (project in file("distod-metanome-integration"))
       Package.ManifestAttributes( "Algorithm-Bootstrap-Class" -> "com.github.codelionx.distod.DistodAlgorithm" )
   )
   .dependsOn(distod)
+
+lazy val metanomeTestRunner = (project in file("metanome-test-runner"))
+  .settings(
+    name := "metanome-test-runner",
+    libraryDependencies ++= Seq(
+      "de.metanome" % "algorithm_helper" % "1.2-SNAPSHOT",
+      "de.metanome" % "backend" % "1.2-SNAPSHOT",
+    )
+  )
+  .dependsOn(metanomeIntegration)

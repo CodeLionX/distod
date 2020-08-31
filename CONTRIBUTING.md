@@ -13,13 +13,7 @@ You are more than welcome to contribute any PR regardless if the issue or featur
   - `refactor/` for refactorings that do not introduce new features
   - `doc/` for changes that only affect documentation files and **no source code**. Those branches will not be included in the automatic tests and builds by our CI.
   - `ci/` branches are automatically build by our CI. Mainly used for testing the CI configuration.
-- when starting work on this project please use the [labels](https://github.com/CodeLionX/dODo/labels) to mark the state of your PR
-  - if you create your PR before all changes are done, you can create the PR as a _draft_ and start with the label `WIP` (work in progress):
-    ![open PR as a draft](./doc/pictures/open_PR-draft.png)
-  - when you are finished with the PR, mark it ready for review with `Needs Review`
-  - if the reviewer approves your PR, he/she can mark it with `Merge` or merge it into master directly
-  - when your PR is marked with `Merge`, any contributor is allowed to merge the PR into the `master` branch
-
+- when starting work on this project, please create a new PR and mark it as work-in-process by prefixing its titel with `WIP:`
 
 ## Set up development environment (Linux)
 
@@ -40,7 +34,6 @@ You are more than welcome to contribute any PR regardless if the issue or featur
   sudo apt-get install sbt
   ```
 
-
 ### Use IDE, eg. Intellij IDEA
 
 - Install JDK, eg. JDK-1.8:
@@ -57,4 +50,4 @@ You are more than welcome to contribute any PR regardless if the issue or featur
 
 ## Set up development environment (Windows)
 
-**tbd**
+- Use your IDE similar to [linux](#use-ide-eg-intellij-idea)

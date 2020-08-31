@@ -47,16 +47,7 @@ class DistodAlgorithm
   }
 
   override def execute(): Unit = {
-    val distodOverwriteConfig = ConfigFactory.parseString(OverwriteConf.conf)
-    val distodConfig = ConfigFactory.parseString(ApplicationConf.conf)
-    val akkaVersionConfig = ConfigFactory.parseString(AkkaVersionConf.conf)
-    val referenceConfig = ConfigFactory.parseString(ReferenceConf.conf)
-    val config = parseConfig
-      .withFallback(distodOverwriteConfig)
-      .withFallback(distodConfig)
-      .withFallback(akkaVersionConfig)
-      .withFallback(referenceConfig)
-      .resolve()
+    val config = ConfigFactory.load()
     println(s"Config: $config")
     ActorSystem.create(config.getString("distod.system-name"), config, LeaderGuardian())
     println("Test completed")

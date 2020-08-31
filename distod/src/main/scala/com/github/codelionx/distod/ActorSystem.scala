@@ -34,7 +34,7 @@ object ActorSystem {
   def create[T](userGuardian: Behavior[T]): akka.actor.typed.ActorSystem[T] = {
     val actorSystemName = defaultConfiguration.getString("distod.system-name")
 
-    val versionInfoMsg = s"DISTOD version: $distodVersion\nDISTOD commit: $distodGitSHA"
+    val versionInfoMsg = s"DISTOD version: $distodVersion; DISTOD commit: $distodGitSHA"
 
     val system = create(actorSystemName, defaultConfiguration, userGuardian)
     println(versionInfoMsg)

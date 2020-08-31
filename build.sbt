@@ -51,17 +51,20 @@ lazy val distod = (project in file("distod"))
       //  "com.twitter" %% "chill-akka" % "0.9.3", // just for scala 2.12?
       //  "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
     ),
+
+    // set java options for DISTOD
+    javaOptions in run ++= Seq("-Xms2G", "-Xmx2G", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8"),
+
     // test configuration
     parallelExecution in Test := true,
     logBuffered in Test := false,
 
-    // set main class for assembly
-    mainClass in assembly := Some("com.github.codelionx.distod.Main"),
-
     // skip tests during assembly
     test in assembly := {},
 
-    // don't include logging configuration file
+    // set main class for assembly
+    mainClass in assembly := Some("com.github.codelionx.distod.Main"),
+
     assemblyMergeStrategy in assembly := {
       // discard JDK11 module infos from libs (not required for assembly and JDK8)
       case "module-info.class" => MergeStrategy.discard

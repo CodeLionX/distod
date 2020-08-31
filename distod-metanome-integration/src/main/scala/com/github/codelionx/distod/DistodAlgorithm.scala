@@ -2,6 +2,7 @@ package com.github.codelionx.distod
 
 import java.util
 
+import com.github.codelionx.distod.actors.LeaderGuardian
 import com.typesafe.config.ConfigFactory
 import de.metanome.algorithm_integration.AlgorithmConfigurationException
 import de.metanome.algorithm_integration.algorithm_types.{FunctionalDependencyAlgorithm, RelationalInputParameterAlgorithm}
@@ -46,13 +47,18 @@ class DistodAlgorithm
   }
 
   override def execute(): Unit = {
+    val distodOverwriteConfig = ConfigFactory.parseString(OverwriteConf.conf)
     val distodConfig = ConfigFactory.parseString(ApplicationConf.conf)
+    val akkaVersionConfig = ConfigFactory.parseString(AkkaVersionConf.conf)
     val referenceConfig = ConfigFactory.parseString(ReferenceConf.conf)
     val config = parseConfig
+      .withFallback(distodOverwriteConfig)
       .withFallback(distodConfig)
+      .withFallback(akkaVersionConfig)
       .withFallback(referenceConfig)
+      .resolve()
     println(s"Config: $config")
-    //        ActorSystem.create("metanome-distod", config, LeaderGuardian())
+    ActorSystem.create(config.getString("distod.system-name"), config, LeaderGuardian())
     println("Test completed")
   }
 

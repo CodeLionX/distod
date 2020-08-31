@@ -10,14 +10,14 @@ object GenerateConfFiles {
   private val trippleQuotes = "\"\"\""
 
   val settings: Seq[Setting[_]] = inConfig(Compile)(Seq(
-//    sourceGenerators += generateFromResource(sourceManaged, _ / "com" / "github" / "codelionx" / "distod" / "DistodConf.scala", "distod.conf",
-//      s"""|package com.github.codelionx.distod
-//          |
-//          |object DistodConf {
-//          |  val conf: String = $trippleQuotes%s$trippleQuotes
-//          |}
-//          |""".stripMargin
-//    ),
+    sourceGenerators += generateFromResource(sourceManaged, _ / "com" / "github" / "codelionx" / "distod" / "OverwriteConf.scala", "application-overwrite.conf",
+      s"""|package com.github.codelionx.distod
+          |
+          |object OverwriteConf {
+          |  val conf: String = $trippleQuotes%s$trippleQuotes
+          |}
+          |""".stripMargin
+    ),
     sourceGenerators += generateFromDependencyResource(
       sourceManaged,
       _ / "com" / "github" / "codelionx" / "distod" / "ReferenceConf.scala",
@@ -26,6 +26,18 @@ object GenerateConfFiles {
       s"""|package com.github.codelionx.distod
           |
           |object ReferenceConf {
+          |  val conf: String = $trippleQuotes%s$trippleQuotes
+          |}
+          |""".stripMargin
+    ),
+    sourceGenerators += generateFromDependencyResource(
+      sourceManaged,
+      _ / "com" / "github" / "codelionx" / "distod" / "AkkaVersionConf.scala",
+      "akka-actor",
+      _ / "version.conf",
+      s"""|package com.github.codelionx.distod
+          |
+          |object AkkaVersionConf {
           |  val conf: String = $trippleQuotes%s$trippleQuotes
           |}
           |""".stripMargin

@@ -142,6 +142,12 @@ java -Xms2g -Xmx2g -XX:+UseG1GC \
   -jar distod.jar
 ```
 
+### Experiments
+
+The configuration of DISTOD and its competitors used for the experiments in the paper can be found in the [`experiments`-folder](./experiments).
+Note that we do not publish the results of the experiments in this Github-Repository due to their size.
+Please contact [Sebastian Schmidl](https://github.com/codelionx) directly for the experiments' result backups.
+
 ## Building
 
 ### Prerequisites
@@ -197,13 +203,34 @@ Start a longer running job with DISTOD, then open [VisualVM](https://visualvm.gi
 You can profile the process using the sample tab ("CPU").
 Stop it at any time to inspect the results without them changing constantly.
 
-If you want to monitor a remote process, you can start the following deamon for VisualVM to connect to:
+If you want to monitor a remote process, you can start the following daemon for VisualVM to connect to:
 
 ```bash
 jstatd -J-Djava.security.policy=jstatd.all.policy
 ```
 
+An [example `jstatd.all.policy`-file](./deployment/jstatd.all.policy) can be found in the `deployment` folder.
+
 If you want to use the sampler, you have to enable JMX as well.
+To do this, use the following options when starting the JVM and then connect to `hostname:9010` using VisualVM:
+
+- `-Dcom.sun.management.jmxremote`: enables JMX
+- `-Dcom.sun.management.jmxremote.authenticate=false`, `-Dcom.sun.management.jmxremote.ssl=false`: disables authentication (**dangerous!**)
+- `-Dcom.sun.management.jmxremote.port=9010`, `-Dcom.sun.management.jmxremote.rmi.port=9010`: sets remote port
+- `-Djava.rmi.server.hostname="$(hostname)"`: sets remote host to bind to
+
+Example call:
+
+```sh
+java -Xms2g -Xmx2g -XX:+UseG1GC  \
+  -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false \
+  -Dcom.sun.management.jmxremote.port=9010 -Dcom.sun.management.jmxremote.rmi.port=9010 -Djava.rmi.server.hostname="$(hostname)" \
+  -Dconfig.file="distod.conf" \
+  -Dlogback.configurationFile=logback.xml \
+  -Dfile.encoding=UTF-8 \
+  -jar distod.jar
+
+```
 
 ### Useful commands
 
@@ -235,19 +262,6 @@ If you want to use the sampler, you have to enable JMX as well.
 
   The `total-executor-cores` values is calculated based on the number of executors (nodes) and the number of processors (cores) that should be used by the executor.
 
-- Executing an experiment from the `experiments`-folder is done using [Ansible](https://www.ansible.com/) playbooks:
-
-  ```bash
-  cd experiments
-  ansible-playbook -i ansible/inventory.ini ansible/fastod.yml -e 'experiment=exp1-datasets'
-  ```
-
-  If the experiment is in the _Wait until experiment finished_ step, one can safely stop the Ansible _driver_ process (on the local machine) using `Ctrl-C`.
-  The results can then be obtained by **changing** the `load-results.yml` playbook to the executed experiment and running:
-
-  ```bash
-  ansible-playbook -i ansible/inventory.ini ansible/load-results.yml
-  ```
 
 ## References
 

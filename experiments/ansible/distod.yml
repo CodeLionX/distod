@@ -50,6 +50,6 @@
         chdir: "{{ deployment_path }}"
         # for debugging
         #        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
-        cmd: screen -d -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
+        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
         creates: "{{ lock_file }}"
     - import_tasks: common_tasks/collect-results.yml

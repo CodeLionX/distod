@@ -35,7 +35,7 @@ declare -a jmvs=(
   "8.0.265-zing"
   "11.0.8-zing"
   "11.0.8-zulu"
-  #"11.0.8-oracle"
+  # "11.0.8-oracle" # currently not installed
   "20.2.0.r11-grl"
   "8.0.265.hs-adpt"
   "15.0.0.hs-adpt"
@@ -46,7 +46,7 @@ declare -a jmvs=(
   "15.0.0.hs-adpt"
   "11.0.8.j9-adpt"
   "11.0.8.j9-adpt"
-  "11.0.8.j9-adpt"
+  # "11.0.8.j9-adpt" # does only support compressed Oops and <= 4GB heap
   "11.0.8.j9-adpt"
 )
 declare -a argss=(
@@ -62,16 +62,16 @@ declare -a argss=(
   "-XX:+UseConcMarkSweepGC"
   "-XX:+UnlockExperimentalVMOptions -XX:+UseZGC"
   "-XX:+UseShenandoahGC"
-  "-Xgcpolicy:gencon"
-  "-Xgcpolicy:balanced"
-  "-Xgcpolicy:metronome"
-  "-Xgcpolicy:optavgpause"
+  "-Xgcpolicy:gencon -Dakka.java-flight-recorder.enabled=false"
+  "-Xgcpolicy:balanced -Dakka.java-flight-recorder.enabled=false"
+  # "-Xgcpolicy:metronome -Dakka.java-flight-recorder.enabled=false"
+  "-Xgcpolicy:optavgpause -Dakka.java-flight-recorder.enabled=false"
 )
 declare -a gcnames=(
   "C4"
   "C4"
   "G1"
-  "G1"
+  # "G1"
   "G1"
   "G1"
   "G1"
@@ -82,7 +82,7 @@ declare -a gcnames=(
   "Shenandoah"
   "gencon"
   "balanced"
-  "metronome"
+  # "metronome"
   "optavgpause"
 )
 
@@ -122,45 +122,44 @@ for ((i = 0; i < ${#jmvs[@]}; ++i)); do
     # system metrics file: sys_metrics.log
     # headers: percent CPU usage, percent memory usage, virtual memory in KiB, cumulative CPU time
     run_command="export SDKMAN_DIR=\"\$HOME/.sdkman\"; \
-    source \"\$HOME/.sdkman/bin/sdkman-init.sh\"; \
-    ${switch_java_command}; \
-    java -version; \
-    java -server -Xmx28g ${args} \
+      source \"\$HOME/.sdkman/bin/sdkman-init.sh\"; \
+      ${switch_java_command}; \
+      java -version; \
+      (while sleep 5; do ps -o pcpu,pmem,vsz,time,args -e | grep \"java.*distod.jar\$\" | sort -r | head -n 1 >> sys-metrics.log; done) & \
+      metrics_pid=\$!; \
+      java -server -Xmx28g ${args} \
         -Dconfig.file=\$(hostname).conf \
         -Dlogback.configurationFile=logback.xml \
         -Dfile.encoding=UTF-8 \
-        -jar distod.jar & \
-      java_pid=\$!; (while sleep 1; do ps -o pcpu,pmem,vsz,time -p \${java_pid} | tail -n 1 >> sys_metrics.log; done) & \
-      metrics_pid=\$!; wait \${java_pid}; kill -15 \${metrics_pid}"
+        -jar distod.jar; \
+      kill -15 \${metrics_pid}"
 
     # start followers
     for node in ${nodes}; do
       ssh "${node}" "cd ~/distod && screen -d -L -S \"distod-exp8-jvms\" -m bash -c '${run_command}'"
     done
 
+    java -version 2>&1 | tee -a "${logfile}"
+    # start system metrics collector in background
+    ( while sleep 5; do
+      ps -o pcpu,pmem,vsz,time,args -e | grep 'java.*distod.jar$' | sort -r | head -n 1 >> sys-metrics.log
+    done ) &
+    metrics_pid=$!
+    # start leader
     t0=$(date +%s)
-
-    # start leader in background
-    java -version >> "${logfile}"
-    ( timeout --signal=15 12h \
+    timeout --signal=15 12h \
       java -server -Xmx31g ${args} \
       -Dconfig.file="$(hostname).conf" \
       -Dlogback.configurationFile=logback.xml \
       -Ddistod.input.path="../data/${dataset}" \
       -Ddistod.input.has-header="no" \
       -Dfile.encoding=UTF-8 \
-      -jar distod.jar 2>&1 | tee "${logfile}" ) &
-    java_pid=$!
-    # start system metrics collector in background
-    ( while sleep 1; do
-      ps -o pcpu,pmem,vsz,time -p ${java_pid} | tail -n 1 >> sys_metrics.log
-    done ) &
-    metrics_pid=$!
-    # wait for java process to finish and stop system metrics collection
-    wait ${java_pid}
+      -jar distod.jar 2>&1 | tee -a "${logfile}"
+    t1=$(date +%s)
+
+    # wait for java process to finish and then stop system metrics collection
     kill -15 ${metrics_pid}
 
-    t1=$(date +%s)
     duration=$((t1 - t0))
     echo "Duration: ${duration} s"
 
@@ -206,7 +205,7 @@ for ((i = 0; i < ${#jmvs[@]}; ++i)); do
     done
 
     {
-      echo -n "${jvm},${gcname},${n}, ${duration}"
+      echo -n "${jvm},${gcname},${n},${duration},"
       grep "TIME Overall runtime" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
       echo -n ","
       grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'

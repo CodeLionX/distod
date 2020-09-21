@@ -1,0 +1,58 @@
+# Variables:
+# - experiment name of the experiments to run (without suffix)
+
+---
+- hosts: pi
+  gather_facts: no
+  vars:
+    - component: "distod-pi"
+    - src_path: "../{{ component }}"
+    - deployment_path: "~/sebastian/{{ component }}"
+    - lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"
+  tasks:
+    - name: Ensure deployment path exists
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+    - name: Copy distod artefacts
+      synchronize:
+        src: "{{ src_path }}/{{ item }}"
+        dest: "{{ deployment_path }}/"
+      with_items:
+        - common.conf
+        - distod.jar
+        - logback.xml
+        - start.sh
+        - "{{ inventory_hostname }}.conf"
+
+- hosts: pi_leader
+  gather_facts: no
+  vars:
+    - component: "distod-pi"
+    - src_path: "../{{ component }}"
+    - deployment_path: "~/sebastian/{{ component }}"
+    - lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"
+  tasks:
+    - name: Ensure deployment path exists
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+    - name: Copy data
+      synchronize:
+        src: "../data/"
+        dest: "{{ deployment_path }}/../data/"
+        recursive: yes
+    - name: Copy distod test artefacts
+      synchronize:
+        src: "{{ src_path }}/{{ experiment }}.sh"
+        dest: "{{ deployment_path }}/"
+    - debug:
+        msg: "Starting experiment {{ experiment }}.sh on {{ inventory_hostname }}: creates {{ lock_file }}"
+    - name: Run experiment in screen
+      command:
+        chdir: "{{ deployment_path }}"
+        # for debugging
+        #        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
+        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh" "{{ deployment_path }}" "{{ lock_file }}"
+        creates: "{{ lock_file }}"
+    - import_tasks: common_tasks/collect-results.yml

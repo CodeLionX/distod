@@ -2,7 +2,7 @@
 # - experiment name of the experiments to run (without suffix)
 
 ---
-- hosts: all
+- hosts: cluster
   gather_facts: no
   vars_files:
     - vars/distod.yml

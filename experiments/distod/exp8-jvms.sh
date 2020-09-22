@@ -14,22 +14,22 @@ source "$HOME/.sdkman/bin/sdkman-init.sh"
 # test matrix
 # JVM JIT GC Version
 # ===================================
-# Zing Falcon C4 8
-# Zing Falcon C4 11
-# Zulu HotSpot G1 11
-# OracleJDK HotSpot G1 11
-# GraalVM Graal G1 11
-# AdoptOpenJDK HotSpot G1 8
-# AdoptOpenJDK HotSpot G1 15
-# AdoptOpenJDK HotSpot G1 11
-# AdoptOpenJDK HotSpot ParallelGC 11
-# AdoptOpenJDK HotSpot CMS 11
-# AdoptOpenJDK HotSpot ZGC 11
-# AdoptOpenJDK HotSpot Shenandoah 15
-# AdoptOpenJDK OpenJ9 gencon 11
-# AdoptOpenJDK OpenJ9 balanced 11
-# AdoptOpenJDK OpenJ9 metronome 11
-# AdoptOpenJDK OpenJ9 optavgpause 11
+# Zing Falcon C4 8.0.265
+# Zing Falcon C4 11.0.8
+# Zulu HotSpot G1 11.0.8
+# OracleJDK HotSpot G1 11.0.8
+# GraalVM Graal G1 11.0.8
+# AdoptOpenJDK HotSpot G1 8.0.265
+# AdoptOpenJDK HotSpot G1 15.0.0
+# AdoptOpenJDK HotSpot G1 11.0.8
+# AdoptOpenJDK HotSpot ParallelGC 11.0.8
+# AdoptOpenJDK HotSpot CMS 11.0.8
+# AdoptOpenJDK HotSpot ZGC 11.0.8
+# AdoptOpenJDK HotSpot Shenandoah 15.0.0
+# AdoptOpenJDK OpenJ9 gencon 11.0.8
+# AdoptOpenJDK OpenJ9 balanced 11.0.8
+# AdoptOpenJDK OpenJ9 metronome 11.0.8
+# AdoptOpenJDK OpenJ9 optavgpause 11.0.8
 
 declare -a jmvs=(
   "8.0.265-zing"
@@ -201,7 +201,7 @@ for ((i = 0; i < ${#jmvs[@]}; ++i)); do
       scp "${node}":~/distod/sys-metrics.log "${folder}/sys-metrics-${node}.log" >/dev/null
       scp "${node}":~/distod/screenlog.0 "${folder}/screen-${node}.log" >/dev/null
       # intentially put argument in single quotes to let the target shell expand the ~
-      ssh "${node}" rm -f '~/distod/distod.log' '~/distod/sys-metrics.log'
+      ssh "${node}" rm -f '~/distod/distod.log' '~/distod/sys-metrics.log' '~/distod/screenlog.0'
     done
 
     {

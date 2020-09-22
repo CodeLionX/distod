@@ -30,12 +30,14 @@ source "$HOME/.sdkman/bin/sdkman-init.sh"
 # AdoptOpenJDK OpenJ9 balanced 11.0.8
 # AdoptOpenJDK OpenJ9 metronome 11.0.8
 # AdoptOpenJDK OpenJ9 optavgpause 11.0.8
+# OracleJDK HotSpot G1 8.0.261
+# OracleJDK HotSpot G1 15.0.0
 
 declare -a jmvs=(
   "8.0.265-zing"
   "11.0.8-zing"
   "11.0.8-zulu"
-  # "11.0.8-oracle" # currently not installed
+  "11.0.8-oracle"
   "20.2.0.r11-grl"
   "8.0.265.hs-adpt"
   "15.0.0.hs-adpt"
@@ -48,12 +50,14 @@ declare -a jmvs=(
   "11.0.8.j9-adpt"
   # "11.0.8.j9-adpt" # does only support compressed Oops and <= 4GB heap
   "11.0.8.j9-adpt"
+  "8.0.261-oracle"
+  "15.0.0-oracle"
 )
 declare -a argss=(
   "" # zing needs no args
   "" # zing needs no args
   "-XX:+UseG1GC"
-  # "-XX:+UseG1GC"
+  "-XX:+UseG1GC"
   "-XX:+UseG1GC"
   "-XX:+UseG1GC"
   "-XX:+UseG1GC"
@@ -66,12 +70,14 @@ declare -a argss=(
   "-Xgcpolicy:balanced -Dakka.java-flight-recorder.enabled=false"
   # "-Xgcpolicy:metronome -Dakka.java-flight-recorder.enabled=false"
   "-Xgcpolicy:optavgpause -Dakka.java-flight-recorder.enabled=false"
+  "-XX:+UseG1GC"
+  "-XX:+UseG1GC"
 )
 declare -a gcnames=(
   "C4"
   "C4"
   "G1"
-  # "G1"
+  "G1"
   "G1"
   "G1"
   "G1"
@@ -84,6 +90,8 @@ declare -a gcnames=(
   "balanced"
   # "metronome"
   "optavgpause"
+  "G1"
+  "G1"
 )
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"

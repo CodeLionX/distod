@@ -112,11 +112,6 @@ def collect_metrics(root):
 
 
 if __name__ == "__main__":
-
-    t0 = parse_timedelta("00:01:03")
-    t1 = parse_timedelta("00:02:58")
-    print(t0 + t1)
-
     root = "results/distod-exp8-jvms"
     metrics = collect_metrics(root)
     print_as_csv(metrics, root)

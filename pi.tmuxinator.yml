@@ -1,0 +1,75 @@
+# ./.tmuxinator.yml
+
+name: pi
+root: /home/sebastian/Documents/Projects/distod
+
+startup_window: dev
+startup_pane: 1
+
+windows:
+  - dev:
+      panes:
+        - deployment:
+            - cd experiments
+            - clear
+  - cluster:
+      layout: tiled
+      # Synchronize all panes of this window
+      synchronize: after
+      pre:
+        - cd deployment
+      panes:
+        - pi01:
+            - set -x host pi01.local
+            - ssh pi@$host
+            - clear
+        - pi02:
+            - set -x host pi02.local
+            - ssh pi@$host
+            - clear
+        - pi03:
+            - set -x host pi03.local
+            - ssh pi@$host
+            - clear
+        - pi04:
+            - set -x host pi04.local
+            - ssh pi@$host
+            - clear
+        - pi05:
+            - set -x host pi05.local
+            - ssh pi@$host
+            - clear
+        - pi06:
+            - set -x host pi06.local
+            - ssh pi@$host
+            - clear
+        - pi07:
+            - set -x host pi07.local
+            - ssh pi@$host
+            - clear
+        - pi08:
+            - set -x host pi08.local
+            - ssh pi@$host
+            - clear
+        - pi09:
+            - set -x host pi09.local
+            - ssh pi@$host
+            - clear
+        - pi10:
+            - set -x host pi10.local
+            - ssh pi@$host
+            - clear
+        - pi11:
+            - set -x host pi11.local
+            - ssh pi@$host
+            - clear
+        - pi12:
+            - set -x host pi12.local
+            - ssh pi@$host
+            - clear
+  - head:
+      panes:
+        - pi01:
+            - set -x host pi01.local
+            - ssh pi@$host
+            - clear

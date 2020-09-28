@@ -2,10 +2,13 @@
 # - experiment name of the experiments to run (without suffix)
 
 ---
-- hosts: cluster
+- hosts: pi
   gather_facts: no
-  vars_files:
-    - vars/distod.yml
+  vars:
+    - component: "distod-pi"
+    - src_path: "../{{ component }}"
+    - deployment_path: "~/sebastian/{{ component }}"
+    - lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"
   tasks:
     - name: Ensure deployment path exists
       file:
@@ -15,7 +18,6 @@
       synchronize:
         src: "{{ src_path }}/{{ item }}"
         dest: "{{ deployment_path }}/"
-        verify_host: yes
       with_items:
         - common.conf
         - distod.jar
@@ -23,10 +25,13 @@
         - start.sh
         - "{{ inventory_hostname }}.conf"
 
-- hosts: leader
+- hosts: pi_leader
   gather_facts: no
-  vars_files:
-    - vars/distod.yml
+  vars:
+    - component: "distod-pi"
+    - src_path: "../{{ component }}"
+    - deployment_path: "~/sebastian/{{ component }}"
+    - lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"
   tasks:
     - name: Ensure deployment path exists
       file:
@@ -35,21 +40,19 @@
     - name: Copy data
       synchronize:
         src: "../data/"
-        dest: "~/data/"
+        dest: "{{ deployment_path }}/../data/"
         recursive: yes
-        verify_host: yes
     - name: Copy distod test artefacts
       synchronize:
         src: "{{ src_path }}/{{ experiment }}.sh"
         dest: "{{ deployment_path }}/"
-        verify_host: yes
     - debug:
         msg: "Starting experiment {{ experiment }}.sh on {{ inventory_hostname }}: creates {{ lock_file }}"
     - name: Run experiment in screen
       command:
         chdir: "{{ deployment_path }}"
         # for debugging
-        #        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
-        cmd: screen -d -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh"
+        #        cmd: screen -d -L -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh" "{{ deployment_path }}" "{{ lock_file }}"
+        cmd: screen -d -S "distod-master-{{ experiment }}" -m "./{{ experiment }}.sh" "{{ deployment_path }}" "{{ lock_file }}"
         creates: "{{ lock_file }}"
     - import_tasks: common_tasks/collect-results.yml

@@ -117,6 +117,6 @@ def collect_metrics(root):
 
 
 if __name__ == "__main__":
-    root = "experiments/results/distod-exp8-jvms.bak"
+    root = "experiments/results/distod-exp8-jvms"
     metrics = collect_metrics(root)
     print_as_csv(metrics, root)

@@ -40,3 +40,5 @@ ansible-playbook -i ansible/inventory.ini ansible/load-results.yml
 | exp5-columns | [:heavy_check_mark:](./distod/exp5-columns.sh) | :x: | :x: | Scales the number of columns on the plista dataset. |
 | exp6-memory | **Performed manually!** | [:heavy_check_mark:](./fastod/exp6-memory.sh) | **Performed manually!** | Compares the runtime of all algorithms with different heap memory limits. |
 | exp7-caching | [:heavy_check_mark:](./distod/exp7-caching.sh) | (n/a) | (n/a) | Compares the runtimes of DISTOD with partition caching turned off or on. |
+| exp8-jvms | [:heavy_check_mark:](./distod/exp8-jvms.sh) | (n/a) | (n/a) | Runs DISTOD on different JVMs and using different GCs and settings. |
+| exp9-dispatchers | [:heavy_check_mark:](./distod/exp9-dispatchers.sh) | (n/a) | (n/a) | Runs the DISTOD master and the workers on different dispatcher implementations to compare their impact. |

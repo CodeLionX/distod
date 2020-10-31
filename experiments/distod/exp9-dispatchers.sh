@@ -40,12 +40,6 @@ for dataset in ${datasets}; do
     echo ""
     echo "Running DISTOD on dataset ${dataset} with dispatchers: ${master_dispatcher}/${worker_dispatcher}"
 
-    if [[ "${caching}" = "off" ]]; then
-      threshold=1
-    else
-      threshold=15
-    fi
-
     # start followers
     for node in ${nodes}; do
       ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp9-dispatchers\" -m ./start.sh -Ddistod.master-pinned-dispatcher=\"${master_dispatcher}\" -Ddistod.cpu-bound-tasks-dispatcher=\"${worker_dispatcher}\""

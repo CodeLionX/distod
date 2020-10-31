@@ -3,13 +3,15 @@
 import os
 import re
 from datetime import timedelta
-import time
 import statistics
+# import time
+
 
 # r'^\S*(\s+)\S+([\s.]+)\S+([\s]+)\S+([\s:]+).*$'
 logline_pattern = r'^\s*([\d.]+)\s+([\d.]+)\s+([\d]+)\s+([\d:]+).*$'
 runfolder_pattern = r'^.*/\d$'
 time_pattern = "%H:%M:%S"
+
 
 def parse_timedelta(s):
     components = s.split(":")
@@ -20,10 +22,12 @@ def parse_timedelta(s):
     )
     # return time.strptime(s, time_pattern)
 
+
 def format_timedelta(td):
     # "%d:%d:%d" % (td)
     return str(td).split(".")[0]
     # return time.strftime(time_pattern, td)
+
 
 def timedelta_mean(xs):
     in_seconds = map(lambda x: x.total_seconds(), xs)
@@ -45,6 +49,7 @@ def print_as_csv(metrics, root):
                     format_timedelta(metrics[exp][node]["cum_time"]),
                     metrics[exp][node]["cum_time"].total_seconds()
                 ))
+
 
 def collect_metrics(root):
     exp_metrics = {}
@@ -89,7 +94,7 @@ def collect_metrics(root):
                 run_metrics[node_type]["vsz"].append(vsz)
                 cum_times.append(max_cum_time)
 
-        if(re.match(runfolder_pattern, folder)):
+        if re.match(runfolder_pattern, folder):
             print("Processed run folder %s" % folder)
             for key in run_metrics:
                 run_metrics[key]["cum_time"].append(sum(cum_times, start=parse_timedelta("00:00:00")))
@@ -112,6 +117,6 @@ def collect_metrics(root):
 
 
 if __name__ == "__main__":
-    root = "results/distod-exp8-jvms"
+    root = "experiments/results/distod-exp8-jvms.bak"
     metrics = collect_metrics(root)
     print_as_csv(metrics, root)

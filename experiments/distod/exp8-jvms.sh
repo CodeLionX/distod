@@ -28,7 +28,7 @@ source "$HOME/.sdkman/bin/sdkman-init.sh"
 # AdoptOpenJDK HotSpot Shenandoah 15.0.0
 # AdoptOpenJDK OpenJ9 gencon 11.0.8
 # AdoptOpenJDK OpenJ9 balanced 11.0.8
-# AdoptOpenJDK OpenJ9 metronome 11.0.8
+# (AdoptOpenJDK OpenJ9 metronome 11.0.8)
 # AdoptOpenJDK OpenJ9 optavgpause 11.0.8
 # OracleJDK HotSpot G1 8.0.261
 # OracleJDK HotSpot G1 15.0.0

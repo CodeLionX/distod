@@ -1,8 +1,10 @@
 package com.github.codelionx.distod.actors
 
+import java.io.File
+
 import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors, StashBuffer}
 import com.github.codelionx.distod.Settings
 import com.github.codelionx.distod.io.CSVParser
 import com.github.codelionx.distod.partitions.{FullPartition, Partition}
@@ -42,7 +44,17 @@ class DataReader(context: ActorContext[DataLoadingCommand], buffer: StashBuffer[
   private val parser = CSVParser(settings)
 
   context.log.debug("DataReader started, parsing data from {}", settings.inputParsingSettings.filePath)
-  private val table = parser.parse()
+  private val table = try{
+    parser.parse()
+  } catch {
+    case e: IllegalArgumentException =>
+      context.log.error(
+        "Could not find input file {} at {}",
+        settings.inputParsingSettings.filePath,
+        new File("").getAbsolutePath
+      )
+      throw e
+  }
 
   private def start(): Behavior[DataLoadingCommand] = {
     // Load data early:

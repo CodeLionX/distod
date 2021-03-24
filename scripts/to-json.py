@@ -53,20 +53,20 @@ def perform_substitution(reader):
         yield i, {k: hash(v) for k, v in row.items()}
 
 
-def main(filename, delimiter, has_header, target, substitution_enabled, duplicate):
+def main(filename, delimiter_in, delimiter_out, has_header, target, substitution_enabled, duplicate):
     with open(target + ".csv", 'w', encoding='utf-8') as csv_out:
         with open(target + ".json", 'w', encoding='utf-8') as out:
-            reader = read_source(filename, delimiter, has_header)
+            reader = read_source(filename, delimiter_in, has_header)
             if substitution_enabled:
                 reader = perform_substitution(reader)
 
             for i, row in reader:
                 if duplicate and has_header and i == 0:
                     headers = row.keys()
-                    csv_out.write(delimiter.join(headers) + "\n")
+                    csv_out.write(delimiter_out.join(headers) + "\n")
                 if duplicate:
                     values = [str(v) for v in row.values()]
-                    csv_out.write(delimiter.join(values) + "\n")
+                    csv_out.write(delimiter_out.join(values) + "\n")
                 row["index"] = i
                 obj = json.dumps(row)
                 out.write(obj + ",\n")
@@ -74,8 +74,10 @@ def main(filename, delimiter, has_header, target, substitution_enabled, duplicat
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert a csv file to JSON and substitute all values with integers')
-    parser.add_argument('--delimiter', type=str, default=",",
-                        help='CVS delimiter')
+    parser.add_argument('--delimiter-in', type=str, default=",",
+                        help='CVS delimiter for input file')
+    parser.add_argument('--delimiter-out', type=str, default=",",
+                        help='CVS delimiter for output file if --duplicate is given')
     parser.add_argument('--has-header', type=bool, default=False,
                         help='set to true of the csv file has a header line')
     parser.add_argument('-s', '--substitute', action='store_true',
@@ -88,5 +90,5 @@ if __name__ == "__main__":
                         help='target file path (where json is written to (without suffix)')
 
     args = parser.parse_args()
-    # main("../data/adult-48842-14.csv", ";", False, "../data/adult-sub", True, True)
-    main(args.source, args.delimiter, args.has_header, args.target, args.substitute, args.duplicate)
+    # main("../data/adult-48842-14.csv", ";", ",", False, "../data/adult-sub", True, True)
+    main(args.source, args.delimiter_in, args.delimiter_out, args.has_header, args.target, args.substitute, args.duplicate)

@@ -3,7 +3,7 @@
 datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv flight-500k-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=3
+N=1
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
 
@@ -26,7 +26,7 @@ for dataset in ${datasets}; do
 
     # start followers
     for node in ${nodes}; do
-      ssh "${node}" "cd ~/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
+      ssh "${node}" "cd ~/distod/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
     done
 
     t0=$(date +%s)
@@ -86,9 +86,9 @@ for dataset in ${datasets}; do
     mv distod.log "${resultfolder}/${dataset}/${n}/distod-$(hostname).log"
     mv results.txt "${resultfolder}/${dataset}/${n}/"
     for node in ${nodes}; do
-      scp "${node}":~/distod/distod.log "${resultfolder}/${dataset}/${n}/distod-${node}.log" >/dev/null
+      scp "${node}":~/distod/distod/distod.log "${resultfolder}/${dataset}/${n}/distod-${node}.log" >/dev/null
       # intentially put argument in single quotes to let the target shell expand the ~
-      ssh "${node}" rm -f '~/distod/distod.log'
+      ssh "${node}" rm -f '~/distod/distod/distod.log'
     done
 
     {

@@ -14,7 +14,7 @@
     - name: Copy data
       synchronize:
         src: "{{ src_path }}/data"
-        dest: "{{ deployment_path }}"
+        dest: "{{ data_deployment_path }}"
         recursive: yes
         delete: yes
         verify_host: yes

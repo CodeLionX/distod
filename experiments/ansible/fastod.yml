@@ -13,8 +13,8 @@
         state: directory
     - name: Copy data
       synchronize:
-        src: "../data/"
-        dest: "~/data/"
+        src: "../data"
+        dest: "{{ data_deployment_path }}"
         recursive: yes
         verify_host: yes
     - name: Copy fastod artefacts

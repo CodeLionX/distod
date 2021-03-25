@@ -119,6 +119,10 @@ class Master(context: ActorContext[Command], stash: StashBuffer[Command], localP
     dataReader ! LoadPartitions(loadingEventMapper)
 
     Behaviors.receiveMessagePartial[Command] {
+      case StatisticsTick =>
+        context.log.log(settings.monitoringSettings.statisticsLogLevel,"Master waiting for partitions to be loaded")
+        Behaviors.same
+
       case WrappedLoadingEvent(PartitionsLoaded(table @ PartitionedTable(name, headers, partitions))) =>
         context.log.info("Finished loading dataset {} with headers: {}", name, headers.mkString(","))
 

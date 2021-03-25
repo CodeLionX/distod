@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv flight-500k-sub.csv"
+datasets="imdb-sub.csv tpch-sub.csv dblp-sub.csv ncvoter-4m-19-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
 N=1
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
+
+# Allow usage of sdkman!
+export SDKMAN_DIR="$HOME/.sdkman"
+# shellcheck source=/dev/null
+source "$SDKMAN_DIR/bin/sdkman-init.sh"
+sdk use java "11.0.8.hs-adpt"
 
 # write lock file
 touch /var/lock/distod-exp1-datasets.lock
@@ -36,7 +42,7 @@ for dataset in ${datasets}; do
 #    if [[ "${dataset}" == "horse-sub.csv" || "${dataset}" == "plista-sub.csv" || "${dataset}" == "ncvoter-1m-19-sub.csv" ]]; then
 #      heap_size=58g
 #    fi
-    timeout --signal=15 24h \
+    timeout --signal=15 72h \
       java "-Xms${heap_size}" "-Xmx${heap_size}" -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
         -XX:+UnlockExperimentalVMOptions -XX:G1MixedGCLiveThresholdPercent=60 \

@@ -1,4 +1,4 @@
-Dataset,Columns,Rows,Size (KiB)
+Dataset,Columns,Rows,Original Size (KiB)
 test-sub.csv,4,4,1
 iris-sub.csv,5,150,15
 chess-sub.csv,7,28056,3955
@@ -12,4 +12,7 @@ fd-reduced-250k-30-sub.csv,30,250000,149269
 horse-sub.csv,29,300,168
 plista-sub.csv,63,1001,834
 ncvoter-1m-19-sub.csv,19,999999,326519
-flight-500k.csv,21,499999,71032,71032
+flight-500k.csv,21,499999,71032
+imdb-sub.csv,8,7734683,628014
+dblp-sub.csv,13,8224309,1237373
+tpch-sub.csv,16,6001215,736193

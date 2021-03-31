@@ -13,8 +13,8 @@
         state: directory
     - name: Copy data
       synchronize:
-        src: "{{ src_path }}/data"
-        dest: "{{ data_deployment_path }}"
+        src: "{{ src_path }}/data/"
+        dest: "{{ data_deployment_path }}/"
         recursive: yes
         delete: yes
         verify_host: yes

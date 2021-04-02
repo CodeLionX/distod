@@ -13,8 +13,8 @@
         state: directory
     - name: Copy data
       synchronize:
-        src: "../data"
-        dest: "{{ data_deployment_path }}"
+        src: "../data/"
+        dest: "{{ data_deployment_path }}/"
         recursive: yes
         verify_host: yes
     - name: Copy fastod artefacts
@@ -31,6 +31,6 @@
         chdir: "{{ deployment_path }}"
         # for debugging
 #        cmd: screen -d -L -S "fastod-{{ experiment }}" -m "./{{ experiment }}.sh"
-        cmd: screen -d -S "fastod-{{ experiment }}" -m "./{{ experiment }}.sh"
+        cmd: screen -d -L -S "fastod-{{ experiment }}" -m "./{{ experiment }}.sh"
         creates: "{{ lock_file }}"
     - import_tasks: common_tasks/collect-results.yml

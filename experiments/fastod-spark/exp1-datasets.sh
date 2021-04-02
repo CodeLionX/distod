@@ -26,7 +26,7 @@ for dataset in ${datasets}; do
         --class FastODMain \
         --master spark://odin01:7077 \
         --driver-memory 31G \
-        --executor-memory 28G \
+        --executor-memory 26G \
         --num-executors 11 \
         --executor-cores 20 \
         --total-executor-cores 220 \

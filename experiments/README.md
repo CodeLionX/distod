@@ -42,3 +42,4 @@ ansible-playbook -i ansible/inventory.ini ansible/load-results.yml
 | exp7-caching | [:heavy_check_mark:](./distod/exp7-caching.sh) | (n/a) | (n/a) | Compares the runtimes of DISTOD with partition caching turned off or on. |
 | exp8-jvms | [:heavy_check_mark:](./distod/exp8-jvms.sh) | (n/a) | (n/a) | Runs DISTOD on different JVMs and using different GCs and settings. |
 | exp9-dispatchers | [:heavy_check_mark:](./distod/exp9-dispatchers.sh) | (n/a) | (n/a) | Runs the DISTOD master and the workers on different dispatcher implementations to compare their impact. |
+| exp10-network | [:heavy_check_mark:](./distod/exp10-network.sh) | (n/a) | :x: | Measures the network utilization while DISTOD is running on the full cluster. **Requires password-less `sudo` and [iptraf](http://iptraf.seul.org/) installed (`iptraf-ng` in `PATH`).** |

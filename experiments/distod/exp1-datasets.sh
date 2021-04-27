@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-datasets="imdb-sub.csv tpch-sub.csv dblp-sub.csv ncvoter-4m-19-sub.csv"
+datasets="imdb-sub.csv tpch-sub.csv dblp-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=1
+N=3
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
 

@@ -13,8 +13,8 @@
         state: directory
     - name: Copy data
       synchronize:
-        src: "{{ src_path }}/data"
-        dest: "{{ deployment_path }}"
+        src: "{{ src_path }}/data/"
+        dest: "{{ data_deployment_path }}/"
         recursive: yes
         delete: yes
         verify_host: yes
@@ -42,6 +42,6 @@
         chdir: "{{ deployment_path }}"
         # for debugging
 #        cmd: screen -d -L -S "fastod-spark-{{ experiment }}" -m "./{{ experiment }}.sh"
-        cmd: screen -d -S "fastod-spark-{{ experiment }}" -m "./{{ experiment }}.sh"
+        cmd: screen -d -L -S "fastod-spark-{{ experiment }}" -m "./{{ experiment }}.sh"
         creates: "{{ lock_file }}"
     - import_tasks: common_tasks/collect-results.yml

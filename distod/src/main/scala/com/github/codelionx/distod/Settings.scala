@@ -211,4 +211,11 @@ class Settings private(config: Config) extends Extension {
       else
         None
   }
+
+  val shutdownTimeout: FiniteDuration = {
+    val duration = config.getDuration(s"$namespace.shutdown-timeout")
+    val finiteDurationOnlySeconds = FiniteDuration(duration.getSeconds, TimeUnit.SECONDS)
+    val finiteDurationOnlyNanos = FiniteDuration(duration.getNano, TimeUnit.NANOSECONDS)
+    finiteDurationOnlySeconds + finiteDurationOnlyNanos
+  }
 }

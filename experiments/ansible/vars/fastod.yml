@@ -2,5 +2,6 @@
 ---
 component: "fastod"
 src_path: "../{{ component }}"
-deployment_path: "~/{{ component }}"
+deployment_path: "~/distod/{{ component }}"
+data_deployment_path: "~/distod/data"
 lock_file: "/var/lock/{{ component }}-{{ experiment }}.lock"

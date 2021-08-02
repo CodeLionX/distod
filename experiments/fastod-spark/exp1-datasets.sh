@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-datasets="bridges-sub.json imdb-sub.json dblp-sub.json tpch-sub.json"
+datasets="test-sub.json iris-sub.json chess-sub.json abalone-sub.json bridges-sub.json adult-sub.json letter-sub.json hepatitis-sub.json flight_1k_30c-sub.json fd-reduced-250k-30-sub.json horse-sub.json plista-sub.json ncvoter-1m-19-sub.json flight-500k-sub.json imdb-sub.json dblp-sub.json tpch-sub.json"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=1
+N=3
 
 # write lock file
 touch /var/lock/fastod-spark-exp1-datasets.lock
@@ -26,7 +26,7 @@ for dataset in ${datasets}; do
         --class FastODMain \
         --master spark://odin01:7077 \
         --driver-memory 31G \
-        --executor-memory 26G \
+        --executor-memory 28G \
         --num-executors 11 \
         --executor-cores 20 \
         --total-executor-cores 220 \

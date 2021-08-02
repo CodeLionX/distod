@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
-datasets="test-sub.csv iris-sub.csv chess-sub.csv abalone-sub.csv bridges-sub.csv adult-sub.csv letter-sub.csv hepatitis-sub.csv flight_1k_30c-sub.csv fd-reduced-250k-30-sub.csv horse-sub.csv plista-sub.csv ncvoter-1m-19-sub.csv flight-500k-sub.csv imdb-sub.csv tpch-sub.csv dblp-sub.csv"
+
+
+datasets="abalone-sub.csv bridges-sub.csv fd-reduced-250k-30-sub.csv hepatitis-sub.csv letter-sub.csv test-sub.csv adult-sub.csv chess-sub.csv fd-reduced-1k-30-sub.csv flight_1k_30c-sub.csv iris-sub.csv imdb-sub.csv horse-sub.csv"
 resultfolder="results"
 resultfile="${resultfolder}/metrics.csv"
-N=3
+N=1
 
 nodes="thor01 thor02 thor03 thor04 odin02 odin03 odin04 odin05 odin06 odin07 odin08"
 
@@ -14,10 +16,10 @@ source "$SDKMAN_DIR/bin/sdkman-init.sh"
 sdk use java "11.0.8.hs-adpt"
 
 # write lock file
-touch /var/lock/distod-exp1-datasets.lock
+touch /var/lock/distod-exp10-network.lock
 
 mkdir -p "${resultfolder}"
-echo "Dataset,Run,Runtime (ms),#FDs,#ODs" >"${resultfile}"
+echo "Dataset,Run,Runtime (ms)" >"${resultfile}"
 
 for dataset in ${datasets}; do
   echo ""
@@ -32,7 +34,7 @@ for dataset in ${datasets}; do
 
     # start followers
     for node in ${nodes}; do
-      ssh "${node}" "cd ~/distod/distod && screen -d -S \"distod-exp1-datasets\" -m ./start.sh"
+      ssh "${node}" "cd ~/distod/distod && screen -d -S \"distod-exp10-network\" -m ./start.sh"
     done
 
     t0=$(date +%s)
@@ -42,6 +44,7 @@ for dataset in ${datasets}; do
 #    if [[ "${dataset}" == "horse-sub.csv" || "${dataset}" == "plista-sub.csv" || "${dataset}" == "ncvoter-1m-19-sub.csv" ]]; then
 #      heap_size=58g
 #    fi
+    sudo iptraf-ng -d eno2 -B -L "${resultfolder}/${dataset}/${n}/iptraf.log"
     timeout --signal=15 72h \
       java "-Xms${heap_size}" "-Xmx${heap_size}" -XX:+UseG1GC -XX:G1ReservePercent=10 \
         -XX:MaxGCPauseMillis=400 -XX:G1HeapWastePercent=1 \
@@ -54,6 +57,7 @@ for dataset in ${datasets}; do
         -Dfile.encoding=UTF-8 \
         -jar distod.jar 2>&1 | tee "${logfile}"
     was_killed=$(( $? == 124 ))
+    sudo kill -USR2 $(pgrep iptraf)
 
     t1=$(date +%s)
     duration=$(( t1 - t0 ))
@@ -62,7 +66,7 @@ for dataset in ${datasets}; do
     # wait for followers to stop (we need the resources, e.g. NIC, RAM, ...)
     running_nodes=""
     for node in ${nodes}; do
-      if ssh "${node}" screen -ls distod-exp1-datasets >/dev/null; then
+      if ssh "${node}" screen -ls distod-exp10-network >/dev/null; then
         running_nodes="${running_nodes}${node} "
       fi
     done
@@ -77,9 +81,9 @@ for dataset in ${datasets}; do
       echo "Still waiting for nodes: '${running_nodes}'"
       for node in ${running_nodes}; do
         # still running --> kill follower
-        if ssh "${node}" screen -ls distod-exp1-datasets >/dev/null; then
+        if ssh "${node}" screen -ls distod-exp10-network >/dev/null; then
           echo "Killing follower on node ${node}"
-          ssh "${node}" screen -S distod-exp1-datasets -X quit
+          ssh "${node}" screen -S distod-exp10-network -X quit
         else
           # remove node from running set
           running_nodes=$( echo "${running_nodes}" | sed -s "s/${node} //" )
@@ -100,10 +104,6 @@ for dataset in ${datasets}; do
     {
       echo -n "${dataset},${n},"
       grep "TIME Overall runtime" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/\([[:space:]]\|[a-zA-Z]\)*$//' | tr -d '\n'
-      echo -n ","
-      grep "# FD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
-      echo -n ","
-      grep "# OD" "${logfile}" | tail -n 1 | cut -d ':' -f2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '\n'
       # force newline
       echo ""
     } >>"${resultfile}"
@@ -114,11 +114,7 @@ for dataset in ${datasets}; do
       break
     fi
   done
-
-  # calculate min for the runtime
-  min_runtime=$( grep "${dataset}" "${resultfile}" | cut -d ',' -f3 | sort -n | head -n 1 )
-  echo "${dataset},ALL,${min_runtime},," >>"${resultfile}"
 done
 
 # release lock file
-rm -f /var/lock/distod-exp1-datasets.lock
+rm -f /var/lock/distod-exp10-network.lock

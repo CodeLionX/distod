@@ -9,6 +9,7 @@ import akka.util.Timeout
 import com.github.codelionx.distod.actors.ShutdownCoordinator.WrappedListing
 import com.github.codelionx.distod.protocols.ShutdownProtocol._
 import com.github.codelionx.distod.types.ShutdownReason
+import com.github.codelionx.distod.Settings
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -121,7 +122,7 @@ class ShutdownCoordinator(context: ActorContext[ShutdownCoordinatorCommand], lea
           import system.executionContext
 
           implicit val scheduler: Scheduler = system.scheduler
-          implicit val timeout: Timeout = Timeout(1 minute)
+          implicit val timeout: Timeout = Timeout(Settings(system).shutdownTimeout)
 
           ref.ask[ForcedFollowerShutdownComplete.type](ref =>
             ForceFollowerShutdown(ref)

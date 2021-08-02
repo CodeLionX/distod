@@ -25,13 +25,13 @@ If you use this code and method, please considering using the following referenc
 ```biblatex
 @article{SchmidlAndPapenbrock2020Efficient,
     author={Sebastian {Schmidl} and Thorsten {Papenbrock}},
-    title={Efficient Distributed Discovery of Bidirectional Order Dependencies},
-    journal={},
-    year={2020},
+    title={Efficient distributed discovery of bidirectional order dependencies},
+    journal={The VLDB Journal},
+    year={2021},
     volume={},
     number={},
     pages={},
-    doi={},
+    doi={10.1007/s00778-021-00683-4},
     keywords={
         bidirectional order dependencies;
         distributed computing;

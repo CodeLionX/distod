@@ -24,51 +24,51 @@ windows:
         - cd deployment
       panes:
         - odin01:
-            - set -x host odin01
+            - export host=odin01
             - ssh $host
             - clear
         - odin02:
-            - set -x host odin02
+            - export host=odin02
             - ssh $host
             - clear
         - odin03:
-            - set -x host odin03
+            - export host=odin03
             - ssh $host
             - clear
         - odin04:
-            - set -x host odin04
+            - export host=odin04
             - ssh $host
             - clear
         - odin05:
-            - set -x host odin05
+            - export host=odin05
             - ssh $host
             - clear
         - odin06:
-            - set -x host odin06
+            - export host=odin06
             - ssh $host
             - clear
         - odin07:
-            - set -x host odin07
+            - export host=odin07
             - ssh $host
             - clear
         - odin08:
-            - set -x host odin08
+            - export host=odin08
             - ssh $host
             - clear
         - thor01:
-            - set -x host thor01
+            - export host=thor01
             - ssh $host
             - clear
         - thor02:
-            - set -x host thor02
+            - export host=thor02
             - ssh $host
             - clear
         - thor03:
-            - set -x host thor03
+            - export host=thor03
             - ssh $host
             - clear
         - thor04:
-            - set -x host thor04
+            - export host=thor04
             - ssh $host
             - clear
   - monitor:

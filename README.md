@@ -17,7 +17,7 @@ it can, in particular, process much larger datasets.
 
 ## Citation
 
-> Schmidl, S., Papenbrock, T. Efficient distributed discovery of bidirectional order dependencies. The VLDB Journal (2021). https://doi.org/10.1007/s00778-021-00683-4
+> Schmidl, S., Papenbrock, T. Efficient distributed discovery of bidirectional order dependencies. The VLDB Journal 31, pages 49–74 (2022). https://doi.org/10.1007/s00778-021-00683-4
 
 <!--
 If you use this code and method, please considering using the following reference:

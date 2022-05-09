@@ -17,7 +17,7 @@ ThisBuild / git.baseVersion := "1.0.6"
 ThisBuild / fork in run := true
 
 lazy val root = (project in file("."))
-  .aggregate(distod, benchmarking)
+  .aggregate(distod, benchmarking, metanomeIntegration)
 
 lazy val distod = (project in file("distod"))
   .settings(
@@ -93,4 +93,26 @@ lazy val benchmarking = (project in file("benchmarking"))
     },
   )
   .enablePlugins(JmhPlugin)
+  .dependsOn(distod)
+
+lazy val metanomeIntegration = (project in file("distod-metanome-integration"))
+  .settings(
+    name := "distod-metanome-integration",
+    resolvers += Resolver.mavenLocal,
+    libraryDependencies ++= Seq(
+      "de.metanome" % "algorithm_integration" % "1.2-SNAPSHOT"
+    ),
+    assemblyMergeStrategy in assembly := {
+      // discard JDK11 module infos from libs (not required for assembly and JDK8)
+      case "module-info.class" => MergeStrategy.discard
+      case PathList("javax", "inject", _) => MergeStrategy.last
+      // discard follower configuration (only used for local testing)
+      case PathList("application-follower.conf") => MergeStrategy.discard
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+    packageOptions in (Compile, packageBin) +=
+      Package.ManifestAttributes( "Algorithm-Bootstrap-Class" -> "com.github.codelionx.distod.DistodAlgorithm" )
+  )
   .dependsOn(distod)
